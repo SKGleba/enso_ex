@@ -29,7 +29,7 @@ enum {
 	FAT_BIN_USEFUL_SIZE = 0x6000 - 0x400,
 
 	OS0_SIZE = 0x3820 * BLOCK_SIZE,
-	OS0_CRC32 = 0x69b0c99d,
+	OS0_CRC32 = 0,
 };
 
 typedef struct {
@@ -52,6 +52,12 @@ typedef struct {
 	char unk3[0x10 * 4];
 	uint16_t sig;
 } __attribute__((packed)) master_block_t;
+
+int ex(const char* filloc){
+  SceUID fd;
+  fd = ksceIoOpen(filloc, SCE_O_RDONLY, 0777);
+  if (fd < 0) {ksceIoClose(fd); return 0;}
+ksceIoClose(fd); return 1;}
 
 int printf_file(const char *format, ...) {
 	char line[512] = {0};
@@ -444,9 +450,15 @@ int write_config() {
 	char *pos = NULL;
 	int len = 0;
 
+	int ck = ex("ur0:temp/slim_vs.bin");
+
 	printf("write_config\n");
 
-	ksceIoMkdir("ur0:tai", 0777); // make directory if it does not exist
+	if (ck == 1) {
+		ksceIoUmount(3 * 0x100, 1, 0, 0);
+		ksceIoMount(3 * 0x100, NULL, 2, 0, 0, 0);
+		ksceIoMkdir("vs0:tai", 0777); // make directory if it does not exist
+	} else if (ck == 0) ksceIoMkdir("ur0:tai", 0777); // make directory if it does not exist
 
 	pstv = ksceSblAimgrIsDolce();
 	printf("writing config for %s\n", pstv ? "PSTV" : "PS Vita");
@@ -482,11 +494,20 @@ int write_config() {
 		goto cleanup;
 	}
 
-	ret = fd = ksceIoOpen("ur0:tai/boot_config.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-	if (ret < 0) {
-		printf("failed to open ur0:tai/boot_config.txt for write: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
+	if (ck == 1) {
+		ret = fd = ksceIoOpen("vs0:tai/boot_config.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+		if (ret < 0) {
+			printf("failed to open boot_config.txt for write: 0x%08x\n", ret);
+			ret = -1;
+			goto cleanup;
+		}
+	} else if (ck == 0) {
+		ret = fd = ksceIoOpen("ur0:tai/boot_config.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+		if (ret < 0) {
+			printf("failed to open boot_config.txt for write: 0x%08x\n", ret);
+			ret = -1;
+			goto cleanup;
+		}
 	}
 
 	pos = strstr(config, "\n- appspawn vs0:vsh/shell/shell.self");
@@ -519,12 +540,22 @@ int write_config() {
 	}
 
 	// write 3rd part: patch: load taihen and henkaku
-	const char *patch2 = "\n- load\tur0:tai/taihen.skprx\n- load\tur0:tai/henkaku.skprx\n";
-	len = strlen(patch2);
-	if ((ret = ksceIoWrite(fd, patch2, len)) != len) {
-		printf("failed to write config 3rd part: wrote 0x%08x expected 0x%08x\n", ret, len);
-		ret = -1;
-		goto cleanup;
+	if (ck == 1) {
+		const char *patch2 = "\n- load\tvs0:tai/taihen.skprx\n- load\tvs0:tai/henkaku.skprx\n";
+		len = strlen(patch2);
+		if ((ret = ksceIoWrite(fd, patch2, len)) != len) {
+			printf("failed to write config 3rd part: wrote 0x%08x expected 0x%08x\n", ret, len);
+			ret = -1;
+			goto cleanup;
+		}
+	} else if (ck == 0) {
+		const char *patch2 = "\n- load\tur0:tai/taihen.skprx\n- load\tur0:tai/henkaku.skprx\n";
+		len = strlen(patch2);
+		if ((ret = ksceIoWrite(fd, patch2, len)) != len) {
+			printf("failed to write config 3rd part: wrote 0x%08x expected 0x%08x\n", ret, len);
+			ret = -1;
+			goto cleanup;
+		}
 	}
 
 	// write 4th part: rest of config
@@ -536,6 +567,12 @@ int write_config() {
 	}
 
 	ret = 0;
+
+	if (ck == 1) {
+		ksceIoRename("ur0:temp/slim_vs.bin", "ur0:temp/slim.bin");
+	} else if (ck == 0) {
+		ksceIoRename("ur0:temp/slim_ur.bin", "ur0:temp/slim.bin");
+	}
 
 cleanup:
 	if (fd > 0)
