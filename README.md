@@ -1,6 +1,8 @@
 # enso_ex
 enso installer for PSP2 on fw 3.60 or 3.65
 
+![ref0](https://github.com/SKGleba/enso_ex/raw/master/2018-10-07-213235.jpg)
+
 This is a mod of https://github.com/henkaku/enso, all credits go to team molecule for this awesome tool.
 
 The following features/functions were added:
