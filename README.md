@@ -11,3 +11,5 @@ The following features/functions were added:
  
 The following features/functions were removed:
  - Ability to download and update the firmware via enso installer.
+ 
+All exploit modifications are located in the /modded/ directory.
