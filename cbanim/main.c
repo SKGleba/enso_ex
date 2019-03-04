@@ -21,7 +21,7 @@ int main(int argc, char **argv){
 	int compress = 1, l = 1, png = 0, gif = 0;
 	FILE *fp;
 	if(argc < 4){
-		printf("\nusage: cbanim -intype -loop? filename%%d -opt1\n intypes:\n  -r: raw\n  -p: png/jpg/any supported ststic image format\n  -g: gif\n Note: you can add a \"s\" to resize.\n\n  ex1: cbanim -p -y frame_%%d.png => add PNGs to the bootanimation starting from frame_0.png, set it to loop mode\n  ex2: cbanim -sg -n anim.gif => resize and convert the anim.gif GIF to the bootanimation, set it to run-once mode\n\n");
+		printf("\nusage: cbanim -intype -loop? filename%%d -opt1\n intypes:\n  -r: raw\n  -p: png/jpg/any supported static image format\n  -g: gif\n Note: you can add a \"s\" to resize.\n\n  ex1: cbanim -p -y frame_%%d.png => add PNGs to the bootanimation starting from frame_0.png, set it to loop mode\n  ex2: cbanim -sg -n anim.gif => resize and convert the anim.gif GIF to the bootanimation, set it to run-once mode\n\n");
 		return -1;
 	}
 	if (argc == 5){
