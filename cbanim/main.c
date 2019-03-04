@@ -16,30 +16,89 @@ int main(int argc, char **argv){
 	
 	char mbuff[128], cbuff[128], syscmdc[128], syscmdg[128], max[4];
 	
-	char flags[4] = { 1, 0, 0, 0 };
+	char flags[4] = { 0, 1, 0, 0 };
 	
-	int compress = 1, l = 1;
+	int compress = 1, l = 1, png = 0, gif = 0;
 	FILE *fp;
-	if(argc < 3){
-		printf("\nusage: cbanim -loop? filename%%d -opt1\n ex: cbanim -y boot_splash.bin(%%d)\n\n");
+	if(argc < 4){
+		printf("\nusage: cbanim -intype -loop? filename%%d -opt1\n ex: cbanim -g -y bootanim.gif(%%d)\n\n");
 		return -1;
 	}
-	if (argc == 4){
-         flags[0] = 0;
+	if (argc == 5){
+         flags[1] = 0;
 		 compress = 0;
     }
-	if (strcmp("-y", argv[1]) == 0){
-         flags[1] = 1;
+	if (strcmp("-y", argv[2]) == 0){
+         flags[0] = 1;
     }
+	if (strcmp("-g", argv[1]) == 0){
+         gif = 1;
+		 png = 1;
+    } else if (strcmp("-p", argv[1]) == 0){
+         png = 1;
+    } else if (strcmp("-sg", argv[1]) == 0){
+         gif = 2;
+		 png = 2;
+    } else if (strcmp("-sp", argv[1]) == 0){
+         png = 2;
+    }
+	
+	if (gif > 0) {
+		printf("extracting...\n");
+		sprintf(cbuff, argv[3], 0);
+		printf("wait ( %s )\n", cbuff);
+		sprintf(syscmdg, "convert %s frame.png", cbuff);
+		system(syscmdg);
+		cur++;
+		printf("...done\n");
+		argv[3] = "frame-%d.png";
+	}
+	
+	cur = 0;
+	
+	if (png > 0) printf("converting...\n");
+	while (png > 0) {
+		sprintf(cbuff, argv[3], cur);
+		fp = fopen(cbuff, "rb");
+		if (fp == NULL) break;
+		fclose(fp);
+		printf("converting %s\n", cbuff);
+		if (png == 2) {
+			sprintf(syscmdg, "convert %s -resize 960x544! frame_%d.rgba", cbuff, cur);
+		} else {
+			sprintf(syscmdg, "convert %s frame_%d.rgba", cbuff, cur);
+		}
+		system(syscmdg);
+		if (gif > 0) unlink(cbuff);
+		cur++;
+	}
+	if (png > 0) {
+		printf("...done\n");
+		png = 1;
+	}
+	
+	cur = 0;
+	
 	if (compress == 1) printf("compressing...\n");
-	while (compress == 1) {
-		sprintf(cbuff, argv[2], cur);
+	while (compress == 1 && png == 0) {
+		sprintf(cbuff, argv[3], cur);
 		fp = fopen(cbuff, "rb");
 		if (fp == NULL) break;
 		fclose(fp);
 		printf("compressing %s\n", cbuff);
 		sprintf(syscmdg, "gzip -9 -k %s", cbuff);
 		system(syscmdg);
+		cur++;
+	}
+	while (compress == 1 && png == 1) {
+		sprintf(cbuff, "frame_%d.rgba", cur);
+		fp = fopen(cbuff, "rb");
+		if (fp == NULL) break;
+		fclose(fp);
+		printf("compressing %s\n", cbuff);
+		sprintf(syscmdg, "gzip -9 -k %s", cbuff);
+		system(syscmdg);
+		unlink(cbuff);
 		cur++;
 	}
 	if (compress == 1) printf("...done\n");
@@ -53,10 +112,18 @@ int main(int argc, char **argv){
 	printf("combining [boot_animation.img]...\n");
 	while (l == 1) {
 		if (compress == 1) {
-			sprintf(cbuff, argv[2], cur);
-			sprintf(mbuff, "%s.gz", cbuff);
+			if (png == 0) {
+				sprintf(cbuff, argv[3], cur);
+				sprintf(mbuff, "%s.gz", cbuff);
+			} else {
+				sprintf(mbuff, "frame_%d.rgba.gz", cur);
+			}
 		} else {
-			sprintf(mbuff, argv[2], cur);
+			if (png == 0) {
+				sprintf(mbuff, argv[3], cur);
+			} else {
+				sprintf(mbuff, "frame_%d.rgba", cur);
+			}
 		}
 		fp = fopen(mbuff, "rb");
 		if (fp == NULL) {
