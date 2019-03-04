@@ -47,10 +47,11 @@ int main(int argc, char **argv){
 		printf("extracting...\n");
 		sprintf(cbuff, argv[3], 0);
 		printf("wait ( %s )\n", cbuff);
-		sprintf(syscmdg, "convert %s frame.png", cbuff);
+		sprintf(syscmdg, "convert %s -coalesce temp.gif", cbuff);
 		system(syscmdg);
-		cur++;
+		system("convert temp.gif frame.png");
 		printf("...done\n");
+		unlink("temp.gif");
 		argv[3] = "frame-%d.png";
 	}
 	
