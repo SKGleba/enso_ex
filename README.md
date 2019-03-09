@@ -22,7 +22,7 @@ The following features/functions were removed:
    - file format: raw (rgba) or gzipped raw (rgba) 960x544 image.
  - BootAnimation:
    - location: ur0:tai/boot_animation.img
-   - file format: custom (see /cbanim/).
+   - file format: custom (see https://github.com/SKGleba/enso_ex/tree/master/cbanim).
  - Util
    - sd2vita wakeup fix: self explanatory i think
    - sleep fd fix by TheFlow: fixes common sleep-related homebrew errors
