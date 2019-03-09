@@ -269,11 +269,11 @@ static int (*sceKernelRemapBlock)(int32_t uid, int type) = (void *)0x510086D1;
 #define SDSTOR_PROC_CHKO (0x2498)
 #define SDSTOR_PROC_CHKT (0x2940)
 static const char zeroCallOnePatch[4] = {0x01, 0x20, 0x00, 0xBF};
-#define IOF_XMC0_STRING (0x1DCA0 - 0xA0)
+#define IOF_XMC0_STRING (0x1DB48 - 0xA0)
 static const char sd0_blkn[] = "sdstor0:ext-lp-act-entire";
 static const char sd0_blkn_s[] = "sdstor0:gcd-lp-act-entire";
 static const char uma0_blkn[] = "sdstor0:uma-lp-act-entire";
-#define IOF_IMC_STRING (0x1D7D8 - 0xA0)
+#define IOF_IMC_STRING (0x1D680 - 0xA0)
 
 // firmware specific patch offsets
 

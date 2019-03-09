@@ -24,6 +24,9 @@
 #define printf psvDebugScreenPrintf
 #define ARRAYSIZE(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
+#define fOFF 0x2743
+#define zOFF 0x2747
+
 int _vshSblAimgrGetConsoleId(char cid[32]);
 int sceSblSsUpdateMgrSetBootMode(int x);
 int vshPowerRequestColdReset(void);
@@ -224,6 +227,51 @@ int unlock_system(void) {
 	return 0;
 }
 
+int config_util(void) {
+	psvDebugScreenClear();
+	static char uwu[4] = {0x30, 0x30, 0x30, 0};
+	printf("Util configurator\n");
+	printf("\n1 - sd2vita wakeup fix\n");
+	printf("Options:\n");
+	printf("  CROSS      Enable\n");
+	printf("  SQUARE     Disable\n\n");
+
+	if (get_key() == SCE_CTRL_CROSS) uwu[0] = 0x31;
+	
+	printf("\n2 - sleep fd fix by TheFlow\n");
+	printf("Options:\n");
+	printf("  CROSS      Enable\n");
+	printf("  SQUARE     Disable\n\n");
+
+	if (get_key() == SCE_CTRL_CROSS) uwu[1] = 0x31;
+	
+	printf("\n3 - Delay boot\n");
+	printf("Options:\n");
+	printf("  CROSS      Disabled\n");
+	printf("  SQUARE     5 sec\n");
+	printf("  TRIANGLE   10 sec\n");
+	printf("  CIRCLE     15 sec\n\n");
+
+	int kii = get_key();
+	
+	if (kii == SCE_CTRL_SQUARE) {
+		uwu[2] = 0x31;
+		uwu[3] = 5;
+	} else if (kii == SCE_CTRL_TRIANGLE) {
+		uwu[2] = 0x31;
+		uwu[3] = 10;
+	} else if (kii == SCE_CTRL_CIRCLE) {
+		uwu[2] = 0x31;
+		uwu[3] = 15;
+	}
+	
+	SceUID fd = sceIoOpen("sa0:eex/mmt_cfg.bin", SCE_O_WRONLY | SCE_O_TRUNC | SCE_O_CREAT, 0777);
+	sceIoWrite(fd, uwu, 4);
+	sceIoClose(fd);
+	
+	printf("done\n");
+}
+
 int do_install_compat(void) {
 	int ret = 0;
 
@@ -405,6 +453,7 @@ int do_install(void) {
 	}
 	
 	printf("Configuring enso... ");
+	printf("1000-CFG => %s-CFG chk: ", flags);
 	if (fwver == 34) {
 		fcp("app0:fat_360.bin", "ur0:temp/slim.bin");
 	} else {
@@ -414,7 +463,11 @@ int do_install(void) {
 	static char config[8];
 	
 	SceUID wfd = sceIoOpen("ur0:temp/slim.bin", SCE_O_RDWR, 0777);
-	sceIoLseek(wfd, 0x2707, SCE_SEEK_SET);
+	if (fwver == 69) {
+		sceIoLseek(wfd, fOFF, SCE_SEEK_SET);
+	} else if (fwver == 34) {
+		sceIoLseek(wfd, zOFF, SCE_SEEK_SET);
+	}
 	sceIoRead(wfd, config, 8);
 	
 	if (strncmp(config, "1000-CFG", 8) != 0) {
@@ -423,9 +476,25 @@ int do_install(void) {
 	}
 	
 	sceIoLseek(wfd, 0, SCE_SEEK_SET);
-	sceIoLseek(wfd, 0x2707, SCE_SEEK_SET);
+	if (fwver == 69) {
+		sceIoLseek(wfd, fOFF, SCE_SEEK_SET);
+	} else if (fwver == 34) {
+		sceIoLseek(wfd, zOFF, SCE_SEEK_SET);
+	}
 	sceIoWrite(wfd, flags, 4);
+	sceIoLseek(wfd, 0, SCE_SEEK_SET);
+	if (fwver == 69) {
+		sceIoLseek(wfd, fOFF, SCE_SEEK_SET);
+	} else if (fwver == 34) {
+		sceIoLseek(wfd, zOFF, SCE_SEEK_SET);
+	}
+	sceIoRead(wfd, config, 8);
 	sceIoClose(wfd);
+	if (strncmp(config, flags, 4) != 0) {
+		printf("WRNGPAYLOAD: %s\n", flags);
+		goto err;
+	}
+	printf("%s ", config);
 	printf("done\n");
 	
 	printf("Writing config... ");
@@ -452,7 +521,7 @@ int do_install(void) {
 	}
 	printf("ok!\n");
 	
-	ksceIoMkdir("sa0:eex", 0777);
+	sceIoMkdir("sa0:eex", 0777);
 	
 	printf("copying taihen and henkaku... ");
 	fcp("ur0:tai/taihen.skprx", "sa0:eex/taihen.skprx");
@@ -467,9 +536,16 @@ int do_install(void) {
 	fcp("app0:blogo.xpng", "sa0:eex/boot_splash.img");
 	printf("done\n");
 
+	printf("copying util... ");
+	fcp("app0:mmt.skprx", "sa0:eex/mmt.skprx");
+	printf("done\n");
+	
 	printf("\nThe installation was completed successfully.\n");
 	
 	sceIoRemove("ur0:temp/slim.bin");
+	
+	printf("Press CROSS to launch util config or any other key to finish\n\n");
+	if (get_key() == SCE_CTRL_CROSS) config_util();
 
 	unlock_system();
 	return 0;
@@ -514,17 +590,27 @@ int do_uninstall(void) {
 }
 
 int do_reinstall_config(void) {
-	int ret = 0;
+	int ret = 0, m = 0;
 	
-	ksceIoMkdir("sa0:eex", 0777);
+	sceIoMkdir("sa0:eex", 0777);
+	
+	printf("\nOptions:\n");
+	printf("  CROSS      Fix enso config\n");
+	printf("  SQUARE     Change util settings\n\n");
 
-	printf("Writing config... ");
-	ret = ensoWriteConfig();
-	if (ret < 0) {
-		printf("failed\n");
-		return -1;
+	if (get_key() == SCE_CTRL_SQUARE) m = 1;
+
+	if (m == 0) {
+		printf("Writing config... ");
+		ret = ensoWriteConfig();
+		if (ret < 0) {
+			printf("failed\n");
+			return -1;
+		}
+		printf("ok!\n");
+	} else {
+		config_util();
 	}
-	printf("ok!\n");
 
 	return 0;
 }
@@ -631,7 +717,7 @@ int main(int argc, char *argv[]) {
 	printf("Options:\n\n");
 	printf("  CROSS      Install/reinstall the hack.\n");
 	printf("  TRIANGLE   Uninstall the hack.\n");
-	printf("  SQUARE     Fix boot configuration (choose this if taiHEN isn't loading on boot).\n");
+	printf("  SQUARE     Fix boot configuration/Change util settings\n");
 	printf("  CIRCLE     Exit without doing anything.\n\n");
 
 again:

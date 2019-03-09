@@ -357,7 +357,7 @@ static int LoadBootlogoSingle(int mode) {
 	uid = rKernelAllocMemBlock("SceDisplay", 0x6020D006, 0x200000, &optp);
 	rKernelGetMemBlockBase(uid, (void**)&fb_addr);
 	if (stat.st_size < 0x1FE000) {
-		yid = rKernelAllocMemBlock("rawimg", SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW, 0x200000, NULL);
+		yid = rKernelAllocMemBlock("r", SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW, 0x200000, NULL);
 		rKernelGetMemBlockBase(yid, (void**)&gz_addr);
 		rIoRead(fd, (void *)gz_addr, stat.st_size);
 		rGzipDecompress((void *)fb_addr, 0x1FE000, (void *)gz_addr, NULL);
@@ -408,7 +408,7 @@ static int banimthread(SceSize args, void *argp) {
 	uid = rKernelAllocMemBlock("SceDisplay", 0x6020D006, 0x200000, &optp);
 	rKernelGetMemBlockBase(uid, (void**)&fb_addr);
 	if (flags[1] == 1) {
-		yid = rKernelAllocMemBlock("rawimg", SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW, 0x200000, NULL);
+		yid = rKernelAllocMemBlock("h", SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW, 0x200000, NULL);
 		rKernelGetMemBlockBase(yid, (void**)&gz_addr);
 	}
 	while (chkdipsw(0) == 1) {
@@ -455,7 +455,7 @@ static int KLoadStartModule_Anim(const char* modpath, int arg1, void* s2, int ar
 	if (ex("ur0:tai/boot_splash.img") == 1) {
 		LoadBootlogoSingle(1);
 	} else if (ex("ur0:tai/boot_animation.img") == 1) {
-		SceUID athid = rKernelCreateThread("banim", banimthread, 0x00, 0x1000, 0, 0, 0);
+		SceUID athid = rKernelCreateThread("b", banimthread, 0x00, 0x1000, 0, 0, 0);
 		setdipsw(0);
 		rKernelStartThread(athid, 0, NULL);
 	} else if (ex("sa0:eex/boot_splash.img") == 1) {
@@ -468,13 +468,13 @@ static int KLoadStartModule_Anim(const char* modpath, int arg1, void* s2, int ar
 		rIoRemove("ux0:id.dat");
 	}
  } else if (rstrncmpr(modpath, "ur0:tai/henkaku.skprx", 20) == 0 && ret >= 0) {
-		clrdipsw(0);
 		int rx = KLoadStartModule("sa0:eex/mmt.skprx", 0, NULL, 0, 0, 0);
 		if (rx < 0) rIoMount(0x800, NULL, 0, 0, 0, 0);
+		clrdipsw(0);
  } else if (rstrncmpr(modpath, "sa0:eex/henkaku.skprx", 20) == 0 && ret >= 0) {
-		clrdipsw(0);
 		int rx = KLoadStartModule("sa0:eex/mmt.skprx", 0, NULL, 0, 0, 0);
 		if (rx < 0) rIoMount(0x800, NULL, 0, 0, 0, 0);
+		clrdipsw(0);
  }
  return ret;
 }
@@ -490,13 +490,13 @@ static int KLoadStartModule_Def(const char* modpath, int arg1, void* s2, int arg
 		rIoRemove("ux0:id.dat");
 	}
  } else if (rstrncmpr(modpath, "ur0:tai/henkaku.skprx", 20) == 0 && ret >= 0) {
-		clrdipsw(0);
 		int rx = KLoadStartModule("sa0:eex/mmt.skprx", 0, NULL, 0, 0, 0);
 		if (rx < 0) rIoMount(0x800, NULL, 0, 0, 0, 0);
+		clrdipsw(0);
  } else if (rstrncmpr(modpath, "sa0:eex/henkaku.skprx", 20) == 0 && ret >= 0) {
-		clrdipsw(0);
 		int rx = KLoadStartModule("sa0:eex/mmt.skprx", 0, NULL, 0, 0, 0);
 		if (rx < 0) rIoMount(0x800, NULL, 0, 0, 0, 0);
+		clrdipsw(0);
  }
  return ret;
 }
@@ -520,7 +520,6 @@ static int rIoOpen_sup(char *s1, int arg1, int arg2) {
 static int rIoOpen_dup(char *s1, int arg1, int arg2) {
  int ret = 0;
  rIoRemove("ud0:PSP2UPDATE/PSP2UPDAT.PUP");
- rIoRemove("ud0:PSP2UPDATE/psp2swu.self");
  ret = rIoOpen(s1, arg1, arg2);
  return ret;
 }
