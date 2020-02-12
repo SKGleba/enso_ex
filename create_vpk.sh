@@ -15,6 +15,6 @@ rm *.e2xp;
 cd ../enso/;
 rm *.bin;
 echo "";
-echo "DONE!";
+echo "DONE! [ enso_ex.vpk ]";
 echo "";
 )

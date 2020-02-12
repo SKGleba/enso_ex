@@ -19,22 +19,14 @@
 
 #include "enso.h"
 #include "version.h"
-#include "sha256.h"
 
 #include "graphics.h"
+
+#include "../../enso/ex_defs.h"
 
 #define printf psvDebugScreenPrintf
 #define ARRAYSIZE(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
-typedef struct PayloadsBlockStruct {
-  uint32_t magic;
-  uint32_t count;
-  uint32_t off[15];
-  uint32_t sz[15];
-} __attribute__((packed)) PayloadsBlockStruct;
-
-int _vshSblAimgrGetConsoleId(char cid[32]);
-int sceSblSsUpdateMgrSetBootMode(int x);
 int vshPowerRequestColdReset(void);
 int curfw = 69;
 
@@ -60,8 +52,6 @@ static unsigned buttons[] = {
 	SCE_CTRL_CROSS,
 	SCE_CTRL_SQUARE,
 };
-
-const char check_cid[16] = BUILD_CID;
 
 int fap(const char *from, const char *to) {
 	long psz;
@@ -285,7 +275,7 @@ int mergePayloads(PayloadsBlockStruct *pstart, uint32_t soff) {
 				printf("  -  %s... ", dir.d_name);
 				char *src_path = malloc(strlen("ux0:eex/payloads/") + strlen(dir.d_name) + 2);
 				snprintf(src_path, 255, "ux0:eex/payloads/%s", dir.d_name);
-				fap(src_path, "ux0:eex/data/patches.e2xd");
+				fap(src_path, "ux0:eex/data/" E2X_IPATCHES_FNAME);
 				pstart->off[fcount] = coff;
 				pstart->sz[fcount] = dir.d_stat.st_size;
 				psvDebugScreenSetFgColor(COLOR_GREEN);
@@ -301,23 +291,23 @@ int mergePayloads(PayloadsBlockStruct *pstart, uint32_t soff) {
 }
 
 int do_sync_eex(void) {
-	int ebootlogo = ex("ux0:eex/data/bootlogo.raw"), ibootlogo = ex("os0:bootlogo.raw"), epf = ex("ux0:eex/data/patches.e2xd");
+	int ebootlogo = ex("ux0:eex/data/bootlogo.raw"), ibootlogo = ex("os0:bootlogo.raw"), epf = ex("ux0:eex/data/" E2X_IPATCHES_FNAME);
 	printf("Syncing enso_ex scripts... \n");
 	
 	PayloadsBlockStruct pstart;
 	memset(&pstart, 0, sizeof(pstart));
-	pstart.magic = 0xCAFEBABE;
+	pstart.magic = E2X_MAGIC;
 	
 	if (!ebootlogo && ibootlogo)
 		sceIoRemove("os0:bootlogo.raw");
 	if (epf)
-		sceIoRemove("ux0:eex/data/patches.e2xd");
+		sceIoRemove("ux0:eex/data/" E2X_IPATCHES_FNAME);
 	
-	int fd = sceIoOpen("ux0:eex/data/patches.e2xd", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+	int fd = sceIoOpen("ux0:eex/data/" E2X_IPATCHES_FNAME, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
 	sceIoWrite(fd, &pstart, 128);
 	sceIoClose(fd);
-	int count = mergePayloads(&pstart, getsz("ux0:eex/data/patches.e2xd"));
-	fd = sceIoOpen("ux0:eex/data/patches.e2xd", SCE_O_WRONLY, 0777);
+	int count = mergePayloads(&pstart, getsz("ux0:eex/data/" E2X_IPATCHES_FNAME));
+	fd = sceIoOpen("ux0:eex/data/" E2X_IPATCHES_FNAME, SCE_O_WRONLY, 0777);
 	sceIoWrite(fd, &pstart, 128);
 	sceIoClose(fd);
 	
@@ -489,24 +479,6 @@ int do_reinstall_config(void) {
 	return 0;
 }
 
-int check_build(void) {
-	if (BUILD_PERSONALIZED) {
-		char right_cid[16];
-		char cur_cid[16];
-		for (int i = 0; i < 16; i++) {
-			right_cid[i] = check_cid[i] ^ 0xAA; // super leet encryption
-		}
-		_vshSblAimgrGetConsoleId(cur_cid);
-		if (memcmp(cur_cid, right_cid, 16) == 0) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} else {
-		return 1;
-	}
-}
-
 int check_safe_mode(void) {
 	if (sceIoDevctl("ux0:", 0x3001, NULL, 0, NULL, 0) == 0x80010030) {
 		return 1;
@@ -558,10 +530,6 @@ int main(int argc, char *argv[]) {
 	int ret = 0;
 
 	psvDebugScreenInit();
-
-	if (!check_build()) {
-		return 0;
-	}
 
 	psvDebugScreenSetFgColor(COLOR_CYAN);
 	printf("Built On: %s by SKGleba\n\n", BUILD_DATE);

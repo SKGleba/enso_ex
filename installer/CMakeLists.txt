@@ -60,7 +60,6 @@ add_executable(${SHORT_NAME}
   src/main.c
   src/graphics.c
   src/font.c
-  src/sha256.c
 )
 
 add_dependencies(${SHORT_NAME} emmc_helper_365.skprx)

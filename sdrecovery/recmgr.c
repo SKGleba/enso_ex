@@ -4,22 +4,16 @@
 #include <inttypes.h>
 #include <stdint.h>
 
+#include "../enso/ex_defs.h"
+
 #define BLOCK_SIZE 0x200
 #define RECOVERY_OFFSET 0x400
 #define RECOVERY_SIZE 0x4000
-#define EEX_MAGIC 0xCAFEBABE
 #define DO_LOAD_GCSD_KERNEL 0
 #define DO_USE_RECOVERY 1
 
 uint8_t enable = DO_USE_RECOVERY, extkern = DO_LOAD_GCSD_KERNEL;
-uint32_t bloff = RECOVERY_OFFSET/0x200, blsz = RECOVERY_SIZE/0x200, magic = EEX_MAGIC, foff = 0;
-
-typedef struct RecoveryBlockStruct {
-  uint32_t magic;
-  uint8_t flags[4];
-  uint32_t blkoff;
-  uint32_t blksz;
-} __attribute__((packed)) RecoveryBlockStruct;
+uint32_t bloff = RECOVERY_OFFSET/0x200, blsz = RECOVERY_SIZE/0x200, magic = E2X_MAGIC, foff = E2X_RECOVERY_BLKOFF;
 
 static unsigned char recblk[0x10];
 
@@ -56,6 +50,11 @@ void pseudodd(const char *src, const char *dst, uint32_t iseek, uint32_t oseek, 
 	fclose(fp);
 	printf("writing to target...\n");
 	FILE *fl = fopen(dst, "rb+");
+	if (fl == NULL) {
+		fl = fopen(dst, "wb");
+		fclose(fl);
+		fl = fopen(dst, "rb+");
+	}
 	fseek(fl,oseek,SEEK_SET);
 	fwrite(buffer,1,size,fl);
 	fclose(fl);
@@ -107,7 +106,7 @@ int main (int argc, char *argv[]) {
 	if (strcmp("-r", argv[1]) == 0) {
         mgr(argv[2], (cfname == 0) ? "recovery.bkp" : argv[cfname], 0);
     } else if (strcmp("-w", argv[1]) == 0) {
-        mgr((cfname == 0) ? "recovery/recovery.e2xs" : argv[cfname], argv[2], 1);
+        mgr((cfname == 0) ? "recovery/" E2X_RECOVERY_FNAME : argv[cfname], argv[2], 1);
     } else if (strcmp("-dd", argv[1]) == 0 && cfname != 0) {
         pseudodd(argv[cfname], argv[2], foff, bloff, blsz);
     }

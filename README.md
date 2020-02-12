@@ -22,7 +22,7 @@ A mod of https://github.com/henkaku/enso for PSP2 Vita.
  
 ## Patches
  - The "os0:patches.e2xd" file is a set of code blobs that are executed at low-level module load.
- - Custom patches can be skipped by holding CIRCLE at boot.
+ - Custom patches can be skipped by holding VOLDOWN at boot.
  
 ### Adding patches
  - Patches are position independent code blobs that are run each in their own memblocks.
@@ -40,7 +40,7 @@ A mod of https://github.com/henkaku/enso for PSP2 Vita.
 
 ## Recovery
  - The "recovery" is a code blob loaded from a GC-SD device in GC slot.
- - Recovery can be loaded by holding SELECT at boot.
+ - Recovery can be loaded by holding SELECT at boot, the device must be connected to a power source.
  
 ### Supported recovery types
 1) RAW recovery (recommended)
@@ -51,17 +51,20 @@ A mod of https://github.com/henkaku/enso for PSP2 Vita.
 	- Format your SD card to FAT16 and put your recovery blob in "SD:recovery.e2xp".
 	- By default the device will NOT continue the boot process after this recovery method is used.
 	- TODO: add a cleanup sample to continue boot.
-3) OS0 image
-	- If the SD card contains the EMMC image you can use its os0 for low-level modules.
-	- TODO: full easy dual nand.
  
 ### Recovery errors
  - If the recovery returned 0, the console will continue the boot process.
  - If an error happened the user will need to confirm that he is aware of it by pressing the correct key:
 	- "No recovery found" - press TRIANGLE.
-	- "Error running GC-SD RAW recovery" - press SQUARE.
-	- "Error running GC-SD os0 recovery" - press VOLDOWN.
+	- "Error running GC-SD RAW recovery" - press CIRCLE.
+	- "Error running GC-SD os0 recovery" - press SQUARE.
 	- "Recovery did NOT return 0" - press CROSS.
+	
+### "dual nand"
+ - You can use the SD's partitions instead of EMMC's partitions by holding START at boot.
+ - If an error happened the user will need to confirm that he is aware of it by pressing the correct key:
+	- "Error reading GC-SD" - press TRIANGLE.
+	- "Incorrect SD magic (not SCE magic)" - press CIRCLE.
 
 # Credits
  - Team molecule for henkaku, taihen, enso, and HenKaku wiki entries.

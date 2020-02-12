@@ -28,7 +28,6 @@ enum {
 	FAT_BIN_USEFUL_SIZE = 0x6000 - 0x400,
 
 	OS0_SIZE = 0x3820 * BLOCK_SIZE,
-	OS0_CRC32 = 0xb776951d,
 };
 
 typedef struct {
