@@ -7,7 +7,7 @@
 #include "../../enso/ex_defs.h"
 
 // idk what to give as a sample recovery so here is a simple code that dumps nskbl to raw GCSD
-int _start(void *kbl_param unsigned int ctrldata) {
+int _start(void *kbl_param, unsigned int ctrldata) {
 	// patch read_sector_sd to send a write command instead
 	*(uint8_t *)0x5101e8b7 = 0x62;
 	*(uint8_t *)0x5101e8bb = 0x60;
