@@ -213,7 +213,7 @@ static void __attribute__((noreturn)) sysstate_final_hook(void) {
     sysstate_final();
 }
 
-// Read device to a memblock, mark as RX if req, return ptr (only FAT16 FS)
+// Read device to a memblock, mark as RX if req, return ptr
 static void *load_device(uint32_t device, char *blkname, uint32_t offblk, uint32_t szblk, int type, int mode) {
 	int mblk = sceKernelAllocMemBlock(blkname, 0x1020D006, szblk * 0x200, NULL);
 	if (mblk >= 0) {
