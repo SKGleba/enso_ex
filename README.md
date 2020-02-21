@@ -1,8 +1,6 @@
 # enso_ex
 A mod of https://github.com/henkaku/enso for PSP2 Vita.
 
-## Please wait, rewriting...
-
 # Features
  - pre-nskernel recovery from a GC-SD device.
  - easy low-level code exec for custom kernel patches.
