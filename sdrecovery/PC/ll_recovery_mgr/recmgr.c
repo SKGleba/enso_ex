@@ -1,10 +1,12 @@
+// Flash/configure SD for low-level enso_ex recovery
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
 #include <stdint.h>
 
-#include "../enso/ex_defs.h"
+#include "../../../enso/ex_defs.h"
 
 #define BLOCK_SIZE 0x200
 #define RECOVERY_OFFSET 0x400
@@ -74,10 +76,8 @@ void mgr(const char *src, const char *dst, int set) {
 
 int main (int argc, char *argv[]) {
 
-	int cfname = 0;
-
-	if(argc < 3){
-		printf ("\nusage: sudo ./[binname] [mode] [device] [opt flags]\n");
+	if(argc < 4){
+		printf ("\nusage: sudo ./[binname] [mode] [source] [target] [opt flags]\n");
 		return -1;
 	}
   
@@ -93,9 +93,6 @@ int main (int argc, char *argv[]) {
         } else if (strcmp("-sz", argv[i]) == 0 && i < argc) {
         	i = i + 1;
         	blsz = atoi(argv[i]);
-        } else if (strcmp("-file", argv[i]) == 0 && i < argc) {
-        	i = i + 1;
-        	cfname = i;
         } else if (strcmp("-foff", argv[i]) == 0 && i < argc) {
         	i = i + 1;
         	foff = atoi(argv[i]);
@@ -104,11 +101,11 @@ int main (int argc, char *argv[]) {
 
   // modes
 	if (strcmp("-r", argv[1]) == 0) {
-        mgr(argv[2], (cfname == 0) ? "recovery.bkp" : argv[cfname], 0);
+        mgr(argv[2], argv[3], 0);
     } else if (strcmp("-w", argv[1]) == 0) {
-        mgr((cfname == 0) ? "recovery/" E2X_RECOVERY_FNAME : argv[cfname], argv[2], 1);
-    } else if (strcmp("-dd", argv[1]) == 0 && cfname != 0) {
-        pseudodd(argv[cfname], argv[2], foff, bloff, blsz);
+        mgr(argv[2], argv[3], 1);
+    } else if (strcmp("-dd", argv[1]) == 0) {
+        pseudodd(argv[2], argv[3], foff, bloff, blsz);
     }
  
  	return 0;

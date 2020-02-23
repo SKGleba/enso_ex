@@ -4,10 +4,10 @@ CFLAGS=-Os -fno-builtin-printf -fPIC -fno-builtin-memset -Wall -Wextra -Wno-unus
 OBJCOPY=arm-vita-eabi-objcopy
 LDFLAGS=-nodefaultlibs -nostdlib
 
-all: recovery.e2xp
+all: sector_int2ext_$(FW).e2xp
 	
-recovery.e2xp: recovery
+sector_int2ext_$(FW).e2xp: sector_int2ext_$(FW)
 	$(OBJCOPY) -O binary $^ $@
 	
-recovery: recovery.o
-	$(CC) -o $@ $^ $(LDFLAGS)
+sector_int2ext_$(FW): sector_int2ext.o
+	$(CC) -o $@ $^ $(LDFLAGS) -T sector_int2ext.x

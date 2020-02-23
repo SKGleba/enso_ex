@@ -1,12 +1,13 @@
+// dump NSKBL to GCSD
+
 #include <inttypes.h>
 #ifdef FW_360
-	#include "../../enso/360/nsbl.h"
+	#include "../../../enso/360/nsbl.h"
 #else
-	#include "../../enso/365/nsbl.h"
+	#include "../../../enso/365/nsbl.h"
 #endif
-#include "../../enso/ex_defs.h"
-
-// idk what to give as a sample recovery so here is a simple code that dumps nskbl to raw GCSD
+#include "../../../enso/ex_defs.h"
+ 
 int _start(void *kbl_param, unsigned int ctrldata) {
 	// patch read_sector_sd to send a write command instead
 	*(uint8_t *)0x5101e8b7 = 0x62;

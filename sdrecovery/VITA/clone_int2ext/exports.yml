@@ -1,0 +1,8 @@
+emmc_clone:
+  attributes: 0
+  version:
+    major: 6
+    minor: 9
+  main:
+    start: module_start
+    stop: module_stop
