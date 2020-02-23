@@ -96,21 +96,6 @@ static int sdif_write_sector_mmc_patched(void* ctx, int sector, char* buffer, in
 	return sdif_write_sector_mmc(ctx, sector, buffer, nSectors);
 }
 
-// main function to hook stuff
-#define HOOK_EXPORT(name, lib_nid, func_nid) do {           \
-    void **func = get_export_func(mod, lib_nid, func_nid);  \
-    DACR_OFF(                                               \
-        name = *func;                                       \
-        *func = name ## _patched;                           \
-    );                                                      \
-} while (0)
-#define FIND_EXPORT(name, lib_nid, func_nid) do {           \
-    void **func = get_export_func(mod, lib_nid, func_nid);  \
-    DACR_OFF(                                               \
-        name = *func;                                       \
-    );                                                      \
-} while (0)
-
 void __attribute__((optimize("O0"))) test(PayloadArgsStruct *args) {
 	SceObject *obj;
     SceModuleObject *mod;
