@@ -12,6 +12,7 @@
 #define E2X_IPATCHES_SKIP CTRL_VOLDOWN
 #define E2X_IPATCHES_FNAME "patches.e2xd"
 #define E2X_EPATCHES_UXCFG CTRL_VOLUP
+#define E2X_BOOTMGR_NAME "bootmgr.e2xp"
 
 typedef struct RecoveryBlockStruct {
   uint32_t magic;

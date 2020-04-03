@@ -291,15 +291,17 @@ int mergePayloads(PayloadsBlockStruct *pstart, uint32_t soff) {
 }
 
 int do_sync_eex(void) {
-	int ebootlogo = ex("ux0:eex/data/bootlogo.raw"), ibootlogo = ex("os0:bootlogo.raw"), epf = ex("ux0:eex/data/" E2X_IPATCHES_FNAME);
+	int ibootlogo = ex("os0:bootlogo.raw"), epf = ex("ux0:eex/data/" E2X_IPATCHES_FNAME), ibmgr = ex("os0:" E2X_BOOTMGR_NAME);
 	printf("Syncing enso_ex scripts... \n");
 	
 	PayloadsBlockStruct pstart;
 	memset(&pstart, 0, sizeof(pstart));
 	pstart.magic = E2X_MAGIC;
 	
-	if (!ebootlogo && ibootlogo)
+	if (ibootlogo)
 		sceIoRemove("os0:bootlogo.raw");
+	if (ibmgr)
+		sceIoRemove("os0:" E2X_BOOTMGR_NAME);
 	if (epf)
 		sceIoRemove("ux0:eex/data/" E2X_IPATCHES_FNAME);
 	
@@ -508,7 +510,7 @@ int optct = 5;
 void smenu(){
 	psvDebugScreenClear(COLOR_BLACK);
 	psvDebugScreenSetFgColor(COLOR_CYAN);
-	printf("                        enso_ex v4.0                             \n");
+	printf("                        enso_ex v4.1                             \n");
 	printf("                         By SKGleba                              \n");
 	psvDebugScreenSetFgColor(COLOR_RED);
 	for(int i = 0; i < optct; i++){

@@ -35,6 +35,11 @@ A mod of https://github.com/henkaku/enso for PSP2 Vita.
 	- If the file is not found there will be no logo, useful for boot animations.
  - rconfig.e2xp: If VOLUP is held at boot, "ux0:eex/boot_config.txt" is used instead of the ur0: one.
 	- It also works in safe/update mode.
+	
+## BootMgr
+ - The "os0:bootmgr.e2xp" file is a code blob that is executed just before psp2bootconfig load.
+ - BootMgr can be skipped by holding VOLDOWN at boot.
+ - To add/change it you need to add/change "ux0:eex/data/bootmgr.e2xp" and sync.
 
 ## Recovery
  - The "recovery" is a code blob loaded from a GC-SD device in GC slot.

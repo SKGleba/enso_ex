@@ -257,6 +257,7 @@ static void (*flush_icache)() = (void*)0x51014521;
 static int (*strncmp)(const char *s1, const char *s2, int len) = (void *)0x51013B30;
 static SceObject *(*get_obj_for_uid)(int uid) = (void *)0x51017649;
 static int (*module_load)(const SceModuleLoadList *list, int *uids, int count, int) = (void *)0x51001551;
+static int (*module_load_direct)(const SceModuleLoadList *list, int *uids, int count, int osloc, int unk) = (void *)0x5100148d;
 static int (*sceKernelAllocMemBlock)(const char *name, int type, int size, SceKernelAllocMemBlockKernelOpt *opt) = (void *)0x510086C1;
 static int (*sceKernelGetMemBlockBase)(int32_t uid, void **basep) = (void *)0x510040E5;
 static int (*sceKernelRemapBlock)(int32_t uid, int type) = (void *)0x510086D1;
@@ -277,6 +278,9 @@ static int (*is_true_dolce)(void) = (void *)0x510171e5;
 static SceBootArgs *boot_args = (void *)0x51167528;
 static SceSysrootContext **sysroot_ctx_ptr = (void *)0x51138A3C;
 static void **module_load_func_ptr = (void *)0x51027630;
+
+#define PSP2BOOTCONFIG_STRING (0x51023bb8)
+#define PSP2BCFG_STRING_ADDR (0x51023c08)
 
 // sysstate patches
 #define SBLAUTHMGR_OFFSET_PATCH_ARG (168)
