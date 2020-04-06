@@ -24,7 +24,7 @@ A mod of https://github.com/henkaku/enso for PSP2 Vita.
  
 ### Adding patches
  - Patches are position independent code blobs that are run each in their own memblocks.
- - Patches are located in the "ux0:eex/patches/" directory.
+ - Patches are located in the "ux0:eex/payloads/" directory.
  - Data files for patches are located in the "ux0:eex/data/" directory.
  - You can "sync"/"compile" patches with the enso_ex app.
  
