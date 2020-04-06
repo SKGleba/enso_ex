@@ -371,9 +371,9 @@ static void add_tparty_patches(const SceModuleLoadList *list, int *uids, int cou
 
 // Run BootMgr and resume psp2bootconfig load
 static int load_psp2bootconfig_patched(uint32_t myaddr, int *uids, int count, int osloc, int unk) {
-	void (*tcode)(void *kbl_param, unsigned int ctrldata) = (void *)(load_file("os0:" E2X_BOOTMGR_NAME, "bootmgr", 1) + 1);
+	void (*tcode)(void) = (void *)(load_file("os0:" E2X_BOOTMGR_NAME, "bootmgr_ex", 1) + 1);
 	if (tcode != (void *)0x1)
-		tcode(boot_args, 69);
+		tcode();
 	myaddr = PSP2BOOTCONFIG_STRING;
 	return module_load_direct((SceModuleLoadList *)&myaddr, uids, count, osloc, unk);
 }
