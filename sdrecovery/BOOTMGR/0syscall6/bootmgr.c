@@ -11,9 +11,6 @@
 
 #include "../../../enso/ex_defs.h"
 
-#define FW_FWV 0x03730000 // kernel firmware version (if running diff kernel than bl)
-#define KASM_DEC_SZ 36988 // kprx_auth_sm.elf size in bytes (for diff kernel than bl)
-
 // per-fw offsets
 #ifdef FW_365
 	#define LOADSM_KA_NOP_1 0x51016cf2
@@ -157,6 +154,13 @@ typedef struct jump_args_cmd {
    uint32_t req[16];
 } jump_args_cmd;
 
+typedef struct hfw_config_struct {
+  uint32_t orig_fwv;
+  uint32_t fw_fwv;
+  uint32_t kasm_sz;
+  uint32_t ussm_sz;
+} __attribute__((packed)) hfw_config_struct;
+
 #ifdef FW_365
 static int (*smtool_invoke)(uint32_t param_1, uint32_t self_paddr_list_paddr, uint32_t self_paddr_list_count, uint32_t *param_4, SceSblSmCommContext130 *param_5, int *id) = (void*)0x51015f21;
 static int (*smtool_call_big_ka)(void *argv, uint32_t args, uint32_t cmdid) = (void*)0x51016bc9;
@@ -196,8 +200,10 @@ static int read_f2b(unsigned int size, void *buf, char *file) {
 	return 3;
 }
 
-static int load_ussm(int *ctx) {
+static int load_ussm(int *ctx, uint32_t sm_sz_arg) {
 	unsigned int smsz = 42456;
+	if (sm_sz_arg > 0)
+		smsz = sm_sz_arg;
 	int sm_block = sceKernelAllocMemBlock("sm_cached", 0x10208006, (smsz + 0xfff) & 0xfffff000, 0), cmd_block = sceKernelAllocMemBlock("load_sm_cmd", 0x10208006, 0x1000, 0);
 	void *sm_block_addr = NULL, *cmd_block_addr = NULL;
 	sceKernelGetMemBlockBase(sm_block, (void**)&sm_block_addr); // block for SM
@@ -256,7 +262,7 @@ static void corrupt(void *cmd_buf, uint32_t addr) {
 }
 
 // add rvk patches
-static void cmep_run(void) {
+static void cmep_run(uint32_t sm_sz_arg) {
 	SceKernelAllocMemBlockKernelOpt optp;
 	optp.size = 0x58;
 	optp.attr = 2;
@@ -278,7 +284,9 @@ static void cmep_run(void) {
 	memcpy(payload_block_addr, &NMPstage2_payload, sizeof(NMPstage2_payload)); // stage2 payload that will jump to base+0x100
 	memcpy((payload_block_addr + 0x100), &sk_rvk_patch_nmp, sizeof(sk_rvk_patch_nmp)); // rvk & sm_load patch installer
 	memcpy((payload_block_addr + 0x220), &sm_load_patch_nmp, sizeof(sm_load_patch_nmp)); // custom sm_load handler
-	uint32_t rvksz = KASM_DEC_SZ;
+	uint32_t rvksz = 36988;
+	if (sm_sz_arg > 0)
+		rvksz = sm_sz_arg;
 	if (read_f2b(rvksz, (payload_block_addr + 0x300), "os0:zss_ka.elf") == 0) { // add custom kprx_auth_sm if present
 		*(uint32_t *)(payload_block_addr + 0x200) = 0xDEAFFADE; // magic
 		*(uint32_t *)(payload_block_addr + 0x204) = (0x1f850300 + 0x1000); // .elf \ header
@@ -293,18 +301,23 @@ static void cmep_run(void) {
 	*(uint16_t *)CALL_KA_NOP_A = 0x6073; // undo the 3rd arg patch
 	clean_dcache((void *)CALL_KA_NOP_R, 0x10);
 	flush_icache();
-	memcpy(payload_block_addr, &bkp, 0x80); // restore first 0x80 bytes of SPRAM  (WHY? something dies)
+	memcpy(payload_block_addr, &bkp, 0x80); // restore first 0x80 bytes of SPRAM (WHY? something dies)
 	sceKernelFreeMemBlock(args_block);
 	sceKernelFreeMemBlock(payload_block);
 	return;
 }
 
 void gp_main(void) {
-	if (load_ussm((int *)0x5113f0e8) == 0) { // load update_sm
-		cmep_run(); // add rvk patches
+	hfw_config_struct cfg;
+	memset(&cfg, 0, 0x10);
+	read_f2b(0x10, &cfg, "os0:hfw_cfg.bin");
+	if (load_ussm((int *)0x5113f0e8, cfg.ussm_sz) == 0) { // load update_sm
+		cmep_run(cfg.kasm_sz); // add rvk patches
 		smtool_stop(); // stop the sm to allow kprxauth load
-		*(uint32_t *)(boot_args + 4) = (uint32_t)FW_FWV; // kbl_param.fw_ver
-		*(uint32_t *)((*(uint32_t *)(*(uint32_t *)(0x51138a3c) + 0x6c)) + 4) = (uint32_t)FW_FWV; // sysrootP2->kbl_param.fw_ver
+		if (cfg.fw_fwv > 0) { // change fw version to the one in hfw config (if present)
+			*(uint32_t *)(boot_args + 4) = cfg.fw_fwv; // kbl_param.fw_ver
+			*(uint32_t *)((*(uint32_t *)(*(uint32_t *)(0x51138a3c) + 0x6c)) + 4) = cfg.fw_fwv; // sysrootP2->kbl_param.fw_ver
+		}
 	}
 	return;
 }
