@@ -92,8 +92,8 @@ set_target_properties(emmc_helper_360
   -nostdlib
 )
 target_link_libraries(emmc_helper_360
-  k
   gcc
+  SceSysclibForDriver_stub
   SceThreadmgrForDriver_stub
   SceModulemgrForDriver_stub
   SceModulemgrForKernel_stub
@@ -119,8 +119,8 @@ set_target_properties(emmc_helper_365
   -nostdlib
 )
 target_link_libraries(emmc_helper_365
-  k
   gcc
+  SceSysclibForDriver_stub
   SceThreadmgrForDriver_stub
   SceModulemgrForDriver_stub
   SceModulemgrForKernel_367_stub
@@ -144,8 +144,8 @@ set_target_properties(kernel2
   -nostdlib
 )
 target_link_libraries(kernel2
-  k
   gcc
+  SceSysclibForDriver_stub
   SceIofilemgrForDriver_stub
   SceSysmemForDriver_stub
   taihenForKernel_stub
@@ -185,11 +185,11 @@ vita_create_vpk(${SHORT_NAME}.vpk ${VITA_TITLEID} ${SHORT_NAME}.self
   NAME ${VITA_APP_NAME}
   FILE ${CMAKE_SOURCE_DIR}/../enso/fat_365.bin gudfw/fat.bin
   FILE ${CMAKE_SOURCE_DIR}/../enso/fat_360.bin oldfw/fat.bin
-  FILE ${CMAKE_SOURCE_DIR}/../patches/clogo_365.e2xp gudfw/clogo.e2xp
-  FILE ${CMAKE_SOURCE_DIR}/../patches/clogo_360.e2xp oldfw/clogo.e2xp
-  FILE ${CMAKE_SOURCE_DIR}/../patches/rconfig_365.e2xp gudfw/rconfig.e2xp
-  FILE ${CMAKE_SOURCE_DIR}/../patches/rconfig_360.e2xp oldfw/rconfig.e2xp
+  FILE ${CMAKE_SOURCE_DIR}/../patches/hencfg/e2xhencfg.skprx e2xhencfg.skprx
+  FILE ${CMAKE_SOURCE_DIR}/../patches/culogo/e2xculogo.skprx e2xculogo.skprx
+  FILE ${CMAKE_SOURCE_DIR}/../patches/loader/e2x_ckldr.skprx e2x_ckldr.skprx
   FILE ${CMAKE_SOURCE_DIR}/../data/bootlogo.raw bootlogo.raw
+  FILE ${CMAKE_SOURCE_DIR}/../data/boot_list.txt boot_list.txt
   FILE ${CMAKE_BINARY_DIR}/emmc_helper_360.skprx oldfw/emmc_helper.skprx
   FILE ${CMAKE_BINARY_DIR}/emmc_helper_365.skprx gudfw/emmc_helper.skprx
   FILE ${CMAKE_BINARY_DIR}/emmc_helper_user.suprx emmc_helper.suprx

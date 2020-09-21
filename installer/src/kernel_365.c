@@ -1,3 +1,11 @@
+/* kernel.c -- enso installer
+ *
+ * Copyright (C) 2017 molecule, 2018-2020 skgleba
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ */
+ 
 #include <psp2kern/kernel/modulemgr.h>
 #include <psp2kern/io/fcntl.h>
 #include <psp2kern/io/stat.h>
@@ -6,10 +14,6 @@
 #include <psp2kern/kernel/cpu.h>
 
 #include <taihen.h>
-
-#include <libk/stdarg.h>
-#include <libk/string.h>
-#include <libk/stdio.h>
 
 #include "enso.h"
 
@@ -56,7 +60,7 @@ int printf_file(const char *format, ...) {
 	va_list arg;
 
 	va_start(arg, format);
-	vsprintf(line, format, arg);
+	vsnprintf(line, 512, format, arg);
 	va_end(arg);
 
 	int fd = ksceIoOpen("ux0:data/enso.log", SCE_O_WRONLY | SCE_O_APPEND | SCE_O_CREAT, 0777);
@@ -300,21 +304,7 @@ int check_blocks(void) {
 			crc = crc32(crc, buffer, sizeof(buffer));
 		}
 		printf("crc32[2; 48] = 0x%08x\n", crc);
-		uint32_t known_crc[] = { 0xd40a32e8, 0x8cd78813 };
-		int found = 0;
-		for (size_t i = 0; i < ARRAYSIZE(known_crc); ++i) {
-			if (crc == known_crc[i]) {
-				found = 1;
-				break;
-			}
-		}
-		if (!found) {
-			printf("warning: got unknown checksum\n");
-			dump_blocks();
-			ret = E_MBR_BUT_UNKNOWN;
-		} else {
-			ret = E_PREVIOUS_INSTALL;
-		}
+		ret = E_PREVIOUS_INSTALL;
 	} else {
 		// otherwise just check that the data's empty, including real mbr
 		if ((ret = ksceIoLseek(fd, OFF_REAL_PARTITION_TABLE, SCE_SEEK_SET)) != OFF_REAL_PARTITION_TABLE) {
@@ -329,12 +319,6 @@ int check_blocks(void) {
 			if ((ret = ksceIoRead(fd, buffer, sizeof(buffer))) != sizeof(buffer)) {
 				printf("failed to read a block (2): 0x%08x\n", ret);
 				ret = -1;
-				goto cleanup;
-			}
-			if (!is_empty(&buffer)) {
-				printf("unknown data was found in block %d\n", i + 1);
-				dump_blocks();
-				ret = E_UNKNOWN_DATA;
 				goto cleanup;
 			}
 		}

@@ -1,0 +1,8 @@
+ScePsp2BootConfig:
+  attributes: 0
+  version:
+    major: 6
+    minor: 9
+  main:
+    start: module_start
+    bootstart: module_bootstart

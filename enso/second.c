@@ -1,6 +1,6 @@
 /* second.c -- bootloader patches
  *
- * Copyright (C) 2017 molecule
+ * Copyright (C) 2017 molecule, 2018-2020 skgleba
  *
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
@@ -36,40 +36,16 @@ do {                                   \
         : : "r" (prev_dacr)            \
     );                                 \
 } while (0)
+	
+#define NSKBL_EXPORTS(num) (NSKBL_EXPORTS_ADDR + (num * 4))
+	
+static const char *new_psp2bcfg = E2X_CKLDR_NAME;
 
-#define INSTALL_HOOK_THUMB(func, addr) \
-do {                                                \
-    unsigned *target;                                 \
-    target = (unsigned*)(addr);                       \
-    *target++ = 0xC004F8DF; /* ldr.w    ip, [pc, #4] */ \
-    *target++ = 0xBF004760; /* bx ip; nop */          \
-    *target = (unsigned)func;                         \
-} while (0)
-
-#define INSTALL_RET_THUMB(addr, ret)   \
-do {                                   \
-    unsigned *target;                  \
-    target = (unsigned*)(addr);        \
-    *target = 0x47702000 | (ret); /* movs r0, #ret; bx lr */ \
-} while (0)
+static int icsahb = 0; // invalid self flag
 
 // sdif globals
 static int (*sdif_read_sector_mmc)(void* ctx, int sector, char* buffer, int nSectors) = NULL;
 static void *(*get_sd_context_part_validate_mmc)(int sd_ctx_index) = NULL;
-
-// patches globals
-static int g_pload = 0;
-static void *tpatches[15];
-
-// sigpatch globals
-static int g_sigpatch_disabled = 0;
-static int g_homebrew_decrypt = 0;
-static int (*sbl_parse_header)(uint32_t ctx, const void *header, int len, void *args) = NULL;
-static int (*sbl_set_up_buffer)(uint32_t ctx, int segidx) = NULL;
-static int (*sbl_decrypt)(uint32_t ctx, void *buf, int sz) = NULL;
-
-// sysstate final function
-static void __attribute__((noreturn)) (*sysstate_final)(void) = NULL;
 
 static void **get_export_func(SceModuleObject *mod, uint32_t lib_nid, uint32_t func_nid) {
     for (SceModuleExports *ent = mod->ent_top_user; ent != mod->ent_end_user; ent++) {
@@ -82,39 +58,6 @@ static void **get_export_func(SceModuleObject *mod, uint32_t lib_nid, uint32_t f
         }
     }
     return NULL;
-}
-
-static int is_safe_mode(void) {
-    SceBootArgs *boot_args = (*sysroot_ctx_ptr)->boot_args;
-    uint32_t v;
-    if (boot_args->debug_flags[7] != 0xFF) {
-        return 1;
-    }
-    v = boot_args->boot_type_indicator_2 & 0x7F;
-    if (v == 0xB || (v == 4 && boot_args->resume_context_addr)) {
-        v = ~boot_args->field_CC;
-        if (((v >> 8) & 0x54) == 0x54 && (v & 0xC0) == 0) {
-            return 1;
-        } else {
-            return 0;
-        }
-    } else if (v == 4) {
-        return 0;
-    }
-    if (v == 0x1F || (uint32_t)(v - 0x18) <= 1) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-static int is_update_mode(void) {
-    SceBootArgs *boot_args = (*sysroot_ctx_ptr)->boot_args;
-    if (boot_args->debug_flags[4] != 0xFF) {
-        return 1;
-    } else {
-        return 0;
-    }
 }
 
 static int is_cable(void) {
@@ -130,8 +73,42 @@ static int is_cable(void) {
     }
 }
 
-static inline int skip_patches(void) {
-    return is_safe_mode() || is_update_mode();
+static int self_auth_header_patched(void *myaddr, int a1, int a2, int a3) {
+	int ret = self_auth_header(1, a1, a2, a3);
+	DACR_OFF(
+		icsahb = (ret < 0);
+    );
+	if (icsahb) {
+		*(uint32_t *)((void *)(a3) + 0xa8) = 0x40;
+		ret = 0;
+	}
+	return ret;
+}
+
+static int self_setup_authseg_patched(void *myaddr, int a1) {
+	if (icsahb)
+		return 2;
+	else
+		return self_setup_authseg(1, a1);
+}
+
+static int self_load_block_patched(void *myaddr, int a1, int a2) {
+	if (icsahb)
+		return 0;
+	else
+		return self_load_block(1, a1, a2);
+}
+
+static void allow_fselfs() {
+	*(uint16_t *)SGB_BOFF = 0xd162; // redirect argerrorh to another one (3x4bytes free for patched func offsets)
+	*(uint32_t *)(SGB_BOFF + 0x66) = 0x47804813; // bl self_auth_header -> ldr r0, argerrorh[0]; blx r0
+	*(uint32_t *)(SGB_BOFF + 0x76) = 0x47804810; // bl self_setup_authseg -> ldr r0, argerrorh[1]; blx r0
+	*(uint32_t *)(SGB_BOFF + 0x86) = 0x4780480d; // bl self_load_block -> ldr r0, argerrorh[2]; blx r0
+	*(uint32_t *)(SGB_BOFF + 0xB6) = (uint32_t)self_auth_header_patched; // 
+	*(uint32_t *)(SGB_BOFF + 0xBA) = (uint32_t)self_setup_authseg_patched; // 3x4 bytes of unused arg error handler
+	*(uint32_t *)(SGB_BOFF + 0xBE) = (uint32_t)self_load_block_patched; // 
+	clean_dcache((void *)SGB_ROFF, 0x100);
+	flush_icache();
 }
 
 // sdif patches for MBR redirection
@@ -152,48 +129,6 @@ static int sdif_read_sector_mmc_patched(void* ctx, int sector, char* buffer, int
     return sdif_read_sector_mmc(ctx, sector, buffer, nSectors);
 }
 
-// sigpatches for bootup
-static int sbl_parse_header_patched(uint32_t ctx, const void *header, int len, void *args) {
-    int ret = sbl_parse_header(ctx, header, len, args);
-    if (unlikely(!g_sigpatch_disabled)) {
-        DACR_OFF(
-            g_homebrew_decrypt = (ret < 0);
-        );
-        if (g_homebrew_decrypt) {
-            *(uint32_t *)(args + SBLAUTHMGR_OFFSET_PATCH_ARG) = 0x40;
-            ret = 0;
-        }
-    }
-    return ret;
-}
-
-static int sbl_set_up_buffer_patched(uint32_t ctx, int segidx) {
-    if (unlikely(!g_sigpatch_disabled)) {
-        if (g_homebrew_decrypt) {
-            return 2; // always compressed!
-        }
-    }
-    return sbl_set_up_buffer(ctx, segidx);
-}
-
-static int sbl_decrypt_patched(uint32_t ctx, void *buf, int sz) {
-    if (unlikely(!g_sigpatch_disabled)) {
-        if (g_homebrew_decrypt) {
-            return 0;
-        }
-    }
-    return sbl_decrypt(ctx, buf, sz);
-}
-
-static void __attribute__((noreturn)) sysstate_final_hook(void) {
-
-    DACR_OFF(
-        g_sigpatch_disabled = 1;
-    );
-
-    sysstate_final();
-}
-
 // Read device to a memblock, mark as RX if req, return ptr (only FAT16 FS)
 static void *load_device(uint32_t device, char *blkname, uint32_t offblk, uint32_t szblk, int type, int mode) {
 	int mblk = sceKernelAllocMemBlock(blkname, 0x1020D006, szblk * 0x200, NULL);
@@ -212,13 +147,26 @@ static void *load_device(uint32_t device, char *blkname, uint32_t offblk, uint32
 	return NULL;
 }
 
-// Read file to a memblock, mark as RX if req, return ptr (only FAT16 FS, max sz 8MB)
-static void *load_file(char *fpath, char *blkname, int mode) {
+// Read file to a memblock/buf, mark as RX if req, return ptr (only FAT16 FS, max sz 8MB)
+static void *load_file(char *fpath, char *blkname, unsigned int mode) {
 	long long int Var11 = iof_open(fpath, 1, 0);
 	if (Var11 >= 0) {
 		uint32_t uVar4 = (uint32_t)((unsigned long long int)Var11 >> 0x20);
 		Var11 = iof_get_sz(uVar4, (int)Var11, 0, 0, 2);
 		unsigned int uVar7 = (unsigned int)((unsigned long long int)Var11 >> 0x20);
+		if (mode > 1) { // direct/fixed sz mode
+			unsigned int fsz = mode;
+			if ((int)iof_get_sz(uVar4, (int)Var11, 0, 0, 0) >= 0 && iof_read(uVar4, (void *)blkname, &fsz) >= 0) {
+				if (*(uint32_t *)blkname == 0) { // assume that the file has some magic
+					iof_close(uVar4);
+					return (void *)2;
+				}
+				iof_close(uVar4);
+				return NULL;
+			}
+			iof_close(uVar4);
+			return (void *)3;
+		}
 		unsigned int blksz = 0x1000;
 		while (blksz < uVar7 && blksz < 0x800000)
 			blksz-=-0x1000;
@@ -227,10 +175,11 @@ static void *load_file(char *fpath, char *blkname, int mode) {
 		sceKernelGetMemBlockBase(mblk, (void **)&xbas);
 		if ((int)Var11 >= 0 && uVar7 < blksz && (int)iof_get_sz(uVar4, (int)Var11, 0, 0, 0) >= 0 && iof_read(uVar4, xbas, &uVar7) >= 0 && *(uint32_t *)xbas != 0) {
 			iof_close(uVar4);
-			if (mode)
+			if (mode) {
 				sceKernelRemapBlock(mblk, 0x1020D005);
-			clean_dcache(xbas, blksz);
-            flush_icache();
+				clean_dcache(xbas, blksz);
+				flush_icache();
+			}
 			return xbas;
 		}
 		iof_close(uVar4);
@@ -282,99 +231,47 @@ static void recovery(unsigned int ctrl) {
 				gpio_port_set(0, 7);
 				rf = (void *)(load_device(0x5102801c, "recovery", recoveryblock.blkoff, recoveryblock.blksz, 1, 1) + 1);
 				error = (rf != (void *)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 2;
-			} else { // use the recovery in os0 (GCSD probs)
-				gpio_port_set(0, 7);
-				rf = (void *)(load_file("os0:" E2X_RECOVERY_FNAME, "recovery", 1) + 1);
-				error = (rf != (void *)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 3;
 			}
 		} else if (recoveryblock.magic != 0x796e6f53) { // make sure its not SCE MBR, assume its FAT16 and try to run recovery from it
 			gpio_port_set(0, 7);
 			rf = (void *)(load_file("sd0:" E2X_RECOVERY_FNAME, "recovery", 1) + 1);
 			error = (rf != (void *)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 1;
 		}
+	} else { // use the recovery in os0 (GCSD probs)
+		gpio_port_set(0, 7);
+		rf = (void *)(load_file("os0:" E2X_RECOVERY_FNAME, "recovery", 1) + 1);
+		error = (rf != (void *)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 1;
 	}
 	while(error > 0) {
 		syscon_common_read(&ctrl, 0x101);
 		if ((CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_NOENT) && error == 1) // No recovery found
-		|| (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_SDERR) && error == 2) // Error running GC-SD recovery
-		|| (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_OSERR) && error == 3) // Error running os0 recovery
+		|| (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_SDERR) && error == 2) // Error running recovery
 		|| (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RETERR) && error == 4)) // Recovery returned !0
 			break;
 	}
 	gpio_port_clear(0, 7);
 }
 
-// Read the patches file for code blobs and alloc them
-static int load_patches_data(char *fpath) {
-	void *patches = load_file(fpath, "patches", 0);
-	if (patches == NULL)
-		return 1;
-	PayloadsBlockStruct *pstart = patches;
-	if (pstart->magic != E2X_MAGIC)
-		return 1;
-	int mblk;
-	unsigned int blksz;
-	void *xbas = NULL;
-	int i = 0;
-	for (int i = 0; i < (E2X_MAX_EPATCHES_N - 1); i-=-1) {
-		if (pstart->off[i] == 0)
-			break;
-		blksz = 0, mblk = 0;
-		xbas = NULL;
-		while (blksz < pstart->sz[i] && blksz < 0x800000)
-			blksz-=-0x2000;
-		mblk = sceKernelAllocMemBlock("", 0x1020D006, blksz, NULL);
-		sceKernelGetMemBlockBase(mblk, (void **)&xbas);
-		memcpy(xbas, (patches + pstart->off[i]), pstart->sz[i]);
-		sceKernelRemapBlock(mblk, 0x1020D005);
-		clean_dcache(xbas, blksz);
-        flush_icache();
-		tpatches[i] = (xbas + 1);
-	}
-	return 0;
-}
-
-// Run os0:patches.e2xd
-static void add_tparty_patches(const SceModuleLoadList *list, int *uids, int count, int safemode, unsigned int ctrldata) {
-	PayloadArgsStruct pargs;
-	pargs.list = list; // --
-	pargs.uids = uids; // pass module_load args
-	pargs.count = count; // --
-	pargs.safemode = safemode; // pass updatemode/safemode status
-	pargs.ctrldata = ctrldata; // pass buttons status
-	void (*runtp)(PayloadArgsStruct *pargs);
-	gpio_port_set(0, 7);
-	if (g_pload == 0) {
-		DACR_OFF(
-			g_pload = 34;
-			if (load_patches_data("os0:" E2X_IPATCHES_FNAME) == 1) // load the data file with blobs
-				tpatches[0] = (void *)(load_file("os0:patches.e2xp", "patches", 1) + 1); // if blobs load fails, try to load the old patches file
-			if (tpatches[0] != (void *)0x1)
-				g_pload = 1; // first run
-		);
-	} else {
-		DACR_OFF(
-			g_pload = g_pload + 1;
-		);
-	}
-	pargs.trun = g_pload; // pass run count, thats because the modload func is re-run a few times
-	if (g_pload < 34) {
-		for (int i = 0; i < (E2X_MAX_EPATCHES_N - 1); i-=-1) {
-			if ((tpatches[i] == NULL) || (tpatches[i] == (void *)0x1))
-				break;
-			runtp = tpatches[i];
-			runtp(&pargs);
-		}
-	}
-	gpio_port_clear(0, 7);
+// patch get_hwcfg to give important offs
+static int get_hwcfg_patched(uint32_t *dst) {
+	if (dst[0] == 69) {
+		syscon_common_read(&dst[0], 0x101);
+		dst[1] = (uint32_t)load_file;
+		dst[2] = (uint32_t)(*sysroot_ctx_ptr)->boot_args;
+		dst[3] = (uint32_t)NSKBL_EXPORTS_ADDR;
+		return 0;
+	} else
+		return get_hwcfg(dst);
 }
 
 // Run BootMgr and resume psp2bootconfig load
 static int load_psp2bootconfig_patched(uint32_t myaddr, int *uids, int count, int osloc, int unk) {
+	allow_fselfs();
+	*(uint32_t *)NSKBL_EXPORTS(26) = (uint32_t)get_hwcfg_patched;
 	void (*tcode)(void) = (void *)(load_file("os0:" E2X_BOOTMGR_NAME, "bootmgr_ex", 1) + 1);
 	if (tcode != (void *)0x1)
 		tcode();
-	myaddr = PSP2BOOTCONFIG_STRING;
+	myaddr = (uint32_t)new_psp2bcfg;
 	return module_load_direct((SceModuleLoadList *)&myaddr, uids, count, osloc, unk);
 }
 
@@ -396,25 +293,14 @@ static int module_load_patched(const SceModuleLoadList *list, int *uids, int cou
     int ret;
     SceObject *obj;
     SceModuleObject *mod;
-	unsigned int ctrldata;
-	syscon_common_read(&ctrldata, 0x101); // TODO: don't read at every modload, find a way to make it a global.
-    int sdif_idx = -1, authmgr_idx = -1, sysstate_idx = -1;
-    int skip = skip_patches(); // [safe] or [update] mode flag
-	int noap = CTRL_BUTTON_HELD(ctrldata, E2X_IPATCHES_SKIP); // skip custom patches (patches.e2xp) flag
-	if (is_true_dolce())
-		noap = skip;
+    int sdif_idx = -1;
 	
     for (int i = 0; i < count; i-=-1) {
         if (!list[i].filename) {
             continue; // wtf sony why don't you sanitize input
         }
-        if (strncmp(list[i].filename, "sdif.skprx", 10) == 0) {
+        if (strncmp(list[i].filename, "sdif.skprx", 10) == 0)
             sdif_idx = i; // never skip MBR redirection patches
-        } else if (strncmp(list[i].filename, "authmgr.skprx", 13) == 0) {
-            authmgr_idx = i;
-        } else if (!skip && strncmp(list[i].filename, "sysstatemgr.skprx", 17) == 0) {
-            sysstate_idx = i;
-        }
     }
 	
 	ret = module_load(list, uids, count, unk);
@@ -435,39 +321,6 @@ static int module_load_patched(const SceModuleLoadList *list, int *uids, int cou
         }
     }
 	
-    // patch authmgr
-    if (authmgr_idx >= 0) {
-        obj = get_obj_for_uid(uids[authmgr_idx]);
-        if (obj != NULL) {
-            mod = (SceModuleObject *)&obj->data;
-            HOOK_EXPORT(sbl_parse_header, 0x7ABF5135, 0xF3411881);
-            HOOK_EXPORT(sbl_set_up_buffer, 0x7ABF5135, 0x89CCDA2C);
-            HOOK_EXPORT(sbl_decrypt, 0x7ABF5135, 0xBC422443);
-        }
-    }
-	
-    // patch sysstate to load unsigned boot configs
-    if (sysstate_idx >= 0) {
-        obj = get_obj_for_uid(uids[sysstate_idx]);
-        if (obj != NULL) {
-            mod = (SceModuleObject *)&obj->data;
-            DACR_OFF(
-                INSTALL_RET_THUMB(mod->segments[0].buf + SYSSTATE_IS_MANUFACTURING_MODE_OFFSET, 1);
-                *(uint32_t *)(mod->segments[0].buf + SYSSTATE_IS_DEV_MODE_OFFSET) = 0x20012001;
-                memcpy(mod->segments[0].buf + SYSSTATE_RET_CHECK_BUG, sysstate_ret_patch, sizeof(sysstate_ret_patch));
-				memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ur0_path, sizeof(ur0_path));
-				memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_path, sizeof(ur0_psp2config_path));
-                // this patch actually corrupts two words of data, but they are only used in debug printing and seem to be fine
-                INSTALL_HOOK_THUMB(sysstate_final_hook, mod->segments[0].buf + SYSSTATE_FINAL_CALL);
-                sysstate_final = mod->segments[0].buf + SYSSTATE_FINAL;
-            );
-        }
-    }
-	
-	// Add custom patches
-	if (!noap)
-		add_tparty_patches(list, uids, count, skip, ctrldata);
-	
     return ret;
 }
 #undef HOOK_EXPORT
@@ -482,7 +335,7 @@ void go(void) {
 	flush_icache();
 	
 	// redirect module_load_from_list
-    *module_load_func_ptr = module_load_patched;
+	*(uint32_t *)NSKBL_EXPORTS(7) = (uint32_t)module_load_patched;
 	
 	unsigned int ctrl;
 	syscon_common_read(&ctrl, 0x101);
@@ -497,7 +350,7 @@ void go(void) {
 	}
 	
 	// Recovery if wall-connected & SELECT/START held
-	if (is_cable() == 1) {
+	if (is_cable()) {
 		if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RUNDF))
 			recovery(ctrl);
 		else if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RUNDN))

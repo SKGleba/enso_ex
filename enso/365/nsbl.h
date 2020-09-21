@@ -1,6 +1,6 @@
 /* nsbl.h -- imported data from non-secure bootloader
  *
- * Copyright (C) 2017 molecule
+ * Copyright (C) 2017 molecule, 2018-2020 skgleba
  *
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
@@ -277,23 +277,19 @@ static int (*is_true_dolce)(void) = (void *)0x51017321;
 // firmware specific patch offsets
 static SceBootArgs *boot_args = (void *)0x51167528;
 static SceSysrootContext **sysroot_ctx_ptr = (void *)0x51138A3C;
-static void **module_load_func_ptr = (void *)0x510277A8;
+
+static int (*get_hwcfg)(uint32_t *cfgs) = (void *)0x51012a1d;
+
+#define NSKBL_EXPORTS_ADDR (0x5102778c)
 
 #define PSP2BOOTCONFIG_STRING (0x51023dc0)
 #define PSP2BCFG_STRING_ADDR (0x51023e10)
 
-// sysstate patches
-#define SBLAUTHMGR_OFFSET_PATCH_ARG (168)
-#define SYSSTATE_IS_MANUFACTURING_MODE_OFFSET (0x1500)
-#define SYSSTATE_IS_DEV_MODE_OFFSET (0xE28)
-#define SYSSTATE_RET_CHECK_BUG (0xD92)
-static const uint8_t sysstate_ret_patch[] = {0x13, 0x22, 0xc8, 0xf2, 0x01, 0x02};
-#define SYSSTATE_SD0_STRING (0x2448)
-static const char ur0_path[] = "ur0:";
-#define SYSSTATE_SD0_PSP2CONFIG_STRING (0x2396)
-static const char ur0_psp2config_path[] = "ur0:tai/boot_config.txt";
-#define SYSSTATE_FINAL_CALL (0x130)
-#define SYSSTATE_FINAL (0x18C9)
+static int (*self_auth_header)() = (void*)0x51016ea5;
+static int (*self_setup_authseg)() = (void*)0x51016f95;
+static int (*self_load_block)() = (void*)0x51016fd1;
+#define SGB_BOFF 0x5101887a
+#define SGB_ROFF 0x51018870
 
 #else
 #error "No firmware defined or firmware not supported."

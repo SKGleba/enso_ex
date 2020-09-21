@@ -1,3 +1,11 @@
+/* main.c -- enso installer (user side)
+ *
+ * Copyright (C) 2017 molecule, 2018-2020 skgleba
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ */
+
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/modulemgr.h>
 #include <psp2/io/fcntl.h>
@@ -182,7 +190,7 @@ int load_helper(void) {
 			return -1;
 		}
 	} else {
-		printf("Failed to get fw version\n", ret);
+		printf("Failed to get fw version\nMake sure that you have 0syscall6 disabled!\n", ret);
 		return -1;
 	}
 
@@ -260,60 +268,26 @@ int unlock_system(void) {
 	return 0;
 }
 
-int mergePayloads(PayloadsBlockStruct *pstart, uint32_t soff) {
-	int fcount = 0;
-	SceUID dfd = sceIoDopen("ux0:eex/payloads/");
-	if (dfd >= 0) {
-		int res = 0;
-		uint32_t coff = soff;
-		do {
-			SceIoDirent dir;
-			memset(&dir, 0, sizeof(SceIoDirent));
-			res = sceIoDread(dfd, &dir);
-			if (res > 0) {
-				psvDebugScreenSetFgColor(COLOR_YELLOW);
-				printf("  -  %s... ", dir.d_name);
-				char *src_path = malloc(strlen("ux0:eex/payloads/") + strlen(dir.d_name) + 2);
-				snprintf(src_path, 255, "ux0:eex/payloads/%s", dir.d_name);
-				fap(src_path, "ux0:eex/data/" E2X_IPATCHES_FNAME);
-				pstart->off[fcount] = coff;
-				pstart->sz[fcount] = dir.d_stat.st_size;
-				psvDebugScreenSetFgColor(COLOR_GREEN);
-				printf("ok!\n");
-				psvDebugScreenSetFgColor(COLOR_WHITE);
-				fcount-=-1;
-				coff-=-dir.d_stat.st_size;
-			}
-		} while (res > 0 && fcount < 15);
-		sceIoDclose(dfd);
-	}
-	return fcount;
-}
-
 int do_sync_eex(void) {
-	int ibootlogo = ex("os0:bootlogo.raw"), epf = ex("ux0:eex/data/" E2X_IPATCHES_FNAME), ibmgr = ex("os0:" E2X_BOOTMGR_NAME);
+	int ibootlogo = ex("os0:ex/bootlogo.raw"), ibmgr = ex("os0:" E2X_BOOTMGR_NAME), icklist = ex("os0:ex/boot_list.txt");
+	int obootlogo = ex("os0:bootlogo.raw"), opatch = ex("os0:patches.e2xd"), ocbcfg = ex("os0:qsp2bootconfig.skprx");
 	printf("Syncing enso_ex scripts... \n");
 	
-	PayloadsBlockStruct pstart;
-	memset(&pstart, 0, sizeof(pstart));
-	pstart.magic = E2X_MAGIC;
-	
 	if (ibootlogo)
-		sceIoRemove("os0:bootlogo.raw");
+		sceIoRemove("os0:ex/bootlogo.raw");
 	if (ibmgr)
 		sceIoRemove("os0:" E2X_BOOTMGR_NAME);
-	if (epf)
-		sceIoRemove("ux0:eex/data/" E2X_IPATCHES_FNAME);
+	if (icklist)
+		sceIoRemove("os0:ex/boot_list.txt");
+	if (obootlogo)
+		sceIoRemove("os0:bootlogo.raw");
+	if (opatch)
+		sceIoRemove("os0:patches.e2xd");
+	if (ocbcfg)
+		sceIoRemove("os0:qsp2bootconfig.skprx");
 	
-	int fd = sceIoOpen("ux0:eex/data/" E2X_IPATCHES_FNAME, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-	sceIoWrite(fd, &pstart, 128);
-	sceIoClose(fd);
-	int count = mergePayloads(&pstart, getsz("ux0:eex/data/" E2X_IPATCHES_FNAME));
-	fd = sceIoOpen("ux0:eex/data/" E2X_IPATCHES_FNAME, SCE_O_WRONLY, 0777);
-	sceIoWrite(fd, &pstart, 128);
-	sceIoClose(fd);
-	
-	copyDir("ux0:eex/data/", "os0:");
+	copyDir("ux0:eex/boot/", "os0:");
+	copyDir("ux0:eex/custom/", "os0:ex/");
 	
 	psvDebugScreenSetFgColor(COLOR_GREEN);
 	printf("synced!\n");
@@ -381,11 +355,14 @@ int do_install(void) {
 	
 	printf("Copying files... ");
 	sceIoMkdir("ux0:eex/", 6);
-	sceIoMkdir("ux0:eex/payloads/", 6);
-	sceIoMkdir("ux0:eex/data/", 6);
-	fcp((curfw == 69) ? "app0:gudfw/clogo.e2xp" : "app0:oldfw/clogo.e2xp", "ux0:eex/payloads/clogo.e2xp");
-	fcp((curfw == 69) ? "app0:gudfw/rconfig.e2xp" : "app0:oldfw/rconfig.e2xp", "ux0:eex/payloads/rconfig.e2xp");
-	fcp("app0:bootlogo.raw", "ux0:eex/data/bootlogo.raw");
+	sceIoMkdir("ux0:eex/custom/", 6);
+	sceIoMkdir("ux0:eex/boot/", 6);
+	sceIoMkdir("os0:ex/", 6);
+	fcp("app0:e2xculogo.skprx", "ux0:eex/custom/e2xculogo.skprx");
+	fcp("app0:e2xhencfg.skprx", "ux0:eex/custom/e2xhencfg.skprx");
+	fcp("app0:" E2X_CKLDR_NAME, "ux0:eex/boot/" E2X_CKLDR_NAME);
+	fcp("app0:bootlogo.raw", "ux0:eex/custom/bootlogo.raw");
+	fcp("app0:boot_list.txt", "ux0:eex/custom/boot_list.txt");
 	fcp("ur0:tai/boot_config.txt", "ux0:eex/boot_config.txt");
 	psvDebugScreenSetFgColor(COLOR_GREEN);
 	printf("ok!\n");
@@ -510,7 +487,7 @@ int optct = 5;
 void smenu(){
 	psvDebugScreenClear(COLOR_BLACK);
 	psvDebugScreenSetFgColor(COLOR_CYAN);
-	printf("                        enso_ex v4.1                             \n");
+	printf("                        enso_ex v4.5                             \n");
 	printf("                         By SKGleba                              \n");
 	psvDebugScreenSetFgColor(COLOR_RED);
 	for(int i = 0; i < optct; i++){

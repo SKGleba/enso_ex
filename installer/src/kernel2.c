@@ -1,3 +1,11 @@
+/* kernel2.c -- modulemgr workaround
+ *
+ * Copyright (C) 2017 molecule, 2018-2020 skgleba
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ */
+
 #include <psp2kern/kernel/modulemgr.h>
 #include <stdio.h>
 #include <string.h>
@@ -77,8 +85,8 @@ int checkfw(void) {
 	fd = ksceIoOpen("ur0:temp/temp.t", SCE_O_RDONLY, 0777);
 	static char ubuf[3];
 	ksceIoRead(fd, ubuf, 3);
-	static char fwchkloc[14];
-	sprintf(fwchkloc, "ur0:temp/%s.t", ubuf);
+	static char fwchkloc[32];
+	snprintf(fwchkloc, 32, "ur0:temp/%s.t", ubuf);
 	ksceIoClose(fd);
 	ksceIoRename("ur0:temp/temp.t", fwchkloc);
 	return 1;

@@ -1,0 +1,38 @@
+firmware: 3.65
+modules:
+  SceKbl:
+    nid: 0xDEADBEEF
+    libraries:
+      SceKblForKernel:
+        kernel: true
+        nid: 0xD0FC2991
+        functions:
+          KblDeinitComm: 0x08E9FAEB
+          KblPrintf1: 0x13A5ABEF
+          KblExecSysrootx360x20: 0x161D6FCC
+          KblExecSysrootx2d4: 0x1DB28F02
+          KblDeinitStorageHandlers: 0x261F2747
+          KblSyncCpuSysrootx2c: 0x314AA770
+          KblIsModelx102: 0x5945F065
+          KblLoadModulesFromList: 0x6D7A1F18
+          KblPrintf3: 0x752E7EEC
+          KblStopKASM: 0x79241ACF
+          KblCpuBarrierStart: 0x807B4437
+          KblIsNotDolce: 0x838466E9
+          KblIsCex: 0x8A416887
+          KblIsModelx100: 0x943E7537
+          KblStartModulesFromList: 0x9A92436E
+          KblGetDevRegs: 0x9B868276
+          KblWriteModStartRegs: 0x9F4F3F98
+          KblIsDolce: 0xA7BD4417
+          KblGetCpuId: 0xB506A10E
+          KblIsModelx101: 0xB6C9ACF1
+          KblIsGenuineDolce: 0xB6D00D6D
+          KblGetDipsw204And205Stat: 0xC011935A
+          KblIsDoubleModel: 0xC3DDDE15
+          KblExecSysrootx2d8: 0xC7B77991
+          KblCheckDipsw: 0xC8F4DE71
+          KblParamx2dAnd1: 0xCE94F329
+          KblGetHwConfig: 0xD3A516D5
+          KblDisableIrq: 0xDDB3A1A8
+          KblSetupStorages: 0xF7AF8690
