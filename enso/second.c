@@ -148,15 +148,14 @@ static void *load_device(uint32_t device, char *blkname, uint32_t offblk, uint32
 }
 
 // Read file to a memblock/buf, mark as RX if req, return ptr (only FAT16 FS, max sz 8MB)
-static void *load_file(char *fpath, char *blkname, unsigned int mode) {
+static void *load_file(char *fpath, char *blkname, unsigned int size, int mode) {
 	long long int Var11 = iof_open(fpath, 1, 0);
 	if (Var11 >= 0) {
 		uint32_t uVar4 = (uint32_t)((unsigned long long int)Var11 >> 0x20);
 		Var11 = iof_get_sz(uVar4, (int)Var11, 0, 0, 2);
-		unsigned int uVar7 = (unsigned int)((unsigned long long int)Var11 >> 0x20);
+		unsigned int uVar7 = (size > 0) ? size : (unsigned int)((unsigned long long int)Var11 >> 0x20);
 		if (mode > 1) { // direct/fixed sz mode
-			unsigned int fsz = mode;
-			if ((int)iof_get_sz(uVar4, (int)Var11, 0, 0, 0) >= 0 && iof_read(uVar4, (void *)blkname, &fsz) >= 0) {
+			if ((int)iof_get_sz(uVar4, (int)Var11, 0, 0, 0) >= 0 && iof_read(uVar4, (void *)blkname, &uVar7) >= 0) {
 				if (*(uint32_t *)blkname == 0) { // assume that the file has some magic
 					iof_close(uVar4);
 					return (void *)2;
@@ -188,19 +187,27 @@ static void *load_file(char *fpath, char *blkname, unsigned int mode) {
 	return NULL;
 }
 
-// Use GC-SD instead of emmc (use the int2ext patch with it)
+// Use GC-SD instead of emmc or GC-SD instead of os0
 static void dnand(unsigned int ctrl) {
 	int error = 1, (*rf)(void *kbl_param, unsigned int ctrldata) = NULL;
     void *rbase = NULL;
 	syscon_common_write(1, 0x888, 2); // enable the GC slot
 	*(uint16_t*)0x51001252 = 0x2500; // skip main emmc init
 	*(uint32_t*)0x51167594 = *(uint32_t*)0x51167594 | 0x40000; // enable sd0 mounting
+	clean_dcache((void *)0x51001250, 0x10);
+	clean_dcache((void *)0x51167590, 0x10);
+	flush_icache();
 	setup_emmc(); // reinit main storages
 	char mbr[0x200];
 	if (read_sector_sd((int *)*(uint32_t *)0x5102801c, 0, (int)&mbr, 1) >= 0) {
 		if (*(uint32_t *)mbr == 0x796e6f53) { // EMMC dump/SCE formatted GCSD, use its os0 as main os0
 			gpio_port_set(0, 7);
 			init_part((unsigned int *)0x51167784, 0x110000, (unsigned int *)0x510010C5, (unsigned int *)0x51028018);
+			error = 0;
+		} else if (*(uint32_t *)(mbr + 0x38) == 0x20363154) { // base+0x36 = 'FA[T16 ]  ' - fat16 partition, set as os0
+			gpio_port_set(0, 7);
+			init_part((unsigned int *)0x51167784, 0x100000, (unsigned int *)0x510010C5, (unsigned int *)0x51028018);
+			// now there will be os0 and sd0 mounted with the same src
 			error = 0;
 		} else // unk magic
 			error = 2;
@@ -221,6 +228,9 @@ static void recovery(unsigned int ctrl) {
 	syscon_common_write(1, 0x888, 2); // enable the GC slot
 	*(uint16_t*)0x51001252 = 0x2500; // skip main emmc init
 	*(uint32_t*)0x51167594 = *(uint32_t*)0x51167594 | 0x40000; // enable sd0 mounting
+	clean_dcache((void *)0x51001250, 0x10);
+	clean_dcache((void *)0x51167590, 0x10);
+	flush_icache();
 	setup_emmc(); // reinit main storages
 	RecoveryBlockStruct recoveryblock;
 	if (read_sector_sd((int *)*(uint32_t *)0x5102801c, E2X_RECOVERY_BLKOFF, (int)&recoveryblock, 1) >= 0) {
@@ -232,14 +242,14 @@ static void recovery(unsigned int ctrl) {
 				rf = (void *)(load_device(0x5102801c, "recovery", recoveryblock.blkoff, recoveryblock.blksz, 1, 1) + 1);
 				error = (rf != (void *)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 2;
 			}
-		} else if (recoveryblock.magic != 0x796e6f53) { // make sure its not SCE MBR, assume its FAT16 and try to run recovery from it
+		} else if (*(uint32_t *)(recoveryblock.data + 0x28) == 0x20363154) { // base+0x36 = 'FA[T16 ]  ' - fat16 partition 
 			gpio_port_set(0, 7);
-			rf = (void *)(load_file("sd0:" E2X_RECOVERY_FNAME, "recovery", 1) + 1);
+			rf = (void *)(load_file("sd0:" E2X_RECOVERY_FNAME, "recovery", 0, 1) + 1);
 			error = (rf != (void *)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 1;
 		}
 	} else { // use the recovery in os0 (GCSD probs)
 		gpio_port_set(0, 7);
-		rf = (void *)(load_file("os0:" E2X_RECOVERY_FNAME, "recovery", 1) + 1);
+		rf = (void *)(load_file("os0:" E2X_RECOVERY_FNAME, "recovery", 0, 1) + 1);
 		error = (rf != (void *)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 1;
 	}
 	while(error > 0) {
@@ -268,7 +278,7 @@ static int get_hwcfg_patched(uint32_t *dst) {
 static int load_psp2bootconfig_patched(uint32_t myaddr, int *uids, int count, int osloc, int unk) {
 	allow_fselfs();
 	*(uint32_t *)NSKBL_EXPORTS(26) = (uint32_t)get_hwcfg_patched;
-	void (*tcode)(void) = (void *)(load_file("os0:" E2X_BOOTMGR_NAME, "bootmgr_ex", 1) + 1);
+	void (*tcode)(void) = (void *)(load_file("os0:" E2X_BOOTMGR_NAME, "bootmgr_ex", 0, 1) + 1);
 	if (tcode != (void *)0x1)
 		tcode();
 	myaddr = (uint32_t)new_psp2bcfg;

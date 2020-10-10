@@ -57,13 +57,13 @@ int module_start(uint32_t argc, void *args) {
 	if (skip_patches(patch_args->kbl_param))
 		return 0;
 	
-	int goodfw = (*(uint32_t *)(patch_args->kbl_param + 0x4) == 0x03650000);
+	int nkblfw = (*(uint32_t *)(patch_args->kbl_param + 0x4) == 0x03650000);
 	
-	void *(*get_obj_for_uid)(int uid) = (goodfw) ? get_obj_for_uid_365 : get_obj_for_uid_360;
-	int (*sceKernelAllocMemBlock)(const char *name, int type, int size, void *opt) = (goodfw) ? sceKernelAllocMemBlock_365 : sceKernelAllocMemBlock_360;
-	int (*sceKernelGetMemBlockBase)(int32_t uid, void **basep) = (goodfw) ? sceKernelGetMemBlockBase_365 : sceKernelGetMemBlockBase_360;
-	int (*sceKernelFreeMemBlock)(int32_t uid) = (goodfw) ? sceKernelFreeMemBlock_365 : sceKernelFreeMemBlock_360;
-	int (*lf)(char *fpath, void *dst, unsigned int sz) = patch_args->load_file;
+	void *(*get_obj_for_uid)(int uid) = (nkblfw) ? get_obj_for_uid_365 : get_obj_for_uid_360;
+	int (*sceKernelAllocMemBlock)(const char *name, int type, int size, void *opt) = (nkblfw) ? sceKernelAllocMemBlock_365 : sceKernelAllocMemBlock_360;
+	int (*sceKernelGetMemBlockBase)(int32_t uid, void **basep) = (nkblfw) ? sceKernelGetMemBlockBase_365 : sceKernelGetMemBlockBase_360;
+	int (*sceKernelFreeMemBlock)(int32_t uid) = (nkblfw) ? sceKernelFreeMemBlock_365 : sceKernelFreeMemBlock_360;
+	int (*lf)(char *fpath, void *dst, unsigned int sz, int mode) = patch_args->load_file;
 	
 	SceKernelAllocMemBlockKernelOpt optp;
 	optp.size = 0x58;
@@ -77,7 +77,7 @@ int module_start(uint32_t argc, void *args) {
 	if (xbas == NULL)
 		return 0;
 	
-	int logoerr = lf("os0:ex/bootlogo.raw", xbas, 0x200000);
+	int logoerr = lf("os0:ex/bootlogo.raw", xbas, 0x200000, 2);
 	
 	sceKernelFreeMemBlock(mblk);
 	

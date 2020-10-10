@@ -124,10 +124,10 @@ int module_start(uint32_t argc, void *args) {
 	
 	patch_args_struct *patch_args = args;
 	
-	int goodfw = (*(uint32_t *)(patch_args->kbl_param + 0x4) == 0x03650000);
+	int nkblfw = (*(uint32_t *)(patch_args->kbl_param + 0x4) == 0x03650000);
 	
-	void *(*memcpy)(void *dst, const void *src, int sz) = (goodfw) ? memcpy_365 : memcpy_360;
-	void *(*get_obj_for_uid)(int uid) = (goodfw) ? get_obj_for_uid_365 : get_obj_for_uid_360;
+	void *(*memcpy)(void *dst, const void *src, int sz) = (nkblfw) ? memcpy_365 : memcpy_360;
+	void *(*get_obj_for_uid)(int uid) = (nkblfw) ? get_obj_for_uid_365 : get_obj_for_uid_360;
 	
     SceObject *obj;
     SceModuleObject *mod;
@@ -143,6 +143,7 @@ int module_start(uint32_t argc, void *args) {
     obj = get_obj_for_uid(patch_args->uids_b[14]);
     if (obj != NULL) {
 		mod = (SceModuleObject *)&obj->data;
+		int goodfw = (*(uint8_t *)(mod->segments[0].buf + 10) == 0xDA); // check if its 3.65, thats because kernel FW can be different than bl FW
 		DACR_OFF(
 			INSTALL_RET_THUMB(mod->segments[0].buf + SYSSTATE_IS_MANUFACTURING_MODE_OFFSET, 1);
 			*(uint32_t *)(mod->segments[0].buf + SYSSTATE_IS_DEV_MODE_OFFSET) = 0x20012001;

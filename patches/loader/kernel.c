@@ -62,42 +62,9 @@ static char *mlist_str_d[] = {
 	"deci4p_sdrfp.skprx"
 };
 
-static int prepare_modlists(void) {
+static void prepare_modlists(void) {
 	char dispmodel[16];
 	uint32_t cfgstr[16];
-	
-	// setup arg that will be given to patchers
-	cfgstr[0] = 69;
-	KblGetHwConfig(&cfgstr); // get some globals from e2x's hwcfg hook
-	patch_args.uids_a = mlist_uid_a; // set default list part 1
-	patch_args.uids_b = mlist_uid_b; // set default list part 2
-	patch_args.uids_d = NULL; // 0 unless devkit (later check)
-	patch_args.nskbl_exports = (void *)cfgstr[3]; // copy nskbl exports_start addr
-	patch_args.kbl_param = (void *)cfgstr[2];
-	patch_args.load_file = (void *)cfgstr[1]; // e2x's load_file func
-	patch_args.ctrldata = cfgstr[0]; // current ctrl status
-	
-	int goodfw = (*(uint32_t *)(patch_args.kbl_param + 0x4) == 0x03650000);
-	
-	// custom
-	if (CTRL_BUTTON_HELD(patch_args.ctrldata, E2X_EPATCHES_SKIP)) {
-defcmods:
-		clist_str[0] = "e2xhencfg.skprx";
-		clist_str[1] = "e2xculogo.skprx";
-		use_clist = 2;
-	} else {
-		int (*lf)(char *fpath, void *dst, unsigned int sz) = patch_args.load_file;
-		if ((lf("os0:ex/boot_list.txt", e2xlist, (16 * 16)) == 0) && ((e2xlist[0] == 'E') && (e2xlist[2] == 'X') && (e2xlist[12] == '='))) { // "E2XMODCOUNT:=XX\0"
-			for (int i = 1; i < (((e2xlist[13] - 0x30) * 10) + (e2xlist[14] - 0x30) + 1); i-=-1) {
-				if (i > 14)
-					break;
-				clist_str[i - 1] = &e2xlist[i * 16];
-				e2xlist[(i * 16) + 15] = 0x00;
-				use_clist = i;
-			}
-		} else
-			goto defcmods;
-	}
 	
 	// devkit
 	int iVar1 = KblCheckDipsw(0xc1);
@@ -131,13 +98,46 @@ defcmods:
 	if ((iVar1 == 0) || ((iVar1 = KblIsCex(), iVar1 == 0 && (iVar1 = KblIsModelx102(), iVar1 == 0))))
 		mlist_str_b[3] = "hdmi.skprx";
 	
-	return goodfw;
+	// setup arg that will be given to patchers
+	cfgstr[0] = 69;
+	KblGetHwConfig(&cfgstr); // get some globals from e2x's hwcfg hook
+	patch_args.uids_a = mlist_uid_a; // set default list part 1
+	patch_args.uids_b = mlist_uid_b; // set default list part 2
+	patch_args.uids_d = NULL; // 0 unless devkit (later check)
+	patch_args.nskbl_exports = (void *)cfgstr[3]; // copy nskbl exports_start addr
+	patch_args.kbl_param = (void *)cfgstr[2];
+	patch_args.load_file = (void *)cfgstr[1]; // e2x's load_file func
+	patch_args.ctrldata = cfgstr[0]; // current ctrl status
+	
+	// custom
+	int (*lf)(char *fpath, void *dst, unsigned int sz, int mode) = patch_args.load_file;
+	if (CTRL_BUTTON_HELD(patch_args.ctrldata, E2X_EPATCHES_SKIP)) {
+		clist_str[0] = "e2xrecovr.skprx"; // recovery script
+		clist_str[1] = "e2xhfwmod.skprx"; // always run the hfw-compat script
+		use_clist = 2;
+	} else {
+		if ((lf("os0:ex/boot_list.txt", e2xlist, (16 * 16), 2) == 0) && ((e2xlist[0] == 'E') && (e2xlist[2] == 'X') && (e2xlist[12] == '='))) { // "E2XMODCOUNT:=XX\0"
+			for (int i = 1; i < (((e2xlist[13] - 0x30) * 10) + (e2xlist[14] - 0x30) + 1); i-=-1) {
+				if (i > 14)
+					break;
+				clist_str[i - 1] = &e2xlist[i * 16];
+				e2xlist[(i * 16) + 15] = 0x00;
+				use_clist = i;
+			}
+		} else {
+			clist_str[0] = "e2xhencfg.skprx";
+			clist_str[1] = "e2xculogo.skprx";
+			clist_str[2] = "e2xhfwmod.skprx";
+			use_clist = 3;
+		}
+	}
 }
 
 void _start() __attribute__ ((weak, alias ("module_start")));
 int module_start(SceSize argc, void *args) {
+	
 	// prepare all the module lists
-	int goodfw = prepare_modlists();
+	prepare_modlists();
 	
 	// load default modules
 	KblLoadModulesFromList(mlist_str_a, mlist_uid_a, 13, 0);
@@ -147,7 +147,7 @@ int module_start(SceSize argc, void *args) {
 	
 	// change moddir to os0:ex/ and load custom modules from there
 	if (use_clist > 0) {
-		if (goodfw) {
+		if (*(uint32_t *)(patch_args.kbl_param + 0x4) == 0x03650000) {
 			*(uint8_t *)0x51023de7 = 'e';
 			*(uint8_t *)0x51023de8 = 'x';
 		} else {

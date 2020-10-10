@@ -70,9 +70,10 @@ A mod of https://github.com/henkaku/enso for PSP2 Vita.
 	
 ### "dual nand"
  - You can use the SD's os0 partition instead of EMMC's os0 partition by holding START at boot.
+ - You can also format the SD card to FAT16, holding START will mount the SD card as os0.
  - If an error happened the user will need to confirm that he is aware of it by pressing the correct key:
 	- "Error reading GC-SD" - press TRIANGLE.
-	- "Incorrect SD magic (not SCE magic)" - press CIRCLE.
+	- "Incorrect SD magic (not SCE/FAT16)" - press CIRCLE.
 
 # Credits
  - Team molecule for henkaku, taihen, enso, and HenKaku wiki entries.
