@@ -66,38 +66,6 @@ static void prepare_modlists(void) {
 	char dispmodel[16];
 	uint32_t cfgstr[16];
 	
-	// devkit
-	int iVar1 = KblCheckDipsw(0xc1);
-	if ((((iVar1 != 0) && (iVar1 = KblIsCex(), iVar1 == 0)) && (iVar1 = KblIsModelx102(), iVar1 == 0)) && (iVar1 = KblIsDoubleModel(), iVar1 == 0)) {
-		use_devmods = 5;
-		iVar1 = KblParamx2dAnd1();
-		if (iVar1 == 0) {
-			use_devmods = 3;
-			mlist_str_d[3] = NULL;
-			mlist_str_d[4] = NULL;
-		}
-		patch_args.uids_d = mlist_uid_d;
-	} else
-		use_devmods = 0;
-	
-	// can bsod
-	if (KblIsCex())
-		mlist_str_b[13] = NULL;
-	
-	// display type
-	iVar1 = KblIsGenuineDolce();
-	if (iVar1 == 0) {
-		KblGetHwConfig(&dispmodel);
-		if ((dispmodel[0] & 9) != 0)
-			mlist_str_b[2] = "lcd.skprx";
-	} else
-		mlist_str_b[2] = NULL;
-	
-	// has hdmi
-	iVar1 = KblIsNotDolce();
-	if ((iVar1 == 0) || ((iVar1 = KblIsCex(), iVar1 == 0 && (iVar1 = KblIsModelx102(), iVar1 == 0))))
-		mlist_str_b[3] = "hdmi.skprx";
-	
 	// setup arg that will be given to patchers
 	cfgstr[0] = 69;
 	KblGetHwConfig(&cfgstr); // get some globals from e2x's hwcfg hook
@@ -131,6 +99,38 @@ static void prepare_modlists(void) {
 			use_clist = 3;
 		}
 	}
+	
+	// devkit
+	int iVar1 = KblCheckDipsw(0xc1);
+	if ((((iVar1 != 0) && (iVar1 = KblIsCex(), iVar1 == 0)) && (iVar1 = KblIsModelx102(), iVar1 == 0)) && (iVar1 = KblIsDoubleModel(), iVar1 == 0)) {
+		use_devmods = 5;
+		iVar1 = KblParamx2dAnd1();
+		if (iVar1 == 0) {
+			use_devmods = 3;
+			mlist_str_d[3] = NULL;
+			mlist_str_d[4] = NULL;
+		}
+		patch_args.uids_d = mlist_uid_d;
+	} else
+		use_devmods = 0;
+	
+	// can bsod
+	if (KblIsCex())
+		mlist_str_b[13] = NULL;
+	
+	// display type
+	iVar1 = KblIsGenuineDolce();
+	if (iVar1 == 0) {
+		KblGetHwConfig(&dispmodel);
+		if ((dispmodel[0] & 9) != 0)
+			mlist_str_b[2] = "lcd.skprx";
+	} else
+		mlist_str_b[2] = NULL;
+	
+	// has hdmi
+	iVar1 = KblIsNotDolce();
+	if ((iVar1 == 0) || ((iVar1 = KblIsCex(), iVar1 == 0 && (iVar1 = KblIsModelx102(), iVar1 == 0))))
+		mlist_str_b[3] = "hdmi.skprx";
 }
 
 void _start() __attribute__ ((weak, alias ("module_start")));
