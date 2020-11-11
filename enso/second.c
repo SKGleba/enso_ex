@@ -38,8 +38,6 @@ do {                                   \
 } while (0)
 	
 #define NSKBL_EXPORTS(num) (NSKBL_EXPORTS_ADDR + (num * 4))
-	
-static const char *new_psp2bcfg = E2X_CKLDR_NAME;
 
 static int icsahb = 0; // invalid self flag
 
@@ -149,31 +147,34 @@ static void *load_device(uint32_t device, char *blkname, uint32_t offblk, uint32
 
 // Read file to a memblock/buf, mark as RX if req, return ptr (only FAT16 FS, max sz 8MB)
 static void *load_file(char *fpath, char *blkname, unsigned int size, int mode) {
-	long long int Var11 = iof_open(fpath, 1, 0);
-	if (Var11 >= 0) {
-		uint32_t uVar4 = (uint32_t)((unsigned long long int)Var11 >> 0x20);
-		Var11 = iof_get_sz(uVar4, (int)Var11, 0, 0, 2);
-		unsigned int uVar7 = (size > 0) ? size : (unsigned int)((unsigned long long int)Var11 >> 0x20);
+	int fd = iof_open(fpath, 1, 0);
+	if (fd >= 0) {
+		if (mode == 3) {
+			iof_close(fd);
+			return (void *)1;
+		}
+		if (size == 0)
+			size = iof_lseek(fd, 0, 0, 0, 2);
 		if (mode > 1) { // direct/fixed sz mode
-			if ((int)iof_get_sz(uVar4, (int)Var11, 0, 0, 0) >= 0 && iof_read(uVar4, (void *)blkname, &uVar7) >= 0) {
+			if ((int)iof_lseek(fd, 0, 0, 0, 0) >= 0 && iof_read(fd, (void *)blkname, size) >= 0) {
 				if (*(uint32_t *)blkname == 0) { // assume that the file has some magic
-					iof_close(uVar4);
+					iof_close(fd);
 					return (void *)2;
 				}
-				iof_close(uVar4);
+				iof_close(fd);
 				return NULL;
 			}
-			iof_close(uVar4);
+			iof_close(fd);
 			return (void *)3;
 		}
 		unsigned int blksz = 0x1000;
-		while (blksz < uVar7 && blksz < 0x800000)
+		while (blksz < size && blksz < 0x800000)
 			blksz-=-0x1000;
 		int mblk = sceKernelAllocMemBlock(blkname, 0x1020D006, blksz, NULL);
 		void *xbas = NULL;
 		sceKernelGetMemBlockBase(mblk, (void **)&xbas);
-		if ((int)Var11 >= 0 && uVar7 < blksz && (int)iof_get_sz(uVar4, (int)Var11, 0, 0, 0) >= 0 && iof_read(uVar4, xbas, &uVar7) >= 0 && *(uint32_t *)xbas != 0) {
-			iof_close(uVar4);
+		if (size < blksz && (int)iof_lseek(fd, 0, 0, 0, 0) >= 0 && iof_read(fd, xbas, size) >= 0 && *(uint32_t *)xbas != 0) {
+			iof_close(fd);
 			if (mode) {
 				sceKernelRemapBlock(mblk, 0x1020D005);
 				clean_dcache(xbas, blksz);
@@ -181,7 +182,7 @@ static void *load_file(char *fpath, char *blkname, unsigned int size, int mode) 
 			}
 			return xbas;
 		}
-		iof_close(uVar4);
+		iof_close(fd);
 		sceKernelFreeMemBlock(mblk);
 	}
 	return NULL;
@@ -281,7 +282,10 @@ static int load_psp2bootconfig_patched(uint32_t myaddr, int *uids, int count, in
 	void (*tcode)(void) = (void *)(load_file("os0:" E2X_BOOTMGR_NAME, "bootmgr_ex", 0, 1) + 1);
 	if (tcode != (void *)0x1)
 		tcode();
-	myaddr = (uint32_t)new_psp2bcfg;
+	if (load_file("os0:" E2X_CKLDR_NAME, NULL, 0, 3))
+		myaddr = (uint32_t)E2X_CKLDR_NAME;
+	else
+		myaddr = (uint32_t)PSP2BOOTCONFIG_STRING;
 	return module_load_direct((SceModuleLoadList *)&myaddr, uids, count, osloc, unk);
 }
 

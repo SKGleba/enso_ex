@@ -268,9 +268,9 @@ static int (*setup_emmc)() = (void*)0x5100124D;
 static int (*init_part)(unsigned int *partition, unsigned int flags, unsigned int *read_func, unsigned int *master_dev) = (void*)0x5101fd19;
 
 static int (*iof_open)(char *fname, int flags, int mode) = (void *)0x510017D5;
-static uint64_t (*iof_get_sz)(uint32_t param_1, uint32_t param_2, uint32_t param_3, uint32_t param_4, uint32_t param_5) = (void *)0x510018a9;
+static uint32_t (*iof_lseek)(uint32_t param_1, uint32_t param_2, uint32_t param_3, uint32_t param_4, uint32_t param_5) = (void *)0x510018a9;
 static int (*iof_close)(uint32_t fdlike) = (void *)0x51001901;
-static int (*iof_read)(uint32_t fdlike, void *buf, unsigned int *sizelike) = (void *)0x510207e5;
+static int (*iof_read)(uint32_t fdlike, void *buf, uint32_t sizelike) = (void *)0x510207e5;
 
 static int (*is_true_dolce)(void) = (void *)0x510171e5;
 
