@@ -188,27 +188,47 @@ static int (*smc_custom)() = (void*)0x510168d4;
 
 static void *payload_block_addr = NULL;
 
-// read file to buffer
-static int read_f2b(unsigned int size, void *buf, char *file) {
-	long long int Var11 = iof_open(file, 1, 0);
-	if (Var11 < 0)
-		return 1;
-	uint32_t uVar4 = (uint32_t)((unsigned long long int)Var11 >> 0x20);
-	Var11 = iof_get_sz(uVar4, (int)Var11, 0, 0, 2);
-	if (Var11 < 0)
-		return 1;
-	//unsigned int fsz = (unsigned int)((unsigned long long int)Var11 >> 0x20); -- bugged for bigger files for some reason
-	unsigned int fsz = size;
-	if ((int)iof_get_sz(uVar4, (int)Var11, 0, 0, 0) >= 0 && iof_read(uVar4, buf, &fsz) >= 0) {
-		if (*(uint32_t *)buf == 0) {
-			iof_close(uVar4);
-			return 2;
+// Read file to a memblock/buf, mark as RX if req, return ptr (only FAT16 FS, max sz 8MB)
+static void *load_file(char *fpath, char *blkname, unsigned int size, int mode) {
+	int fd = iof_open(fpath, 1, 0);
+	if (fd >= 0) {
+		if (mode == 3) {
+			iof_close(fd);
+			return (void *)1;
 		}
-		iof_close(uVar4);
-		return 0;
+		if (size == 0)
+			size = iof_lseek(fd, 0, 0, 0, 2);
+		if (mode > 1) { // direct/fixed sz mode
+			if ((int)iof_lseek(fd, 0, 0, 0, 0) >= 0 && iof_read(fd, (void *)blkname, size) >= 0) {
+				if (*(uint32_t *)blkname == 0) { // assume that the file has some magic
+					iof_close(fd);
+					return (void *)2;
+				}
+				iof_close(fd);
+				return NULL;
+			}
+			iof_close(fd);
+			return (void *)3;
+		}
+		unsigned int blksz = 0x1000;
+		while (blksz < size && blksz < 0x800000)
+			blksz-=-0x1000;
+		int mblk = sceKernelAllocMemBlock(blkname, 0x1020D006, blksz, NULL);
+		void *xbas = NULL;
+		sceKernelGetMemBlockBase(mblk, (void **)&xbas);
+		if (size < blksz && (int)iof_lseek(fd, 0, 0, 0, 0) >= 0 && iof_read(fd, xbas, size) >= 0 && *(uint32_t *)xbas != 0) {
+			iof_close(fd);
+			if (mode) {
+				sceKernelRemapBlock(mblk, 0x1020D005);
+				clean_dcache(xbas, blksz);
+				flush_icache();
+			}
+			return xbas;
+		}
+		iof_close(fd);
+		sceKernelFreeMemBlock(mblk);
 	}
-	iof_close(uVar4);
-	return 3;
+	return NULL;
 }
 
 static int load_sm(int *ctx, char *argpath, unsigned int smsz) {
@@ -216,7 +236,7 @@ static int load_sm(int *ctx, char *argpath, unsigned int smsz) {
 	void *sm_block_addr = NULL, *cmd_block_addr = NULL;
 	sceKernelGetMemBlockBase(sm_block, (void**)&sm_block_addr); // block for SM
 	sceKernelGetMemBlockBase(cmd_block, (void**)&cmd_block_addr); // block for SM args
-	if (read_f2b(smsz, sm_block_addr, argpath) > 0)
+	if (load_file(argpath, sm_block_addr, smsz, 2) != NULL)
 		return 1;
 	SceSblSmCommContext130 smcomm_ctx; //
 	memset(&smcomm_ctx, 0, 0x130); //

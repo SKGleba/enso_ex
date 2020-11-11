@@ -487,7 +487,7 @@ int optct = 5;
 void smenu(){
 	psvDebugScreenClear(COLOR_BLACK);
 	psvDebugScreenSetFgColor(COLOR_CYAN);
-	printf("                        enso_ex v4.5                             \n");
+	printf("                       enso_ex v4.5.1                            \n");
 	printf("                         By SKGleba                              \n");
 	psvDebugScreenSetFgColor(COLOR_RED);
 	for(int i = 0; i < optct; i++){

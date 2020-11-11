@@ -28,9 +28,9 @@ __attribute__((optimize("O0"))) int zss_patch(void) {
 	memset(payload_block_addr, 0, 0x300);
 	
 	char kasm_sz_chard[4];
-	if (read_f2b(4, &kasm_sz_chard[0], "os0:hfw_cfg.bin") != 0)
+	if (load_file("os0:hfw_cfg.bin", &kasm_sz_chard[0], 4, 2) != NULL)
 		*(uint32_t *)kasm_sz_chard = 36988;
-	if (read_f2b(*(uint32_t *)kasm_sz_chard, payload_block_addr + 0x300, "os0:hfw_kasm.elf") == 0)
+	if (load_file("os0:hfw_kasm.elf", payload_block_addr + 0x300, *(uint32_t *)kasm_sz_chard, 2) == NULL)
 		*(uint32_t *)(payload_block_addr + 0x200) = 0xCAFEBEEF;
 	*(uint32_t *)(payload_block_addr + 0x208) = ((*(uint32_t *)kasm_sz_chard) - 0x1000); // size of .elf \ header
 	memcpy((payload_block_addr + 0x220), &smlh_nmp, sizeof(smlh_nmp)); // custom sm_load handler
