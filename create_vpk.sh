@@ -1,14 +1,11 @@
 (
 cd enso/;
-make FW=360;
-make FW=365;
+make;
 cd ../patches/loader/;
 make;
 cd ../hencfg/;
 make;
 cd ../culogo/;
-make;
-cd ../recovery/;
 make;
 cd ../../installer/;
 cmake ./ && make;
@@ -23,9 +20,6 @@ rm e2xculogo.*;
 rm kernel.o;
 cd ../loader/;
 rm e2x_ckldr.*;
-rm kernel.o;
-cd ../recovery/;
-rm eex_recovery.*;
 rm kernel.o;
 cd ../../enso/;
 rm *.bin;

@@ -7,11 +7,7 @@
  */
 #include <inttypes.h>
 
-#ifdef FW_360
-	#include "360/nsbl.h"
-#else
-	#include "365/nsbl.h"
-#endif
+#include "nsbl.h"
 
 #include "bm_compat.h"
 #include "bm_compat.c"
@@ -36,8 +32,6 @@ do {                                   \
         : : "r" (prev_dacr)            \
     );                                 \
 } while (0)
-	
-#define NSKBL_EXPORTS(num) (NSKBL_EXPORTS_ADDR + (num * 4))
 
 static int icsahb = 0; // invalid self flag
 
@@ -58,6 +52,7 @@ static void **get_export_func(SceModuleObject *mod, uint32_t lib_nid, uint32_t f
     return NULL;
 }
 
+/*
 static int is_cable(void) {
     SceBootArgs *boot_args = (*sysroot_ctx_ptr)->boot_args;
     if (boot_args->field_D8 == 0xC) {
@@ -70,6 +65,7 @@ static int is_cable(void) {
 		}
     }
 }
+*/
 
 static int self_auth_header_patched(void *myaddr, int a1, int a2, int a3) {
 	int ret = self_auth_header(1, a1, a2, a3);
@@ -98,21 +94,20 @@ static int self_load_block_patched(void *myaddr, int a1, int a2) {
 }
 
 static void allow_fselfs() {
-	*(uint16_t *)SGB_BOFF = 0xd162; // redirect argerrorh to another one (3x4bytes free for patched func offsets)
-	*(uint32_t *)(SGB_BOFF + 0x66) = 0x47804813; // bl self_auth_header -> ldr r0, argerrorh[0]; blx r0
-	*(uint32_t *)(SGB_BOFF + 0x76) = 0x47804810; // bl self_setup_authseg -> ldr r0, argerrorh[1]; blx r0
-	*(uint32_t *)(SGB_BOFF + 0x86) = 0x4780480d; // bl self_load_block -> ldr r0, argerrorh[2]; blx r0
-	*(uint32_t *)(SGB_BOFF + 0xB6) = (uint32_t)self_auth_header_patched; // 
-	*(uint32_t *)(SGB_BOFF + 0xBA) = (uint32_t)self_setup_authseg_patched; // 3x4 bytes of unused arg error handler
-	*(uint32_t *)(SGB_BOFF + 0xBE) = (uint32_t)self_load_block_patched; // 
-	clean_dcache((void *)SGB_ROFF, 0x100);
+	*(uint16_t *)0x5101887a = 0xd162; // redirect argerrorh to another one (3x4bytes free for patched func offsets)
+	*(uint32_t *)(0x5101887a + 0x66) = 0x47804813; // bl self_auth_header -> ldr r0, argerrorh[0]; blx r0
+	*(uint32_t *)(0x5101887a + 0x76) = 0x47804810; // bl self_setup_authseg -> ldr r0, argerrorh[1]; blx r0
+	*(uint32_t *)(0x5101887a + 0x86) = 0x4780480d; // bl self_load_block -> ldr r0, argerrorh[2]; blx r0
+	*(uint32_t *)(0x5101887a + 0xB6) = (uint32_t)self_auth_header_patched; // 
+	*(uint32_t *)(0x5101887a + 0xBA) = (uint32_t)self_setup_authseg_patched; // 3x4 bytes of unused arg error handler
+	*(uint32_t *)(0x5101887a + 0xBE) = (uint32_t)self_load_block_patched; // 
+	clean_dcache((void *)0x51018870, 0x100);
 	flush_icache();
 }
 
 // sdif patches for MBR redirection
 static int sdif_read_sector_mmc_patched(void* ctx, int sector, char* buffer, int nSectors) {
     int ret;
-#ifndef NO_MBR_REDIRECT
     if (unlikely(sector == 0 && nSectors > 0)) {
         if (get_sd_context_part_validate_mmc(0) == ctx) {
             ret = sdif_read_sector_mmc(ctx, 1, buffer, 1);
@@ -122,8 +117,6 @@ static int sdif_read_sector_mmc_patched(void* ctx, int sector, char* buffer, int
             return ret;
         }
     }
-#endif
-
     return sdif_read_sector_mmc(ctx, sector, buffer, nSectors);
 }
 
@@ -145,13 +138,14 @@ static void *load_device(uint32_t device, char *blkname, uint32_t offblk, uint32
 	return NULL;
 }
 
-// Read file to a memblock/buf, mark as RX if req, return ptr (only FAT16 FS, max sz 8MB)
+// Read file to a memblock/buf, mark as RX if req, return ptr (only FAT16 FS, max memblock sz 8MB)
 static void *load_file(char *fpath, char *blkname, unsigned int size, int mode) {
 	int fd = iof_open(fpath, 1, 0);
 	if (fd >= 0) {
-		if (mode == 3) {
+		if (mode == 3) { // getSize+1, may be wrong for big files
+			size = (size) ? iof_lseek(fd, 0, 0, 0, 2) : 1;
 			iof_close(fd);
-			return (void *)1;
+			return (void *)size;
 		}
 		if (size == 0)
 			size = iof_lseek(fd, 0, 0, 0, 2);
@@ -285,7 +279,7 @@ static int load_psp2bootconfig_patched(uint32_t myaddr, int *uids, int count, in
 	if (load_file("os0:" E2X_CKLDR_NAME, NULL, 0, 3))
 		myaddr = (uint32_t)E2X_CKLDR_NAME;
 	else
-		myaddr = (uint32_t)PSP2BOOTCONFIG_STRING;
+		myaddr = (uint32_t)0x51023dc0;
 	return module_load_direct((SceModuleLoadList *)&myaddr, uids, count, osloc, unk);
 }
 
@@ -357,19 +351,19 @@ void go(void) {
 	// redirect load_psp2bootconfig
 	if (!CTRL_BUTTON_HELD(ctrl, E2X_IPATCHES_SKIP)) {
 		*(uint32_t *)0x51001688 = 0x47806800;
-		*(uint32_t *)PSP2BCFG_STRING_ADDR = (uint32_t)load_psp2bootconfig_patched;
-		clean_dcache((void *)PSP2BCFG_STRING_ADDR, 0x10);
+		*(uint32_t *)0x51023e10 = (uint32_t)load_psp2bootconfig_patched;
+		clean_dcache((void *)0x51023e10, 0x10);
 		clean_dcache((void *)0x51001680, 0x10);
 		flush_icache();
 	}
 	
 	// Recovery if wall-connected & SELECT/START held
-	if (is_cable()) {
+	// if (is_cable()) {
 		if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RUNDF))
 			recovery(ctrl);
 		else if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RUNDN))
 			dnand(ctrl);
-	}
+	//}
 }
 
 __attribute__ ((section (".text.start"))) void start(void) {

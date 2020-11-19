@@ -62,8 +62,7 @@ add_executable(${SHORT_NAME}
   src/font.c
 )
 
-add_dependencies(${SHORT_NAME} emmc_helper_365.skprx)
-add_dependencies(${SHORT_NAME} emmc_helper_360.skprx)
+add_dependencies(${SHORT_NAME} emmc_helper.skprx)
 
 target_link_libraries(${SHORT_NAME}
   SceDisplay_stub
@@ -82,43 +81,16 @@ target_link_libraries(${SHORT_NAME}
 
 vita_create_self(${SHORT_NAME}.self ${SHORT_NAME} UNSAFE)
 
-# emmc_helper: kernel version 360
-add_executable(emmc_helper_360
-  src/kernel_360.c
+# emmc_helper: kernel
+add_executable(emmc_helper
+  src/kernel.c
   src/crc32.c
 )
-set_target_properties(emmc_helper_360
+set_target_properties(emmc_helper
   PROPERTIES LINK_FLAGS
   -nostdlib
 )
-target_link_libraries(emmc_helper_360
-  gcc
-  SceSysclibForDriver_stub
-  SceThreadmgrForDriver_stub
-  SceModulemgrForDriver_stub
-  SceModulemgrForKernel_stub
-  SceSblAIMgrForDriver_stub
-  SceIofilemgrForDriver_stub
-  SceSysmemForKernel_stub
-  SceSysmemForDriver_stub
-  taihenForKernel_stub
-)
-vita_create_self(emmc_helper_360.skprx emmc_helper_360
-  CONFIG ${CMAKE_SOURCE_DIR}/src/kernel_exports.yml
-  UNSAFE
-)
-vita_create_stubs(emmc_helper_stubs emmc_helper_360 ${CMAKE_SOURCE_DIR}/src/kernel_exports.yml KERNEL)
-
-# emmc_helper: kernel version 365
-add_executable(emmc_helper_365
-  src/kernel_365.c
-  src/crc32.c
-)
-set_target_properties(emmc_helper_365
-  PROPERTIES LINK_FLAGS
-  -nostdlib
-)
-target_link_libraries(emmc_helper_365
+target_link_libraries(emmc_helper
   gcc
   SceSysclibForDriver_stub
   SceThreadmgrForDriver_stub
@@ -130,10 +102,12 @@ target_link_libraries(emmc_helper_365
   SceSysmemForDriver_stub
   taihenForKernel_stub
 )
-vita_create_self(emmc_helper_365.skprx emmc_helper_365
+vita_create_self(emmc_helper.skprx emmc_helper
   CONFIG ${CMAKE_SOURCE_DIR}/src/kernel_exports.yml
   UNSAFE
 )
+
+vita_create_stubs(emmc_helper_stubs emmc_helper ${CMAKE_SOURCE_DIR}/src/kernel_exports.yml KERNEL)
 
 # second kernel helper to work around unloading a kernel module with exported funcs
 add_executable(kernel2
@@ -176,22 +150,19 @@ vita_create_stubs(emmc_helper_user_stubs emmc_helper_user ${CMAKE_SOURCE_DIR}/sr
 add_dependencies(emmc_helper_user emmc_helper_stubs)
 add_dependencies(${SHORT_NAME} emmc_helper_user_stubs)
 add_dependencies(${SHORT_NAME} kernel2.skprx)
-add_dependencies(${SHORT_NAME} emmc_helper_360.skprx)
-add_dependencies(${SHORT_NAME} emmc_helper_365.skprx)
+add_dependencies(${SHORT_NAME} emmc_helper.skprx)
 add_dependencies(${SHORT_NAME} emmc_helper_user.suprx)
 
 vita_create_vpk(${SHORT_NAME}.vpk ${VITA_TITLEID} ${SHORT_NAME}.self
   VERSION ${VITA_VERSION}
   NAME ${VITA_APP_NAME}
-  FILE ${CMAKE_SOURCE_DIR}/../enso/fat_365.bin gudfw/fat.bin
-  FILE ${CMAKE_SOURCE_DIR}/../enso/fat_360.bin oldfw/fat.bin
+  FILE ${CMAKE_SOURCE_DIR}/../enso/fat.bin fat.bin
   FILE ${CMAKE_SOURCE_DIR}/../patches/hencfg/e2xhencfg.skprx e2xhencfg.skprx
   FILE ${CMAKE_SOURCE_DIR}/../patches/culogo/e2xculogo.skprx e2xculogo.skprx
   FILE ${CMAKE_SOURCE_DIR}/../patches/loader/e2x_ckldr.skprx e2x_ckldr.skprx
   FILE ${CMAKE_SOURCE_DIR}/../data/bootlogo.raw bootlogo.raw
   FILE ${CMAKE_SOURCE_DIR}/../data/boot_list.txt boot_list.txt
-  FILE ${CMAKE_BINARY_DIR}/emmc_helper_360.skprx oldfw/emmc_helper.skprx
-  FILE ${CMAKE_BINARY_DIR}/emmc_helper_365.skprx gudfw/emmc_helper.skprx
+  FILE ${CMAKE_BINARY_DIR}/emmc_helper.skprx emmc_helper.skprx
   FILE ${CMAKE_BINARY_DIR}/emmc_helper_user.suprx emmc_helper.suprx
   FILE ${CMAKE_BINARY_DIR}/kernel2.skprx kernel2.skprx
   FILE ${CMAKE_SOURCE_DIR}/res/icon.png sce_sys/icon0.png

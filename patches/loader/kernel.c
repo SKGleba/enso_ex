@@ -65,6 +65,7 @@ static char *mlist_str_d[] = {
 static void prepare_modlists(void) {
 	char dispmodel[16];
 	uint32_t cfgstr[16];
+	int blist_sz = 0;
 	
 	// setup arg that will be given to patchers
 	cfgstr[0] = 69;
@@ -84,7 +85,8 @@ static void prepare_modlists(void) {
 		clist_str[1] = "e2xhfwmod.skprx"; // always run the hfw-compat script
 		use_clist = 2;
 	} else {
-		if ((lf("os0:ex/boot_list.txt", e2xlist, (16 * 16), 2) == 0) && ((e2xlist[0] == 'E') && (e2xlist[2] == 'X') && (e2xlist[12] == '='))) { // "E2XMODCOUNT:=XX\0"
+		blist_sz = lf("os0:ex/boot_list.txt", e2xlist, 1, 3); // bootlist size
+		if (blist_sz > 0 && lf("os0:ex/boot_list.txt", e2xlist, (blist_sz < 0x100) ? blist_sz : 0x100, 2) == 0 && (e2xlist[2] == 'X') && (e2xlist[12] == '=')) { // "E2XMODCOUNT:=XX\0"
 			for (int i = 1; i < (((e2xlist[13] - 0x30) * 10) + (e2xlist[14] - 0x30) + 1); i-=-1) {
 				if (i > 14)
 					break;
@@ -147,13 +149,8 @@ int module_start(SceSize argc, void *args) {
 	
 	// change moddir to os0:ex/ and load custom modules from there
 	if (use_clist > 0) {
-		if (*(uint32_t *)(patch_args.kbl_param + 0x4) == 0x03650000) {
-			*(uint8_t *)0x51023de7 = 'e';
-			*(uint8_t *)0x51023de8 = 'x';
-		} else {
-			*(uint8_t *)0x51023bdf = 'e';
-			*(uint8_t *)0x51023be0 = 'x';
-		}
+		*(uint8_t *)0x51023de7 = 'e';
+		*(uint8_t *)0x51023de8 = 'x';
 		KblLoadModulesFromList(clist_str, clist_uid, use_clist, 0);
 	}
 	

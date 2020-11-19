@@ -17,10 +17,8 @@
 #define SYSSTATE_IS_MANUFACTURING_MODE_OFFSET (0x1500)
 #define SYSSTATE_IS_DEV_MODE_OFFSET (0xE28)
 #define SYSSTATE_RET_CHECK_BUG (0xD92)
-#define SYSSTATE_SD0_STRING_365 (0x2448)
-#define SYSSTATE_SD0_PSP2CONFIG_STRING_365 (0x2396)
-#define SYSSTATE_SD0_STRING_360 (0x2460)
-#define SYSSTATE_SD0_PSP2CONFIG_STRING_360 (0x23AE)
+#define SYSSTATE_SD0_STRING (0x2448)
+#define SYSSTATE_SD0_PSP2CONFIG_STRING (0x2396)
 #define SYSSTATE_FINAL_CALL (0x130)
 #define SYSSTATE_FINAL (0x18C9)
 
@@ -124,14 +122,33 @@ int module_start(uint32_t argc, void *args) {
 	
 	patch_args_struct *patch_args = args;
 	
-	int nkblfw = (*(uint32_t *)(patch_args->kbl_param + 0x4) == 0x03650000);
-	
-	void *(*memcpy)(void *dst, const void *src, int sz) = (nkblfw) ? memcpy_365 : memcpy_360;
-	void *(*get_obj_for_uid)(int uid) = (nkblfw) ? get_obj_for_uid_365 : get_obj_for_uid_360;
-	
     SceObject *obj;
     SceModuleObject *mod;
 	
+	// config / stopfselfs patch
+	obj = get_obj_for_uid(patch_args->uids_b[14]);
+    if (obj != NULL) {
+		mod = (SceModuleObject *)&obj->data;
+		if (*(uint8_t *)(mod->segments[0].buf + 10) != 0xDA) // make sure its 3.65
+				return 0;
+		DACR_OFF(
+			INSTALL_RET_THUMB(mod->segments[0].buf + SYSSTATE_IS_MANUFACTURING_MODE_OFFSET, 1);
+			*(uint32_t *)(mod->segments[0].buf + SYSSTATE_IS_DEV_MODE_OFFSET) = 0x20012001;
+			kbl_memcpy(mod->segments[0].buf + SYSSTATE_RET_CHECK_BUG, sysstate_ret_patch, sizeof(sysstate_ret_patch));
+			if (CTRL_BUTTON_HELD(patch_args->ctrldata, E2X_USE_BBCONFIG)) {
+				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ux0_path, sizeof(ux0_path));
+				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_path, sizeof(ux0_psp2config_path));
+			} else if (!skip_patches(patch_args->kbl_param)) {
+				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ur0_path, sizeof(ur0_path));
+				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_path, sizeof(ur0_psp2config_path));
+			}
+			// this patch actually corrupts two words of data, but they are only used in debug printing and seem to be fine
+			INSTALL_HOOK_THUMB(sysstate_final_hook, mod->segments[0].buf + SYSSTATE_FINAL_CALL);
+			sysstate_final = mod->segments[0].buf + SYSSTATE_FINAL;
+		);
+    }
+	
+	// fself/hen patch
     obj = get_obj_for_uid(patch_args->uids_a[9]);
     if (obj != NULL) {
 		mod = (SceModuleObject *)&obj->data;
@@ -140,28 +157,6 @@ int module_start(uint32_t argc, void *args) {
 		HOOK_EXPORT(sbl_decrypt, 0x7ABF5135, 0xBC422443);
     }
 	
-    obj = get_obj_for_uid(patch_args->uids_b[14]);
-    if (obj != NULL) {
-		mod = (SceModuleObject *)&obj->data;
-		int goodfw = (*(uint8_t *)(mod->segments[0].buf + 10) == 0xDA); // check if its 3.65, thats because kernel FW can be different than bl FW
-		DACR_OFF(
-			INSTALL_RET_THUMB(mod->segments[0].buf + SYSSTATE_IS_MANUFACTURING_MODE_OFFSET, 1);
-			*(uint32_t *)(mod->segments[0].buf + SYSSTATE_IS_DEV_MODE_OFFSET) = 0x20012001;
-			memcpy(mod->segments[0].buf + SYSSTATE_RET_CHECK_BUG, sysstate_ret_patch, sizeof(sysstate_ret_patch));
-			uint32_t sd0stroff = (goodfw) ? SYSSTATE_SD0_STRING_365 : SYSSTATE_SD0_STRING_360;
-			uint32_t sdcfgstroff = (goodfw) ? SYSSTATE_SD0_PSP2CONFIG_STRING_365 : SYSSTATE_SD0_PSP2CONFIG_STRING_360;
-			if (CTRL_BUTTON_HELD(patch_args->ctrldata, E2X_USE_BBCONFIG)) {
-				memcpy(mod->segments[0].buf + sd0stroff, ux0_path, sizeof(ux0_path));
-				memcpy(mod->segments[0].buf + sdcfgstroff, ux0_psp2config_path, sizeof(ux0_psp2config_path));
-			} else if (!skip_patches(patch_args->kbl_param)) {
-				memcpy(mod->segments[0].buf + sd0stroff, ur0_path, sizeof(ur0_path));
-				memcpy(mod->segments[0].buf + sdcfgstroff, ur0_psp2config_path, sizeof(ur0_psp2config_path));
-			}
-			// this patch actually corrupts two words of data, but they are only used in debug printing and seem to be fine
-			INSTALL_HOOK_THUMB(sysstate_final_hook, mod->segments[0].buf + SYSSTATE_FINAL_CALL);
-			sysstate_final = mod->segments[0].buf + SYSSTATE_FINAL;
-		);
-    }
 	
 	return 0;
 }

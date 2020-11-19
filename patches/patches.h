@@ -99,17 +99,9 @@ typedef struct patch_args_struct {
 } __attribute__((packed)) patch_args_struct;
 
 // 3.65 nskbl funcs
-static void *(*memset_365)(void *dst, int ch, int sz) = (void*)0x51013C41;
-static void *(*memcpy_365)(void *dst, const void *src, int sz) = (void *)0x51013BC1;
-static void *(*get_obj_for_uid_365)(int uid) = (void *)0x51017785;
-static int (*sceKernelAllocMemBlock_365)(const char *name, int type, int size, void *opt) = (void *)0x51007161;
-static int (*sceKernelGetMemBlockBase_365)(int32_t uid, void **basep) = (void *)0x510057E1;
-static int (*sceKernelFreeMemBlock_365)(int32_t uid) = (void *)0x51007449;
-
-// 3.60 nskbl funcs
-static void *(*memset_360)(void *dst, int ch, int sz) = (void*)0x51013AD1;
-static void *(*memcpy_360)(void *dst, const void *src, int sz) = (void *)0x51013A51;
-static void *(*get_obj_for_uid_360)(int uid) = (void *)0x51017649;
-static int (*sceKernelAllocMemBlock_360)(const char *name, int type, int size, void *opt) = (void *)0x510086C1;
-static int (*sceKernelGetMemBlockBase_360)(int32_t uid, void **basep) = (void *)0x510040E5;
-static int (*sceKernelFreeMemBlock_360)(int32_t uid) = (void *)0x510089a9;
+static void *(*kbl_memset)(void *dst, int ch, int sz) = (void*)0x51013C41;
+static void *(*kbl_memcpy)(void *dst, const void *src, int sz) = (void *)0x51013BC1;
+static void *(*get_obj_for_uid)(int uid) = (void *)0x51017785;
+static int (*sceKernelAllocMemBlock)(const char *name, int type, int size, void *opt) = (void *)0x51007161;
+static int (*sceKernelGetMemBlockBase)(int32_t uid, void **basep) = (void *)0x510057E1;
+static int (*sceKernelFreeMemBlock)(int32_t uid) = (void *)0x51007449;

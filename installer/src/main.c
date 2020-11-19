@@ -176,23 +176,10 @@ int load_helper(void) {
 		return -1;
 	}
 
-	if (ex("ur0:temp/365.t") == 1) {
-		sceIoRemove("ur0:temp/365.t");
-		if ((ret = g_kernel_module = taiLoadStartKernelModuleForUser(APP_PATH "gudfw/emmc_helper.skprx", &args)) < 0) {
-			printf("Failed to load kernel module: 0x%08x\n", ret);
-			return -1;
-		} 
-	} else if (ex("ur0:temp/360.t") == 1) {
-		curfw = 34;
-		sceIoRemove("ur0:temp/360.t");
-		if ((ret = g_kernel_module = taiLoadStartKernelModuleForUser(APP_PATH "oldfw/emmc_helper.skprx", &args)) < 0) {
-			printf("Failed to load kernel module: 0x%08x\n", ret);
-			return -1;
-		}
-	} else {
-		printf("Failed to get fw version\nMake sure that you have 0syscall6 disabled!\n", ret);
+	if ((ret = g_kernel_module = taiLoadStartKernelModuleForUser(APP_PATH "emmc_helper.skprx", &args)) < 0) {
+		printf("Failed to load kernel module: 0x%08x\n", ret);
 		return -1;
-	}
+	} 
 
 	if ((ret = g_user_module = sceKernelLoadStartModule(APP_PATH "emmc_helper.suprx", 0, NULL, 0, NULL, NULL)) < 0) {
 		printf("Failed to load user module: 0x%08x\n", ret);
@@ -487,7 +474,7 @@ int optct = 5;
 void smenu(){
 	psvDebugScreenClear(COLOR_BLACK);
 	psvDebugScreenSetFgColor(COLOR_CYAN);
-	printf("                       enso_ex v4.5.1                            \n");
+	printf("                        enso_ex v5.0                             \n");
 	printf("                         By SKGleba                              \n");
 	psvDebugScreenSetFgColor(COLOR_RED);
 	for(int i = 0; i < optct; i++){

@@ -45,11 +45,6 @@ int module_start(uint32_t argc, void *args) {
 	if (!CTRL_BUTTON_HELD(patch_args->ctrldata, E2X_RECOVERY_RUNDN))
 		return 0;
 	
-	int nkblfw = (*(uint32_t *)(patch_args->kbl_param + 0x4) == 0x03650000);
-	
-	void *(*get_obj_for_uid)(int uid) = (nkblfw) ? get_obj_for_uid_365 : get_obj_for_uid_360;
-	void *(*memcpy)(void *dst, const void *src, int sz) = (nkblfw) ? memcpy_365 : memcpy_360;
-	
     SceObject *obj;
     SceModuleObject *mod;
 	

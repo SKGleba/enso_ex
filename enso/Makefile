@@ -1,23 +1,22 @@
 CC=arm-vita-eabi-gcc
-FW=365
-CFLAGS=-Os -fno-builtin-printf -fPIC -fno-builtin-memset -Wall -Wextra -Wno-unused-variable -DFW_$(FW)
+CFLAGS=-Os -fno-builtin-printf -fPIC -fno-builtin-memset -Wall -Wextra -Wno-unused-variable
 OBJCOPY=arm-vita-eabi-objcopy
 LDFLAGS=-nodefaultlibs -nostdlib
 
-all: fat_$(FW).bin
-	rm first_* && rm second_* && rm second.o && rm $(FW)/first.o
+all: fat.bin
+	rm second.o && rm first.o && rm second && rm first && rm first.bin && rm second.bin
 
-fat_$(FW).bin: first_$(FW).bin second_$(FW).bin
-	./$(FW)/gen.py $(FW)/fat.tpl first_$(FW).bin second_$(FW).bin fat_$(FW).bin
+fat.bin: first.bin second.bin
+	./gen.py fat.tpl first.bin second.bin fat.bin
 
-first_$(FW).bin: first_$(FW)
+first.bin: first
 	$(OBJCOPY) -O binary $^ $@
 
-second_$(FW).bin: second_$(FW)
+second.bin: second
 	$(OBJCOPY) -O binary $^ $@
 
-first_$(FW): $(FW)/first.o
+first: first.o
 	$(CC) -o $@ $^ $(LDFLAGS) -T first.x
 
-second_$(FW): second.o
+second: second.o
 	$(CC) -o $@ $^ $(LDFLAGS) -T second.x

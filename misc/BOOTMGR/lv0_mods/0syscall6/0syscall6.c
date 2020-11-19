@@ -27,12 +27,11 @@ __attribute__((optimize("O0"))) int zss_patch(void) {
 	memcpy(&backup, payload_block_addr, 0x80);
 	memset(payload_block_addr, 0, 0x300);
 	
-	char kasm_sz_chard[4];
-	if (load_file("os0:hfw_cfg.bin", &kasm_sz_chard[0], 4, 2) != NULL)
-		*(uint32_t *)kasm_sz_chard = 36988;
-	if (load_file("os0:hfw_kasm.elf", payload_block_addr + 0x300, *(uint32_t *)kasm_sz_chard, 2) == NULL)
-		*(uint32_t *)(payload_block_addr + 0x200) = 0xCAFEBEEF;
-	*(uint32_t *)(payload_block_addr + 0x208) = ((*(uint32_t *)kasm_sz_chard) - 0x1000); // size of .elf \ header
+	int kasm_sz = (int)load_file("os0:hfw_kasm.elf", NULL, 1, 3);
+	if (kasm_sz > 0x1000 && load_file("os0:hfw_kasm.elf", payload_block_addr + 0x300, (uint32_t)kasm_sz, 2) == NULL) {
+		*(uint32_t*)(payload_block_addr + 0x200) = 0xCAFEBEEF;
+		*(uint32_t*)(payload_block_addr + 0x208) = (uint32_t)(kasm_sz - 0x1000);
+	}
 	memcpy((payload_block_addr + 0x220), &smlh_nmp, sizeof(smlh_nmp)); // custom sm_load handler
 	memcpy((payload_block_addr + 0x20), &zss_nmp, sizeof(zss_nmp));
 	

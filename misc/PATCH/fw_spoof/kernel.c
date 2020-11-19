@@ -30,9 +30,6 @@ int module_start(uint32_t argc, void *args) {
 	
 	patch_args_struct *patch_args = args;
 	
-	int goodfw = (*(uint32_t *)(patch_args->kbl_param + 0x4) == 0x03650000);
-	void *(*get_obj_for_uid)(int uid) = (goodfw) ? get_obj_for_uid_365 : get_obj_for_uid_360;
-	
 	int (*lf)(char *fpath, void *dst, unsigned int sz, int mode) = patch_args->load_file;
 	hfw_config_struct cfg;
 	if (lf("os0:hfw_cfg.bin", &cfg, 16, 2) != 0)

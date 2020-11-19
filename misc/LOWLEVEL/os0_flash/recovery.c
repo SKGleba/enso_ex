@@ -1,11 +1,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#ifdef FW_365
-	#include "../../../enso/365/nsbl.h"
-#else
-	#include "../../../enso/360/nsbl.h"
-#endif
+#include "../../../enso/365/nsbl.h"
 
 #include "../../../enso/ex_defs.h"
 
@@ -45,7 +41,6 @@ typedef struct {
 } __attribute__((packed)) master_block_t;
 
 // nskbl funcs
-#ifdef FW_365
 static int (*read_sector_mmc_direct)(int *ctx, unsigned int block_offset, uint32_t target_buf, int block_count) = (void*)0x5101c515;
 static int (*lsdif_mmc_verify_args)(int *ctx, unsigned int block_offset, int block_count) = (void*)0x5101c23d;
 static int (*lsdif_mmc_prep_ctx)() = (void*)0x5101c091;
@@ -53,18 +48,8 @@ static int (*lsysclib_concat_unk)() = (void*)0x510221fc;
 static int (*lsdif_mmc_prepare_args)() = (void*)0x5101bbf9;
 static int (*lsdif_mmc_write_args)() = (void*)0x5101c0a5;
 static int (*lsdif_ctrl_apply_cmd)() = (void*)0x5101bf65;
-#else
-static int (*read_sector_mmc_direct)(int *ctx, unsigned int block_offset, uint32_t target_buf, int block_count) = (void*)0x5101c30d;
-static int (*lsdif_mmc_verify_args)(int *ctx, unsigned int block_offset, int block_count) = (void*)0x5101c035;
-static int (*lsdif_mmc_prep_ctx)() = (void*)0x5101be89;
-static int (*lsysclib_concat_unk)() = (void*)0x51021ff4;
-static int (*lsdif_mmc_prepare_args)() = (void*)0x5101b9f5;
-static int (*lsdif_mmc_write_args)() = (void*)0x5101be9d;
-static int (*lsdif_ctrl_apply_cmd)() = (void*)0x5101bd5d;
-#endif
 
 // patch read_sector_sd to send a write command instead
-#ifdef FW_365
 static void set_sd_write_mode(int mode) {
 	if (mode) {
 		*(uint8_t *)0x5101e8b7 = 0x62;
@@ -82,25 +67,6 @@ static void set_sd_write_mode(int mode) {
 		flush_icache();
 	}
 }
-#else
-static void set_sd_write_mode(int mode) {
-	if (mode) {
-		*(uint8_t *)0x5101e6af = 0x62;
-		*(uint8_t *)0x5101e6b3 = 0x60;
-		*(uint8_t *)0x5101e6ba = 0x18;
-		*(uint8_t *)0x5101e6bc = 0x19;
-		clean_dcache((void *)0x5101e6a0, 0x20);
-		flush_icache();
-	} else { // undo patches
-		*(uint8_t *)0x5101e6af = 0x52;
-		*(uint8_t *)0x5101e6b3 = 0x50;
-		*(uint8_t *)0x5101e6ba = 0x11;
-		*(uint8_t *)0x5101e6bc = 0x12;
-		clean_dcache((void *)0x5101e6a0, 0x20);
-		flush_icache();
-	}
-}
-#endif
 
 // write [block_count] from [target_buf] to MMC @ [block_offset] for ctx [ctx]
 static int write_sector_mmc(int *ctx, unsigned int block_offset, int target_buf, int block_count) {
