@@ -255,6 +255,61 @@ int unlock_system(void) {
 	return 0;
 }
 
+int do_write_recovery(void) {
+	int ret = 0;
+	printf("Updating recovery configuration data\n");
+
+	if (ex("ux0:eex/recovery/rconfig.e2xp")) {
+		psvDebugScreenSetFgColor(COLOR_PURPLE);
+		printf(" - recovery config... ");
+		ret = ensoWriteRecoveryConfig();
+		if (ret < 0) {
+			psvDebugScreenSetFgColor(COLOR_RED);
+			printf("failed 0x%08X!\n", ret);
+			psvDebugScreenSetFgColor(COLOR_WHITE);
+		} else {
+			psvDebugScreenSetFgColor(COLOR_GREEN);
+			printf("ok!\n");
+			psvDebugScreenSetFgColor(COLOR_WHITE);
+		}
+	}
+
+	if (ex("ux0:eex/recovery/rblob.e2xp")) {
+		psvDebugScreenSetFgColor(COLOR_PURPLE);
+		printf(" - recovery blob... ");
+		ret = ensoWriteRecoveryBlob();
+		if (ret < 0) {
+			psvDebugScreenSetFgColor(COLOR_RED);
+			printf("failed 0x%08X!\n", ret);
+			psvDebugScreenSetFgColor(COLOR_WHITE);
+		} else {
+			psvDebugScreenSetFgColor(COLOR_GREEN);
+			printf("ok!\n");
+			psvDebugScreenSetFgColor(COLOR_WHITE);
+		}
+	}
+
+	if (ex("ux0:eex/recovery/rmbr.bin")) {
+		psvDebugScreenSetFgColor(COLOR_PURPLE);
+		printf(" - recovery mbr... ");
+		ret = ensoWriteRecoveryMbr();
+		if (ret < 0) {
+			psvDebugScreenSetFgColor(COLOR_RED);
+			printf("failed 0x%08X!\n", ret);
+			psvDebugScreenSetFgColor(COLOR_WHITE);
+		} else {
+			psvDebugScreenSetFgColor(COLOR_GREEN);
+			printf("ok!\n");
+			psvDebugScreenSetFgColor(COLOR_WHITE);
+		}
+	}
+
+	psvDebugScreenSetFgColor(COLOR_GREEN);
+	printf("done!\n");
+	psvDebugScreenSetFgColor(COLOR_WHITE);
+	return 0;
+}
+
 int do_sync_eex(void) {
 	int ibootlogo = ex("os0:ex/bootlogo.raw"), ibmgr = ex("os0:" E2X_BOOTMGR_NAME), icklist = ex("os0:ex/boot_list.txt");
 	int obootlogo = ex("os0:bootlogo.raw"), opatch = ex("os0:patches.e2xd"), ocbcfg = ex("os0:qsp2bootconfig.skprx");
@@ -299,35 +354,6 @@ int do_install(void) {
 	printf("ok!\n");
 	psvDebugScreenSetFgColor(COLOR_WHITE);
 
-	printf("Checking for previous installation... ");
-	ret = ensoCheckBlocks();
-	if (ret < 0) {
-		printf("failed\n");
-		goto err;
-	}
-	psvDebugScreenSetFgColor(COLOR_RED);
-	if (ret == 0) {
-		psvDebugScreenSetFgColor(COLOR_GREEN);
-		printf("ok!\n");
-	} else if (ret == E_PREVIOUS_INSTALL) {
-		printf("\n\nPrevious installation was detected and will be overwritten.\nPress X to continue, any other key to exit.\n");
-		if (get_key() != SCE_CTRL_CROSS)
-			goto err;
-	} else if (ret == E_MBR_BUT_UNKNOWN) {
-		printf("\n\nMBR was detected but installation checksum does not match.\nA dump was created at %s.\nPress X to continue, any other key to exit.\n", BLOCKS_OUTPUT);
-		if (get_key() != SCE_CTRL_CROSS)
-			goto err;
-	} else if (ret == E_UNKNOWN_DATA) {
-		printf("\n\nUnknown data was detected.\nA dump was created at %s.\nThe installation will be aborted.\n", BLOCKS_OUTPUT);
-		goto err;
-	} else {
-		printf("\n\nUnknown error code.\n");
-		goto err;
-	}
-	psvDebugScreenSetFgColor(COLOR_WHITE);
-	
-	printf("\n");
-
 	if (ex("ur0:tai/boot_config.txt") == 0) {
 		printf("Writing config... ");
 		ret = ensoWriteConfig();
@@ -344,6 +370,7 @@ int do_install(void) {
 	sceIoMkdir("ux0:eex/", 6);
 	sceIoMkdir("ux0:eex/custom/", 6);
 	sceIoMkdir("ux0:eex/boot/", 6);
+	sceIoMkdir("ux0:eex/recovery/", 6);
 	sceIoMkdir("os0:ex/", 6);
 	fcp("app0:e2xculogo.skprx", "ux0:eex/custom/e2xculogo.skprx");
 	fcp("app0:e2xhencfg.skprx", "ux0:eex/custom/e2xhencfg.skprx");
@@ -351,6 +378,10 @@ int do_install(void) {
 	fcp("app0:bootlogo.raw", "ux0:eex/custom/bootlogo.raw");
 	fcp("app0:boot_list.txt", "ux0:eex/custom/boot_list.txt");
 	fcp("ur0:tai/boot_config.txt", "ux0:eex/boot_config.txt");
+	if (ex("ur0:tai/boot_config_kitv.txt"))
+		fcp("ur0:tai/boot_config_kitv.txt", "ux0:eex/boot_config_kitv.txt");
+	fcp("app0:rconfig.e2xp", "ux0:eex/recovery/rconfig.e2xp");
+	fcp("app0:rblob.e2xp", "ux0:eex/recovery/rblob.e2xp");
 	psvDebugScreenSetFgColor(COLOR_GREEN);
 	printf("ok!\n");
 	psvDebugScreenSetFgColor(COLOR_WHITE);
@@ -375,6 +406,8 @@ int do_install(void) {
 	psvDebugScreenSetFgColor(COLOR_GREEN);
 	printf("ok!\n");
 	psvDebugScreenSetFgColor(COLOR_WHITE);
+
+	do_write_recovery();
 
 	psvDebugScreenSetFgColor(COLOR_CYAN);
 	printf("\nThe installation was completed successfully.\n");
@@ -467,9 +500,9 @@ int check_henkaku(void) {
 	return 1;
 }
 
-char mmit[][256] = {" -> Install/reinstall the hack."," -> Uninstall the hack."," -> Fix boot configuration."," -> Synchronize enso_ex scripts."," -> Exit"};
+char mmit[][64] = { " -> Install/reinstall the hack."," -> Uninstall the hack."," -> Fix boot configuration."," -> Synchronize enso_ex scripts."," -> Update the enso_ex recovery."," -> Exit" };
 int sel = 0;
-int optct = 5;
+int optct = 6;
 
 void smenu(){
 	psvDebugScreenClear(COLOR_BLACK);
@@ -538,7 +571,9 @@ switch_opts:
 				ret = do_reinstall_config();
 			else if (sel == 3)
 				ret = do_sync_eex();
-			should_reboot = (sel == 4) ? 0 : 1;
+			else if (sel == 4)
+				ret = do_write_recovery();
+			should_reboot = (sel == 5) ? 0 : 1;
 			break;
 		case SCE_CTRL_UP:
 			if(sel!=0){

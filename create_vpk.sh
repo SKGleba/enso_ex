@@ -1,6 +1,11 @@
 (
 cd enso/;
 make;
+echo "#define FATCHECK 0x$(crc32 fat.bin)" > ../installer/src/fatcheck.h;
+cd ../recovery/blob/;
+make;
+cd ../;
+make;
 cd ../patches/loader/;
 make;
 cd ../hencfg/;
@@ -23,6 +28,10 @@ rm e2x_ckldr.*;
 rm kernel.o;
 cd ../../enso/;
 rm *.bin;
+cd ../recovery/;
+rm *.elf && rm *.o && rm *.e2xp;
+cd blob/;
+rm *.elf && rm *.o && rm *.e2xp;
 echo "";
 echo "DONE! [ enso_ex.vpk ]";
 echo "";

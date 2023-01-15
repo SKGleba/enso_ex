@@ -44,6 +44,9 @@
 #define CTRL_HEADPHONE	(1 << 27)
 #define PERVASIVE2_BASE_ADDR		0xE3110000
 
+#define SYSCON_CMD_GET_DCTRL 0x101
+#define SYSCON_CMD_SET_GCSD 0x888
+
 typedef struct syscon_packet {
 	unsigned char tx[32];
 	unsigned char rx[32];

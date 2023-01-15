@@ -26,9 +26,11 @@ static const uint8_t sysstate_ret_patch[] = {0x13, 0x22, 0xc8, 0xf2, 0x01, 0x02}
 
 static const char ur0_path[] = "ur0:";
 static const char ur0_psp2config_path[] = "ur0:tai/boot_config.txt";
+static const char ur0_psp2config_kitv_path[] = "ur0:tai/boot_config_kitv.txt";
 
 static const char ux0_path[] = "ux0:";
 static const char ux0_psp2config_path[] = "ux0:eex/boot_config.txt";
+static const char ux0_psp2config_kitv_path[] = "ux0:eex/boot_config_kitv.txt";
 
 // sigpatch globals
 static int g_sigpatch_disabled = 0;
@@ -134,14 +136,20 @@ int module_start(uint32_t argc, void *args) {
 		DACR_OFF(
 			INSTALL_RET_THUMB(mod->segments[0].buf + SYSSTATE_IS_MANUFACTURING_MODE_OFFSET, 1);
 			*(uint32_t *)(mod->segments[0].buf + SYSSTATE_IS_DEV_MODE_OFFSET) = 0x20012001;
-			kbl_memcpy(mod->segments[0].buf + SYSSTATE_RET_CHECK_BUG, sysstate_ret_patch, sizeof(sysstate_ret_patch));
-			if (CTRL_BUTTON_HELD(patch_args->ctrldata, E2X_USE_BBCONFIG)) {
-				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ux0_path, sizeof(ux0_path));
-				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_path, sizeof(ux0_psp2config_path));
-			} else if (!skip_patches(patch_args->kbl_param)) {
-				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ur0_path, sizeof(ur0_path));
-				kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_path, sizeof(ur0_psp2config_path));
-			}
+            kbl_memcpy(mod->segments[0].buf + SYSSTATE_RET_CHECK_BUG, sysstate_ret_patch, sizeof(sysstate_ret_patch));
+            if (CTRL_BUTTON_HELD(patch_args->ctrldata, E2X_USE_BBCONFIG)) {
+                kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ux0_path, sizeof(ux0_path));
+                if ((*(uint32_t*)(patch_args->kbl_param->dip_switches + (0x98 >> 5) * 4) >> (0x98 & 31)) & 1) // PSTV emulation on kits
+                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_kitv_path, sizeof(ux0_psp2config_kitv_path));
+                else
+                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_path, sizeof(ux0_psp2config_path));
+            } else if (!skip_patches(patch_args->kbl_param)) {
+                kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ur0_path, sizeof(ur0_path));
+                if ((*(uint32_t*)(patch_args->kbl_param->dip_switches + (0x98 >> 5) * 4) >> (0x98 & 31)) & 1) // PSTV emulation on kits
+                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_kitv_path, sizeof(ur0_psp2config_kitv_path));
+                else
+                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_path, sizeof(ur0_psp2config_path));
+            }
 			// this patch actually corrupts two words of data, but they are only used in debug printing and seem to be fine
 			INSTALL_HOOK_THUMB(sysstate_final_hook, mod->segments[0].buf + SYSSTATE_FINAL_CALL);
 			sysstate_final = mod->segments[0].buf + SYSSTATE_FINAL;

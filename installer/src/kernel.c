@@ -1,6 +1,6 @@
 /* kernel.c -- enso installer
  *
- * Copyright (C) 2017 molecule, 2018-2020 skgleba
+ * Copyright (C) 2017 molecule, 2018-2022 skgleba
  *
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
@@ -16,12 +16,16 @@
 #include <taihen.h>
 
 #include "enso.h"
+#include "fatcheck.h"
 
 #define printf(str, x...) do { printf_file("%s:%d: " str, __PRETTY_FUNCTION__, __LINE__, ## x); } while (0)
 #define ARRAYSIZE(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
 int ksceSblAimgrIsDolce(void);
-uint32_t crc32(uint32_t crc, const void *buf, size_t size);
+uint32_t crc32(uint32_t crc, const void* buf, size_t size);
+
+void* memblock_va = NULL;
+static int emmc = 0, memblock_id = 0, kitv_config = 0;
 
 enum {
 	BLOCK_SIZE = 0x200,
@@ -30,6 +34,8 @@ enum {
 	OFF_FAKE_OS0 = 2 * BLOCK_SIZE,
 	FAT_BIN_SIZE = 0x6000, // NOTE: first 0x400 bytes are not written
 	FAT_BIN_USEFUL_SIZE = 0x6000 - 0x400,
+
+	RBLOB_SIZE = 0x39000,
 
 	OS0_SIZE = 0x3820 * BLOCK_SIZE,
 };
@@ -167,49 +173,6 @@ int is_empty(void *data) {
 		if (buf[i] != 0xAA)
 			return 0;
 	return 1;
-}
-
-int check_mbr() {
-	int ret = 0;
-	int fd = 0;
-
-	printf("check_mbr\n");
-
-	static master_block_t master;
-	ret = fd = ksceIoOpen(device, SCE_O_RDONLY, 0777);
-	if (fd < 0) {
-		printf("failed to open the device: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-	if ((ret = ksceIoRead(fd, &master, sizeof(master))) != sizeof(master)) {
-		printf("failed to read master block: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = 0;
-	if (!is_mbr(&master)) {
-		printf("error: master block is not MBR\n");
-		ret = -1;
-	}
-
-cleanup:
-	if (fd > 0)
-		ksceIoClose(fd);
-
-	return ret;
-}
-
-int k_ensoCheckMBR(void) {
-	int ret = 0;
-	int state = 0;
-
-	ENTER_SYSCALL(state);
-	ret = run_on_thread(check_mbr);
-	EXIT_SYSCALL(state);
-
-	return ret;
 }
 
 int dump_blocks(void) {
@@ -358,7 +321,7 @@ int write_config() {
 
 	ksceIoMkdir("ur0:tai", 0777); // make directory if it does not exist
 
-	pstv = ksceSblAimgrIsDolce();
+	pstv = kitv_config ? 1 : ksceSblAimgrIsGenuineDolce();
 	printf("writing config for %s\n", pstv ? "PSTV" : "PS Vita");
 
 	ret = uid = ksceKernelLoadModule(pstv ? "os0:psp2config_dolce.skprx" : "os0:psp2config_vita.skprx", 0, NULL);
@@ -392,7 +355,7 @@ int write_config() {
 		goto cleanup;
 	}
 
-	ret = fd = ksceIoOpen("ur0:tai/boot_config.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+	ret = fd = ksceIoOpen(kitv_config ? "ur0:tai/boot_config_kitv.txt" : "ur0:tai/boot_config.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
 	if (ret < 0) {
 		printf("failed to open ur0:tai/boot_config.txt for write: 0x%08x\n", ret);
 		ret = -1;
@@ -463,96 +426,90 @@ int k_ensoWriteConfig() {
 
 	ENTER_SYSCALL(state);
 	ret = run_on_thread(write_config);
+	if (!ret && (ksceSblAimgrIsTool() || ksceSblAimgrIsTest())) {
+		kitv_config = 1;
+		ret = run_on_thread(write_config());
+		kitv_config = 0;
+	}
 	EXIT_SYSCALL(state);
 
 	return ret;
 }
 
-int write_blocks(void) {
+int k_ensoWriteRecoveryMbr(void) {
 	int ret = 0;
+	int state = 0;
 	int fd = 0;
-	int read_fd = 0;
-	int fat_fd = 0;
 
-	printf("writing blocks 2-..\n");
-
-	ret = fat_fd = ksceIoOpen("ux0:app/MLCL00003/fat.bin", SCE_O_RDONLY, 0);
-	if (ret < 0) {
-		printf("failed to open fat.bin for read: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = fd = ksceIoOpen(device, SCE_O_WRONLY, 0777);
-	if (ret < 0) {
-		printf("failed to open device for write: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = read_fd = ksceIoOpen(device, SCE_O_RDONLY, 0);
-	if (ret < 0) {
-		printf("failed to open device for read: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoLseek(fd, OFF_FAKE_OS0, SCE_SEEK_SET)) != OFF_FAKE_OS0) {
-		printf("failed to seek the device: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoLseek(fat_fd, OFF_FAKE_OS0, SCE_SEEK_SET)) != OFF_FAKE_OS0) {
-		printf("failed to seek fat.bin: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	for (int i = 0; i < FAT_BIN_USEFUL_SIZE / BLOCK_SIZE; ++i) {
-		static char buffer[BLOCK_SIZE];
-		if ((ret = ksceIoRead(fat_fd, buffer, sizeof(buffer))) != sizeof(buffer)) {
-			printf("failed to read fat.bin at block %d: 0x%08x\n", i + 2, ret);
-			ret = -1;
-			goto cleanup;
-		}
-		if ((ret = ksceIoWrite(fd, buffer, sizeof(buffer))) != sizeof(buffer)) {
-			printf("failed to write fat.bin to device at block %d: 0x%08x\n", i + 2, ret);
-			ret = -1;
-			goto cleanup;
-		}
-		// now read it back and confirm we wrote correctly
-		static char read_buffer[BLOCK_SIZE];
-		int off = BLOCK_SIZE * (i + 2);
-		if ((ret = ksceIoLseek(read_fd, off, SCE_SEEK_SET)) != off) {
-			printf("failed to seek read_fd: 0x%08x\n", ret);
-			ret = -1;
-			goto cleanup;
-		}
-		if ((ret = ksceIoRead(read_fd, read_buffer, sizeof(read_buffer))) != sizeof(read_buffer)) {
-			printf("failed to read into read_buffer: 0x%08x\n", ret);
-			ret = -1;
-			goto cleanup;
-		}
-		if (memcmp(read_buffer, buffer, BLOCK_SIZE) != 0) {
-			printf("error: write failed\n");
-			ret = -1;
-			goto cleanup;
-		}
-	}
-
-	printf("success!\n");
-	ret = 0;
-
-cleanup:
-	if (fat_fd > 0)
-		ksceIoClose(fat_fd);
-	if (read_fd > 0)
-		ksceIoClose(read_fd);
-	if (fd > 0)
+	ENTER_SYSCALL(state);
+	memset(memblock_va, 0, BLOCK_SIZE);
+	ret = fd = ksceIoOpen("ux0:eex/recovery/rmbr.bin", SCE_O_RDONLY, 0);
+	if (fd >= 0) {
+		ret = ksceIoRead(fd, memblock_va, BLOCK_SIZE);
 		ksceIoClose(fd);
+		if (*(uint32_t*)memblock_va) {
+			ret = ksceSdifWriteSectorMmc(emmc, 3, memblock_va, 1);
+			if (ret < 0)
+				printf("failed to write mbr3\n");
+		} else {
+			printf("failed to read mbr3 or mbr3 empty: 0x%08X\n", ret);
+			ret = -1;
+		}
+	} else
+		printf("failed to open rmbr.bin for read: 0x%08X\n", ret);
+	EXIT_SYSCALL(state);
 
-	ksceIoSync(device, 0); // sync write
+	return ret;
+}
+
+int k_ensoWriteRecoveryConfig(void) {
+	int ret = 0;
+	int state = 0;
+	int fd = 0;
+
+	ENTER_SYSCALL(state);
+	memset(memblock_va, 0, BLOCK_SIZE);
+	ret = fd = ksceIoOpen("ux0:eex/recovery/rconfig.e2xp", SCE_O_RDONLY, 0);
+	if (fd >= 0) {
+		ret = ksceIoRead(fd, memblock_va, BLOCK_SIZE);
+		ksceIoClose(fd);
+		if (*(uint32_t*)memblock_va) {
+			ret = ksceSdifWriteSectorMmc(emmc, 4, memblock_va, 1);
+			if (ret < 0)
+				printf("failed to write config\n");
+		} else {
+			printf("failed to read config or config empty: 0x%08X\n", ret);
+			ret = -1;
+		}
+	} else
+		printf("failed to open rconfig.e2xp for read: 0x%08X\n", ret);
+	EXIT_SYSCALL(state);
+
+	return ret;
+}
+
+int k_ensoWriteRecoveryBlob(void) {
+	int ret = 0;
+	int state = 0;
+	int fd = 0;
+
+	ENTER_SYSCALL(state);
+	memset(memblock_va, 0, RBLOB_SIZE);
+	ret = fd = ksceIoOpen("ux0:eex/recovery/rblob.e2xp", SCE_O_RDONLY, 0);
+	if (fd >= 0) {
+		ret = ksceIoRead(fd, memblock_va, RBLOB_SIZE);
+		ksceIoClose(fd);
+		if (*(uint32_t*)memblock_va) {
+			ret = ksceSdifWriteSectorMmc(emmc, 0x30, memblock_va, RBLOB_SIZE / BLOCK_SIZE);
+			if (ret < 0)
+				printf("failed to write blob\n");
+		} else {
+			printf("failed to read blob or blob empty: 0x%08X\n", ret);
+			ret = -1;
+		}
+	} else
+		printf("failed to open rblob.e2xp for read: 0x%08X\n", ret);
+	EXIT_SYSCALL(state);
 
 	return ret;
 }
@@ -560,103 +517,30 @@ cleanup:
 int k_ensoWriteBlocks(void) {
 	int ret = 0;
 	int state = 0;
+	int fd = 0;
 
 	ENTER_SYSCALL(state);
-	ret = run_on_thread(write_blocks);
-	EXIT_SYSCALL(state);
-
-	return ret;
-}
-
-int write_mbr(void) {
-	int ret = 0;
-	int fd = 0;
-	int read_fd = 0;
-
-	ret = read_fd = ksceIoOpen(device, SCE_O_RDONLY, 0);
-	if (ret < 0) {
-		printf("failed to open device for read: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = fd = ksceIoOpen(device, SCE_O_WRONLY, 0777);
-	if (ret < 0) {
-		printf("failed to open device for write: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	static master_block_t master;
-	if ((ret = ksceIoRead(read_fd, &master, sizeof(master))) != sizeof(master)) {
-		printf("failed to read master block: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	// write a copy to block 1
-	if ((ret = ksceIoLseek(fd, OFF_REAL_PARTITION_TABLE, SCE_SEEK_SET)) != OFF_REAL_PARTITION_TABLE) {
-		printf("failed to seek the device: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoWrite(fd, &master, sizeof(master))) != sizeof(master)) {
-		printf("failed to write a copy of MBR: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	// check it's actually written by reading back and comparing
-	static uint8_t buffer[BLOCK_SIZE];
-	if ((ret = ksceIoLseek(read_fd, OFF_REAL_PARTITION_TABLE, SCE_SEEK_SET)) != OFF_REAL_PARTITION_TABLE) {
-		printf("failed to seek the device: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoRead(read_fd, buffer, sizeof(buffer))) != sizeof(buffer)) {
-		printf("failed to read real mbr: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if (memcmp(buffer, &master, BLOCK_SIZE) != 0) {
-		printf("error: blocks do not match where they should\n");
-		ret = -1;
-		goto cleanup;
-	}
-
-	int active_os0 = find_active_os0(&master);
-	if (active_os0 == -1) {
-		printf("failed to find active os0\n");
-		ret = -1;
-		goto cleanup;
-	}
-	master.partitions[active_os0].off = 2;
-
-	if ((ret = ksceIoLseek(fd, OFF_PARTITION_TABLE, SCE_SEEK_SET)) != OFF_PARTITION_TABLE) {
-		printf("failed to seek the device: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoWrite(fd, &master, sizeof(master))) != sizeof(master)) {
-		printf("error: failed to write modified MBR\n");
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = 0;
-	printf("success!\n");
-
-cleanup:
-	if (read_fd > 0)
-		ksceIoClose(read_fd);
-	if (fd > 0)
+	memset(memblock_va, 0, FAT_BIN_SIZE);
+	ret = fd = ksceIoOpen("ux0:app/MLCL00003/fat.bin", SCE_O_RDONLY, 0);
+	if (fd >= 0) {
+		ret = ksceIoRead(fd, memblock_va, FAT_BIN_SIZE);
 		ksceIoClose(fd);
-
-	ksceIoSync(device, 0); // sync write
+		if (ret == FAT_BIN_SIZE) {
+			if (crc32(0, memblock_va, FAT_BIN_SIZE) == FATCHECK) {
+				ret = ksceSdifWriteSectorMmc(emmc, 2, memblock_va + (2 * BLOCK_SIZE), (FAT_BIN_SIZE / BLOCK_SIZE) - 2);
+				if (ret < 0)
+					printf("failed to write enso_ex\n");
+			} else {
+				printf("crc doesnt match\n");
+				ret = -1;
+			}
+		} else {
+			printf("failed to read fat.bin: 0x%08X\n", ret);
+			ret = -1;
+		}
+	} else
+		printf("failed to open fat.bin for read: 0x%08X\n", ret);
+	EXIT_SYSCALL(state);
 
 	return ret;
 }
@@ -666,42 +550,33 @@ int k_ensoWriteMBR(void) {
 	int state = 0;
 
 	ENTER_SYSCALL(state);
-	ret = run_on_thread(write_mbr);
+	memset(memblock_va, 0, BLOCK_SIZE);
+	ret = ksceSdifReadSectorMmc(emmc, 0, memblock_va, 1);
+	if (ret >= 0) {
+		master_block_t* master = memblock_va;
+		if (is_mbr(master)) {
+			int active_os0 = find_active_os0(master);
+			if (active_os0 != -1 && master->partitions[active_os0].off != 2) {
+				ret = ksceSdifWriteSectorMmc(emmc, 1, memblock_va, 1);
+				if (ret >= 0) {
+					master->partitions[active_os0].off = 2;
+					ret = ksceSdifWriteSectorMmc(emmc, 0, memblock_va, 1);
+					if (ret < 0)
+						printf("failed to write MBR\n");
+				} else
+					printf("failed to write emuMBR\n");
+			} else {
+				printf("failed to find active os0\n");
+				ret = -1;
+			}
+		} else {
+			printf("error: real master block is not MBR\n");
+			printf("this really shouldn't happen...\n");
+			ret = -1;
+		}
+	} else
+		printf("failed to read mbr 0x%08X\n", ret);
 	EXIT_SYSCALL(state);
-
-	return ret;
-}
-
-int check_real_mbr() {
-	int ret = 0;
-	int fd = 0;
-
-	printf("check_real_mbr\n");
-
-	static master_block_t master;
-	ret = fd = ksceIoOpen(device, SCE_O_RDONLY, 0777);
-	if (fd < 0) {
-		printf("failed to open the device: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoRead(fd, &master, sizeof(master))) != sizeof(master)) {
-		printf("failed to read real master block: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = 0;
-	if (!is_mbr(&master)) {
-		printf("error: real master block is not MBR\n");
-		printf("this really shouldn't happen...\n");
-		ret = -1;
-	}
-
-cleanup:
-	if (fd > 0)
-		ksceIoClose(fd);
 
 	return ret;
 }
@@ -711,67 +586,24 @@ int k_ensoCheckRealMBR(void) {
 	int state = 0;
 
 	ENTER_SYSCALL(state);
-	ret = run_on_thread(check_real_mbr);
+	memset(memblock_va, 0, BLOCK_SIZE);
+	ret = ksceSdifReadSectorMmc(emmc, 0, memblock_va, 1);
+	if (ret >= 0) {
+		master_block_t* master = memblock_va;
+		if (!is_mbr(master)) {
+			printf("error: real master block is not MBR\n");
+			printf("this really shouldn't happen...\n");
+			ret = -1;
+		}
+	} else
+		printf("failed to read mbr 0x%08X\n", ret);
 	EXIT_SYSCALL(state);
 
-	return ret;
+	return ret; 
 }
 
-int uninstall_mbr() {
-	int ret = 0;
-	int rfd = 0;
-	int wfd = 0;
-
-	printf("uninstall_mbr\n");
-
-	ret = rfd = ksceIoOpen(device, SCE_O_RDONLY, 0);
-	if (ret < 0) {
-		printf("failed to open the device for read: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	static master_block_t master;
-	if ((ret = ksceIoRead(rfd, &master, sizeof(master))) != sizeof(master)) {
-		printf("failed to read real master block: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	ksceIoClose(rfd);
-	rfd = 0;
-
-	if (!is_mbr(&master)) {
-		printf("error: real master block is not MBR\n");
-		printf("this really shouldn't happen...\n");
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = wfd = ksceIoOpen(device, SCE_O_WRONLY, 0777);
-	if (ret < 0) {
-		printf("failed to open the device for write: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoWrite(wfd, &master, sizeof(master))) != sizeof(master)) {
-		printf("failed to write real master block: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	ret = 0;
-
-cleanup:
-	if (rfd > 0)
-		ksceIoClose(rfd);
-	if (wfd > 0)
-		ksceIoClose(wfd);
-
-	ksceIoSync(device, 0); // sync write
-
-	return ret;
+int k_ensoCheckMBR(void) {
+	return k_ensoCheckRealMBR();
 }
 
 int k_ensoUninstallMBR(void) {
@@ -779,48 +611,23 @@ int k_ensoUninstallMBR(void) {
 	int state = 0;
 
 	ENTER_SYSCALL(state);
-	ret = run_on_thread(uninstall_mbr);
-	EXIT_SYSCALL(state);
-
-	return ret;
-}
-
-int clean_up_blocks() {
-	int ret = 0;
-	int wfd = 0;
-
-	ret = wfd = ksceIoOpen(device, SCE_O_WRONLY, 0777);
-	if (ret < 0) {
-		printf("failed to open the device for write: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	if ((ret = ksceIoLseek(wfd, OFF_REAL_PARTITION_TABLE, SCE_SEEK_SET)) != OFF_REAL_PARTITION_TABLE) {
-		printf("failed to seek the device: 0x%08x\n", ret);
-		ret = -1;
-		goto cleanup;
-	}
-
-	static uint8_t clean_block[BLOCK_SIZE];
-	memset(clean_block, 0xAA, sizeof(clean_block));
-
-	// wipe it out starting from block 1
-	for (int i = 1; i < FAT_BIN_SIZE / BLOCK_SIZE; ++i) {
-		if ((ret = ksceIoWrite(wfd, clean_block, sizeof(clean_block))) != sizeof(clean_block)) {
-			printf("failed to clean block %d: 0x%08x\n", i, ret);
+	memset(memblock_va, 0, BLOCK_SIZE);
+	ret = ksceSdifReadSectorMmc(emmc, 0, memblock_va, 1);
+	if (ret >= 0) {
+		master_block_t* master = memblock_va;
+		if (is_mbr(master)) {
+			ret = ksceSdifWriteSectorMmc(emmc, 0, memblock_va, 1);
+			if (ret < 0)
+				printf("failed to write mbr 0x%08X\n", ret);
+		} else {
+			printf("error: real master block is not MBR\n");
+			printf("this really shouldn't happen...\n");
 			ret = -1;
-			goto cleanup;
 		}
-	}
+	} else
+		printf("failed to read mbr 0x%08X\n", ret);
 
-	ret = 0;
-
-cleanup:
-	if (wfd > 0)
-		ksceIoClose(wfd);
-
-	ksceIoSync(device, 0); // sync write
+	EXIT_SYSCALL(state);
 
 	return ret;
 }
@@ -830,7 +637,10 @@ int k_ensoCleanUpBlocks(void) {
 	int state = 0;
 
 	ENTER_SYSCALL(state);
-	ret = run_on_thread(clean_up_blocks);
+	memset(memblock_va, 0xAA, FAT_BIN_SIZE);
+	ret = ksceSdifWriteSectorMmc(emmc, 1, memblock_va, (FAT_BIN_SIZE / BLOCK_SIZE) - 1);
+	if (ret < 0)
+		printf("failed to clean blocks 0x%08X\n", ret);
 	EXIT_SYSCALL(state);
 
 	return ret;
@@ -839,6 +649,18 @@ int k_ensoCleanUpBlocks(void) {
 int module_start(int args, void *argv) {
 	(void)args;
 	(void)argv;
+	emmc = ksceSdifGetSdContextPartValidateMmc(0);
+	if (!emmc)
+		return SCE_KERNEL_START_FAILED;
+
+	memblock_id = ksceKernelAllocMemBlock("eex_i_mb", 0x10000000 | 0xC00000 | 0x8000 | 0x6, 0x2000 * BLOCK_SIZE, NULL);
+	if (memblock_id < 0)
+		return SCE_KERNEL_START_FAILED;
+
+	ksceKernelGetMemBlockBase(memblock_id, (void**)&memblock_va);
+	if (!memblock_va)
+		return SCE_KERNEL_START_FAILED;
+
 	printf("enso kernel module started\n");
 
 	return SCE_KERNEL_START_SUCCESS;

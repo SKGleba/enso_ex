@@ -1,6 +1,6 @@
 /* custom bootlogo patch
  *
- * Copyright (C) 2020 skgleba
+ * Copyright (C) 2020-2022 skgleba
  *
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
@@ -57,7 +57,7 @@ int module_start(uint32_t argc, void *args) {
 	if (skip_patches(patch_args->kbl_param))
 		return 0;
 	
-	int (*lf)(char *fpath, void *dst, unsigned int sz, int mode) = patch_args->load_file;
+	int (*get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset) = patch_args->get_file;
 	
 	SceKernelAllocMemBlockKernelOpt optp;
 	optp.size = 0x58;
@@ -71,7 +71,7 @@ int module_start(uint32_t argc, void *args) {
 	if (xbas == NULL)
 		return 0;
 	
-	int logoerr = lf("os0:ex/bootlogo.raw", xbas, 0x200000, 2);
+	int logoerr = get_file("os0:ex/bootlogo.raw", xbas, 0x200000, 0);
 	
 	sceKernelFreeMemBlock(mblk);
 	
@@ -82,10 +82,10 @@ int module_start(uint32_t argc, void *args) {
 	if (obj != NULL) {
 		mod = (SceModuleObject *)&obj->data;
 		DACR_OFF(
-			if (logoerr == 0)
-				*(uint32_t *)(mod->segments[0].buf + 0x700e) = 0x20002000;
-			else
+			if (logoerr < 0)
 				INSTALL_RET_THUMB(mod->segments[0].buf + DISPLAY_BOOT_LOGO_FUNC, 0);
+			else
+				*(uint32_t*)(mod->segments[0].buf + 0x700e) = 0x20002000;
 		);
 	}
 	

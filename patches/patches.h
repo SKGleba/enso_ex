@@ -1,5 +1,6 @@
 #define E2X_EPATCHES_SKIP CTRL_VOLUP
 #define E2X_USE_BBCONFIG CTRL_SQUARE
+#define E2X_RECOVERY_RUNDN CTRL_START
 
 #define CTRL_BUTTON_HELD(ctrl, button)		!((ctrl) & (button))
 #define CTRL_BUTTON_PRESSED(ctrl, old, button)	!(((ctrl) & ~(old)) & (button))
@@ -38,14 +39,7 @@ typedef struct kbl_param_struct {
   uint32_t field_34;
   uint32_t field_38;
   uint32_t field_3C;
-  uint32_t field_40;
-  uint32_t field_44;
-  uint32_t field_48;
-  uint32_t aslr_seed;
-  uint32_t field_50;
-  uint32_t field_54;
-  uint32_t field_58;
-  uint32_t field_5C;
+  uint8_t dip_switches[0x20];
   uint32_t dram_base;
   uint32_t dram_size;
   uint32_t field_68;
@@ -89,11 +83,12 @@ typedef struct kbl_param_struct {
 // This struct is passed to custom plugins at module_start
 typedef struct patch_args_struct {
   void *defarg; // default arg passed to all boot modules at start
-  void *kbl_param;
+  kbl_param_struct* kbl_param;
   uint32_t *nskbl_exports; // nskbl exports start
   uint32_t ctrldata; // current ctrl data
-  void *load_file; // e2x's load_file func
-  int *uids_a; // first uid list
+  void* load_exe; // e2x's load_exe func
+  void* get_file; // e2x's get_file func
+  int* uids_a; // first uid list
   int *uids_b; // second uid list
   int *uids_d; // devkit uid list
 } __attribute__((packed)) patch_args_struct;

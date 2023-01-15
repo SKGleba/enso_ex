@@ -56,15 +56,13 @@ link_directories(
   ${CMAKE_BINARY_DIR}/365_stubs
 )
 
-add_executable(${SHORT_NAME}
+add_executable(${SHORT_NAME}.elf
   src/main.c
   src/graphics.c
   src/font.c
 )
 
-add_dependencies(${SHORT_NAME} emmc_helper.skprx)
-
-target_link_libraries(${SHORT_NAME}
+target_link_libraries(${SHORT_NAME}.elf
   SceDisplay_stub
   SceCtrl_stub
   SceShellSvc_stub
@@ -79,7 +77,13 @@ target_link_libraries(${SHORT_NAME}
   emmc_helper_user_stub_weak
 )
 
-vita_create_self(${SHORT_NAME}.self ${SHORT_NAME} UNSAFE)
+add_custom_target(${SHORT_NAME}.velf ALL
+	COMMAND vita-elf-create ${SHORT_NAME}.elf ${SHORT_NAME}.velf
+)
+
+add_custom_target(${SHORT_NAME}.self ALL
+	COMMAND vita-make-fself -a 0x2808000000000000 -c ${SHORT_NAME}.velf ${SHORT_NAME}.self
+)
 
 # emmc_helper: kernel
 add_executable(emmc_helper
@@ -100,6 +104,7 @@ target_link_libraries(emmc_helper
   SceIofilemgrForDriver_stub
   SceSysmemForKernel_stub
   SceSysmemForDriver_stub
+  SceSdifForDriver_stub
   taihenForKernel_stub
 )
 vita_create_self(emmc_helper.skprx emmc_helper
@@ -148,15 +153,19 @@ vita_create_self(emmc_helper_user.suprx emmc_helper_user
 vita_create_stubs(emmc_helper_user_stubs emmc_helper_user ${CMAKE_SOURCE_DIR}/src/user_exports.yml)
 
 add_dependencies(emmc_helper_user emmc_helper_stubs)
-add_dependencies(${SHORT_NAME} emmc_helper_user_stubs)
-add_dependencies(${SHORT_NAME} kernel2.skprx)
-add_dependencies(${SHORT_NAME} emmc_helper.skprx)
-add_dependencies(${SHORT_NAME} emmc_helper_user.suprx)
+add_dependencies(${SHORT_NAME}.elf emmc_helper_user_stubs)
+add_dependencies(${SHORT_NAME}.elf kernel2.skprx)
+add_dependencies(${SHORT_NAME}.elf emmc_helper.skprx)
+add_dependencies(${SHORT_NAME}.elf emmc_helper_user.suprx)
+add_dependencies(${SHORT_NAME}.velf ${SHORT_NAME}.elf)
+add_dependencies(${SHORT_NAME}.self ${SHORT_NAME}.velf)
 
 vita_create_vpk(${SHORT_NAME}.vpk ${VITA_TITLEID} ${SHORT_NAME}.self
   VERSION ${VITA_VERSION}
   NAME ${VITA_APP_NAME}
   FILE ${CMAKE_SOURCE_DIR}/../enso/fat.bin fat.bin
+  FILE ${CMAKE_SOURCE_DIR}/../recovery/rbootstrap.e2xp rconfig.e2xp
+  FILE ${CMAKE_SOURCE_DIR}/../recovery/blob/rblob.e2xp rblob.e2xp
   FILE ${CMAKE_SOURCE_DIR}/../patches/hencfg/e2xhencfg.skprx e2xhencfg.skprx
   FILE ${CMAKE_SOURCE_DIR}/../patches/culogo/e2xculogo.skprx e2xculogo.skprx
   FILE ${CMAKE_SOURCE_DIR}/../patches/loader/e2x_ckldr.skprx e2x_ckldr.skprx

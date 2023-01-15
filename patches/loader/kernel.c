@@ -12,12 +12,18 @@
 #include <stdlib.h>
 #include <vitasdkkern.h>
 #include "../patches.h"
+#include "../../enso/ex_defs.h"
+
+#define LIST_A_MODULE_COUNT 13
+#define LIST_B_MODULE_COUNT 15
+#define LIST_C_MODULE_COUNT 15
+#define LIST_D_MODULE_COUNT 5
 
 static patch_args_struct patch_args;
 
-static int mlist_uid_a[13], mlist_uid_b[15], mlist_uid_d[5], clist_uid[15], use_devmods, use_clist;
+static int mlist_uid_a[LIST_A_MODULE_COUNT], mlist_uid_b[LIST_B_MODULE_COUNT], mlist_uid_d[LIST_D_MODULE_COUNT], clist_uid[LIST_C_MODULE_COUNT], use_devmods, use_clist;
 
-static char *clist_str[15];
+static char* clist_str[LIST_C_MODULE_COUNT];
 static char e2xlist[16 * 16];
 
 static char *mlist_str_a[] = {
@@ -73,20 +79,21 @@ static void prepare_modlists(void) {
 	patch_args.uids_a = mlist_uid_a; // set default list part 1
 	patch_args.uids_b = mlist_uid_b; // set default list part 2
 	patch_args.uids_d = NULL; // 0 unless devkit (later check)
-	patch_args.nskbl_exports = (void *)cfgstr[3]; // copy nskbl exports_start addr
-	patch_args.kbl_param = (void *)cfgstr[2];
-	patch_args.load_file = (void *)cfgstr[1]; // e2x's load_file func
-	patch_args.ctrldata = cfgstr[0]; // current ctrl status
+	patch_args.get_file = (void*)cfgstr[E2X_CHWCFG_GET_FILE]; // e2x's get_file func
+	patch_args.nskbl_exports = (void*)cfgstr[E2X_CHWCFG_NSKBL_EXPORTS]; // copy nskbl exports_start addr
+	patch_args.kbl_param = (void*)cfgstr[E2X_CHWCFG_KBLPARAM];
+	patch_args.load_exe = (void*)cfgstr[E2X_CHWCFG_LOAD_EXE]; // e2x's load_exe func
+	patch_args.ctrldata = cfgstr[E2X_CHWCFG_CTRL]; // current ctrl status
 	
 	// custom
-	int (*lf)(char *fpath, void *dst, unsigned int sz, int mode) = patch_args.load_file;
+	int (*get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset) = patch_args.get_file;
 	if (CTRL_BUTTON_HELD(patch_args.ctrldata, E2X_EPATCHES_SKIP)) {
 		clist_str[0] = "e2xrecovr.skprx"; // recovery script
 		clist_str[1] = "e2xhfwmod.skprx"; // always run the hfw-compat script
 		use_clist = 2;
-	} else {
-		blist_sz = lf("os0:ex/boot_list.txt", e2xlist, 1, 3); // bootlist size
-		if (blist_sz > 0 && lf("os0:ex/boot_list.txt", e2xlist, (blist_sz < 0x100) ? blist_sz : 0x100, 2) == 0 && (e2xlist[2] == 'X') && (e2xlist[12] == '=')) { // "E2XMODCOUNT:=XX\0"
+	} else { // TODO: REWORK
+		blist_sz = get_file("os0:ex/boot_list.txt", NULL, 0, 0); // bootlist size
+		if (blist_sz > 0 && get_file("os0:ex/boot_list.txt", e2xlist, (blist_sz < 0x100) ? blist_sz : 0x100, 0) == 0 && (e2xlist[2] == 'X') && (e2xlist[12] == '=')) { // "E2XMODCOUNT:=XX\0"
 			for (int i = 1; i < (((e2xlist[13] - 0x30) * 10) + (e2xlist[14] - 0x30) + 1); i-=-1) {
 				if (i > 14)
 					break;
@@ -142,10 +149,10 @@ int module_start(SceSize argc, void *args) {
 	prepare_modlists();
 	
 	// load default modules
-	KblLoadModulesFromList(mlist_str_a, mlist_uid_a, 13, 0);
+	KblLoadModulesFromList(mlist_str_a, mlist_uid_a, LIST_A_MODULE_COUNT, 0);
 	if (use_devmods > 0) // devkit modules
 		KblLoadModulesFromList(mlist_str_d, mlist_uid_d, use_devmods, KblCheckDipsw(0xd2) ? 1 : 0);
-	KblLoadModulesFromList(mlist_str_b, mlist_uid_b, 15, 0);
+	KblLoadModulesFromList(mlist_str_b, mlist_uid_b, LIST_B_MODULE_COUNT, 0);
 	
 	// change moddir to os0:ex/ and load custom modules from there
 	if (use_clist > 0) {
@@ -179,7 +186,7 @@ int module_bootstart(SceSize argc, void *args) {
 		KblStartModulesFromList(clist_uid, use_clist, 4, &patch_args);
 	
 	// start default modules part 1
-	KblStartModulesFromList(mlist_uid_a, 13, 4, args);
+	KblStartModulesFromList(mlist_uid_a, LIST_A_MODULE_COUNT, 4, args);
 	if (use_devmods > 0)
 		KblStartModulesFromList(mlist_uid_d, (use_devmods == 3) ? 3 : 4, 0, 0);
 	
@@ -192,7 +199,7 @@ int module_bootstart(SceSize argc, void *args) {
 	// start default modules part 2
 	if (use_devmods == 5)
 		KblStartModulesFromList(&mlist_uid_d[4], 1, 0, 0);
-	KblStartModulesFromList(mlist_uid_b, 15, 4, args);
+	KblStartModulesFromList(mlist_uid_b, LIST_B_MODULE_COUNT, 4, args);
 	
 	return 0;
 }

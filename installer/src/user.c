@@ -44,6 +44,18 @@ int ensoCleanUpBlocks(void) {
 	return k_ensoCleanUpBlocks();
 }
 
+int ensoWriteRecoveryConfig(void) {
+	return k_ensoWriteRecoveryConfig();
+}
+
+int ensoWriteRecoveryBlob(void) {
+	return k_ensoWriteRecoveryBlob();
+}
+
+int ensoWriteRecoveryMbr(void) {
+	return k_ensoWriteRecoveryMbr();
+}
+
 int module_start(int args, void *argv) {
 	(void)args;
 	(void)argv;

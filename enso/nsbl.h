@@ -1,6 +1,6 @@
 /* nsbl.h -- imported data from non-secure bootloader
  *
- * Copyright (C) 2017 molecule, 2018-2020 skgleba
+ * Copyright (C) 2017 molecule, 2018-2022 skgleba
  *
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
@@ -83,14 +83,7 @@ typedef struct SceBootArgs {
   uint32_t field_34;
   uint32_t field_38;
   uint32_t field_3C;
-  uint32_t field_40;
-  uint32_t field_44;
-  uint32_t field_48;
-  uint32_t aslr_seed;
-  uint32_t field_50;
-  uint32_t field_54;
-  uint32_t field_58;
-  uint32_t field_5C;
+  uint8_t dip_switches[0x20];
   uint32_t dram_base;
   uint32_t dram_size;
   uint32_t field_68;
@@ -245,12 +238,18 @@ typedef struct SceModuleDecryptContext {
   uint32_t max_size;
 } __attribute__((packed)) SceModuleDecryptContext;
 
+#define MEMBLOCK_TYPE_RW 0x1020D006
+#define MEMBLOCK_TYPE_RX 0x1020D005 // cached for speed, rember to clean cache(s)
+#define SDIF_SECTOR_SIZE 0x200
+#define SBLS_START 0x4000 // in sectors
+#define SBLS_END 0x8000 // in sectors
+#define IDSTOR_START 0x200 // in sectors
+
 // firmware specific function offsets
 static void *(*memset)(void *dst, int ch, int sz) = (void*)0x51013C41;
 static void *(*memcpy)(void *dst, const void *src, int sz) = (void *)0x51013BC1;
 static void *(*memmove)(void *dst, const void *src, int sz) = (void *)0x5102152D;
 static void (*clean_dcache)(void *dst, int len) = (void*)0x510146DD;
-static int (*read_block_os0)() = (void*)0x510010FD;
 static void (*flush_icache)() = (void*)0x51014691;
 static int (*strncmp)(const char *s1, const char *s2, int len) = (void *)0x51013CA0;
 static SceObject *(*get_obj_for_uid)(int uid) = (void *)0x51017785;
@@ -259,28 +258,61 @@ static int (*module_load_direct)(const SceModuleLoadList *list, int *uids, int c
 static int (*sceKernelAllocMemBlock)(const char *name, int type, int size, SceKernelAllocMemBlockKernelOpt *opt) = (void *)0x51007161;
 static int (*sceKernelGetMemBlockBase)(int32_t uid, void **basep) = (void *)0x510057E1;
 static int (*sceKernelRemapBlock)(int32_t uid, int type) = (void *)0x51007171;
-static int (*sceKernelFreeMemBlock)(int32_t uid) = (void *)0x51007449;
+static int (*sceKernelFreeMemBlock)(int32_t uid) = (void*)0x51007449;
 
-static int (*read_sector_sd)(int *part_ctx, int sector, int buffer, int nsectors) = (void*)0x5101E879;
+static int (*is_genuine_dolce)(void) = (void*)0x51017321;
+
+static int (*read_sector_default)(int* ctx, int sector, int nsectors, int buffer) = (void*)0x510010FD; // 0x20 cached
+static int (*read_sector_default_direct)(int* ctx, int sector, int nsectors, int buffer) = (void*)0x510010C5;
 static int (*setup_emmc)() = (void*)0x5100124D;
 static int (*init_part)(unsigned int *partition, unsigned int flags, unsigned int *read_func, unsigned int *master_dev) = (void*)0x5101FF21;
 
 static int (*iof_open)(char *fname, int flags, int mode) = (void *)0x510017D5;
-static uint32_t (*iof_lseek)(uint32_t param_1, uint32_t param_2, uint32_t param_3, uint32_t param_4, uint32_t param_5) = (void *)0x510018a9;
+static int (*iof_lseek)(int fd, int fd_hi, uint32_t off, uint32_t off_hi, int mode) = (void *)0x510018a9;
 static int (*iof_close)(uint32_t fdlike) = (void *)0x51001901;
-static int (*iof_read)(uint32_t fdlike, void *buf, uint32_t sizelike) = (void *)0x510209ed;
-
-// firmware specific patch offsets
-static SceBootArgs *boot_args = (void *)0x51167528;
-static SceSysrootContext **sysroot_ctx_ptr = (void *)0x51138A3C;
-
-static int (*get_hwcfg)(uint32_t *cfgs) = (void *)0x51012a1d;
+static int (*iof_read)(uint32_t fdlike, void* buf, uint32_t sizelike) = (void*)0x510209ed;
 
 static int (*self_auth_header)() = (void*)0x51016ea5;
 static int (*self_setup_authseg)() = (void*)0x51016f95;
 static int (*self_load_block)() = (void*)0x51016fd1;
 
-#define NSKBL_EXPORTS_ADDR (0x5102778c)
+static int (*get_hwcfg)(uint32_t* cfgs) = (void*)0x51012a1d;
+
+#ifdef NO_DEBUG_LOGGING
+#define printf(...)
+#else
+static int (*printf)() = (void*)0x51013919;
+#endif
+
+// firmware specific patch offsets
+static SceBootArgs *boot_args = (void *)0x51167528;
+static SceSysrootContext **sysroot_ctx_ptr = (void *)0x51138A3C;
+
+#define NSKBL_EXPORTS_ADDR 0x5102778c
 #define NSKBL_EXPORTS(num) (NSKBL_EXPORTS_ADDR + (num * 4))
+
+#define NSKBL_DEVICE_EMMC_CTX 0x51028010 // for init_part and read_sector_default
+#define NSKBL_DEVICE_GCSD_CTX 0x51028018
+#define NSKBL_DEVICE_EMMC_TGT_CTX 0x51028014 // for read_sector_target, there is part_ctx @ *this
+#define NSKBL_DEVICE_GCSD_TGT_CTX 0x5102801C
+#define NSKBL_PARTITION_OS0 0x51167784
+
+#define NSKBL_LOAD_SELF_FUNC 0x51018860
+#define NSKBL_LOAD_SELF_COMPRESSED_CHECK 0x5101887a
+
+#define NSKBL_LBOOTM_LPSP2BCFG 0x51001688
+#define NSKBL_LBOOTM_LPSP2BCFG_CACHER 0x51001680
+#define NSKBL_PSP2BCFG_STRING 0x51023dc0
+#define NSKBL_PSP2BCFG_STRING_PTR 0x51023e10
+#define NSKBL_PSP2BCFG_STRING_PTR_CACHER 0x51023e00
+
+#define NSKBL_EXPORTS_GET_HWCFG_N 26
+#define NSKBL_EXPORTS_LMODLOAD_N 7
+
+#define NSKBL_INIT_DEV_SETPARAM_MBR_OFF 0x510202CE
+#define NSKBL_INIT_DEV_SETPARAM_MBR_OFF_CACHER 0x510202C0
+
+#define NSKBL_LMODLOAD_CHKRET 0x510014ee
+#define NSKBL_LMODLOAD_CHKRET_CACHER 0x510014e0
 
 #endif
