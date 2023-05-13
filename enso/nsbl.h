@@ -315,4 +315,6 @@ static SceSysrootContext **sysroot_ctx_ptr = (void *)0x51138A3C;
 #define NSKBL_LMODLOAD_CHKRET 0x510014ee
 #define NSKBL_LMODLOAD_CHKRET_CACHER 0x510014e0
 
+#define NSKBL_LMDOLOAD_DIR 0x51023de7
+
 #endif

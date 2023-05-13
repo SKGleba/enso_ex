@@ -1,4 +1,4 @@
-E2XMODCOUNT:=02
+#EXL
 e2xhencfg.skprx
 e2xculogo.skprx
 

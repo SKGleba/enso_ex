@@ -1,7 +1,3 @@
-#define E2X_EPATCHES_SKIP CTRL_VOLUP
-#define E2X_USE_BBCONFIG CTRL_SQUARE
-#define E2X_RECOVERY_RUNDN CTRL_START
-
 #define CTRL_BUTTON_HELD(ctrl, button)		!((ctrl) & (button))
 #define CTRL_BUTTON_PRESSED(ctrl, old, button)	!(((ctrl) & ~(old)) & (button))
 #define CTRL_UP		(1 << 0)
@@ -82,21 +78,21 @@ typedef struct kbl_param_struct {
 
 // This struct is passed to custom plugins at module_start
 typedef struct patch_args_struct {
-  void *defarg; // default arg passed to all boot modules at start
+  uint32_t this_version; // version of this struct
+  uint32_t ex_ctrl; // ex ctrl data
+  void* nskbl_exports_start; // nskbl exports start
   kbl_param_struct* kbl_param;
-  uint32_t *nskbl_exports; // nskbl exports start
-  uint32_t ctrldata; // current ctrl data
-  void* load_exe; // e2x's load_exe func
-  void* get_file; // e2x's get_file func
+  void* (*ex_load_exe)(void* source, char* memblock_name, uint32_t offset, uint32_t size, int flags, int* ret_memblock_id); // e2x's load_exe func
+  int (*ex_get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset); // e2x's get_file func
+  void* (*kbl_memset)(void* dst, int ch, int sz);
+  void* (*kbl_memcpy)(void* dst, const void* src, int sz);
+  void* (*kbl_get_obj_for_uid)(int uid);
+  int (*kbl_alloc_memblock)(const char* name, int type, int size, void* opt);
+  int (*kbl_get_memblock)(int32_t uid, void** basep);
+  int (*kbl_free_memblock)(int32_t uid);
+  void* defarg; // default arg passed to all boot modules at start
   int* uids_a; // first uid list
-  int *uids_b; // second uid list
+  int* uids_b; // second uid list
   int *uids_d; // devkit uid list
 } __attribute__((packed)) patch_args_struct;
-
-// 3.65 nskbl funcs
-static void *(*kbl_memset)(void *dst, int ch, int sz) = (void*)0x51013C41;
-static void *(*kbl_memcpy)(void *dst, const void *src, int sz) = (void *)0x51013BC1;
-static void *(*get_obj_for_uid)(int uid) = (void *)0x51017785;
-static int (*sceKernelAllocMemBlock)(const char *name, int type, int size, void *opt) = (void *)0x51007161;
-static int (*sceKernelGetMemBlockBase)(int32_t uid, void **basep) = (void *)0x510057E1;
-static int (*sceKernelFreeMemBlock)(int32_t uid) = (void *)0x51007449;
+#define PATCH_ARGS_VERSION 3

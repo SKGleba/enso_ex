@@ -23,12 +23,13 @@
 
 #define E2X_BOOTAREA_LOCK_KEY 'CGB5' // [SDIF HOOK] this key lets the caller set the bootarea read-only flag
 #define E2X_READ_REAL_MBR_KEY 'GRB5' // [SDIF HOOK] this key lets the caller read the real MBR
-#define E2x_BOOTAREA_LOCK_CG_ACK 0xAA16 // [SDIF HOOK] confirm change of the bootarea read-only flag
+#define E2X_BOOTAREA_LOCK_CG_ACK 0xAA16 // [SDIF HOOK] confirm change of the bootarea read-only flag
 
 #define E2X_RECOVERY_MBR_OFFSET 3 // secondary/recovery emuMBR
 
-#define E2X_RCONF_OFFSET 4
+#define E2X_RCONF_OFFSET 4 // recovery configuration/bootstrap blob offset
 
+// expected MBR sector in external recovery mode
 typedef struct RecoveryBlockStruct {
   uint32_t magic;
   uint8_t flags[4];
@@ -37,16 +38,34 @@ typedef struct RecoveryBlockStruct {
   char data[0x200 - 0x10];
 } __attribute__((packed)) RecoveryBlockStruct;
 
+// load_exe() mode arg
 enum E2X_LOAD_EXE_MODES {
   E2X_LX_NO_XREMAP = 1, // dont remap to RX after alloc
   E2X_LX_BLK_SAUCE, // source is a block device
   E2X_LX_NO_CCACHE = 4 // dont clean dcache or flush icache
 };
 
-enum E2X_CHWCGG_S {
-  E2X_CHWCFG_CTRL = 0,
-  E2X_CHWCFG_LOAD_EXE,
-  E2X_CHWCFG_KBLPARAM,
-  E2X_CHWCFG_NSKBL_EXPORTS,
-  E2X_CHWCFG_GET_FILE
-};
+// enso_ex exports
+typedef struct ex_ports_struct {
+  char* module_dir;
+  uint32_t ctrl;
+  void* nskbl_exports_start;
+  void* kbl_param;
+  void* (*load_exe)(void* source, char* memblock_name, uint32_t offset, uint32_t size, int flags, int* ret_memblock_id);
+  int (*get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset);
+  void* (*memset)(void* dst, int ch, int sz);
+  void* (*memcpy)(void* dst, const void* src, int sz);
+  void* (*get_obj_for_uid)(int uid);
+  int (*alloc_memblock)(const char* name, int type, int size, void* opt);
+  int (*get_memblock)(int32_t uid, void** basep);
+  int (*free_memblock)(int32_t uid);
+} __attribute__((packed)) ex_ports_struct;
+
+// hooked get_hwcfg(array) exit array
+typedef struct patchedHwcfgStruct {
+  union {
+    uint32_t get_ex_ports;
+    uint8_t hardware_config[0x10];
+    ex_ports_struct ex_ports;
+  };
+} __attribute__((packed)) patchedHwcfgStruct;

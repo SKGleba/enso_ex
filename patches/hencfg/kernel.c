@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include "../hooking.h"
 #include "../patches.h"
+#include "../../enso/ex_defs.h"
 
 // sysstate patches
 #define SBLAUTHMGR_OFFSET_PATCH_ARG (168)
@@ -122,13 +123,15 @@ static void __attribute__((noreturn)) sysstate_final_hook(void) {
 void _start() __attribute__ ((weak, alias ("module_start")));
 int module_start(uint32_t argc, void *args) {
 	
-	patch_args_struct *patch_args = args;
-	
+    patch_args_struct* patch_args = args;
+    if (patch_args->this_version != PATCH_ARGS_VERSION)
+        return -1;
+
     SceObject *obj;
     SceModuleObject *mod;
 	
 	// config / stopfselfs patch
-	obj = get_obj_for_uid(patch_args->uids_b[14]);
+    obj = patch_args->kbl_get_obj_for_uid(patch_args->uids_b[14]);
     if (obj != NULL) {
 		mod = (SceModuleObject *)&obj->data;
 		if (*(uint8_t *)(mod->segments[0].buf + 10) != 0xDA) // make sure its 3.65
@@ -136,19 +139,19 @@ int module_start(uint32_t argc, void *args) {
 		DACR_OFF(
 			INSTALL_RET_THUMB(mod->segments[0].buf + SYSSTATE_IS_MANUFACTURING_MODE_OFFSET, 1);
 			*(uint32_t *)(mod->segments[0].buf + SYSSTATE_IS_DEV_MODE_OFFSET) = 0x20012001;
-            kbl_memcpy(mod->segments[0].buf + SYSSTATE_RET_CHECK_BUG, sysstate_ret_patch, sizeof(sysstate_ret_patch));
-            if (CTRL_BUTTON_HELD(patch_args->ctrldata, E2X_USE_BBCONFIG)) {
-                kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ux0_path, sizeof(ux0_path));
+            patch_args->kbl_memcpy(mod->segments[0].buf + SYSSTATE_RET_CHECK_BUG, sysstate_ret_patch, sizeof(sysstate_ret_patch));
+            if (CTRL_BUTTON_HELD(patch_args->ex_ctrl, E2X_USE_BBCONFIG)) {
+                patch_args->kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ux0_path, sizeof(ux0_path));
                 if ((*(uint32_t*)(patch_args->kbl_param->dip_switches + (0x98 >> 5) * 4) >> (0x98 & 31)) & 1) // PSTV emulation on kits
-                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_kitv_path, sizeof(ux0_psp2config_kitv_path));
+                    patch_args->kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_kitv_path, sizeof(ux0_psp2config_kitv_path));
                 else
-                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_path, sizeof(ux0_psp2config_path));
+                    patch_args->kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ux0_psp2config_path, sizeof(ux0_psp2config_path));
             } else if (!skip_patches(patch_args->kbl_param)) {
-                kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ur0_path, sizeof(ur0_path));
+                patch_args->kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_STRING, ur0_path, sizeof(ur0_path));
                 if ((*(uint32_t*)(patch_args->kbl_param->dip_switches + (0x98 >> 5) * 4) >> (0x98 & 31)) & 1) // PSTV emulation on kits
-                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_kitv_path, sizeof(ur0_psp2config_kitv_path));
+                    patch_args->kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_kitv_path, sizeof(ur0_psp2config_kitv_path));
                 else
-                    kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_path, sizeof(ur0_psp2config_path));
+                    patch_args->kbl_memcpy(mod->segments[0].buf + SYSSTATE_SD0_PSP2CONFIG_STRING, ur0_psp2config_path, sizeof(ur0_psp2config_path));
             }
 			// this patch actually corrupts two words of data, but they are only used in debug printing and seem to be fine
 			INSTALL_HOOK_THUMB(sysstate_final_hook, mod->segments[0].buf + SYSSTATE_FINAL_CALL);
@@ -157,14 +160,13 @@ int module_start(uint32_t argc, void *args) {
     }
 	
 	// fself/hen patch
-    obj = get_obj_for_uid(patch_args->uids_a[9]);
+    obj = patch_args->kbl_get_obj_for_uid(patch_args->uids_a[9]);
     if (obj != NULL) {
 		mod = (SceModuleObject *)&obj->data;
 		HOOK_EXPORT(sbl_parse_header, 0x7ABF5135, 0xF3411881);
 		HOOK_EXPORT(sbl_set_up_buffer, 0x7ABF5135, 0x89CCDA2C);
 		HOOK_EXPORT(sbl_decrypt, 0x7ABF5135, 0xBC422443);
     }
-	
 	
 	return 0;
 }

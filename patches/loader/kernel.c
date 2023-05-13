@@ -16,15 +16,19 @@
 
 #define LIST_A_MODULE_COUNT 13
 #define LIST_B_MODULE_COUNT 15
-#define LIST_C_MODULE_COUNT 15
+#define LIST_C_MODULE_COUNT 32
 #define LIST_D_MODULE_COUNT 5
+
+#define CUSTOM_BOOT_LIST "os0:ex/boot_list.txt"
+#define CUSTOM_BOOT_LIST_MAGIC 'LXE#' // #EXL
+static int bootlist_mb_id = -1;
 
 static patch_args_struct patch_args;
 
-static int mlist_uid_a[LIST_A_MODULE_COUNT], mlist_uid_b[LIST_B_MODULE_COUNT], mlist_uid_d[LIST_D_MODULE_COUNT], clist_uid[LIST_C_MODULE_COUNT], use_devmods, use_clist;
+static int mlist_uid_a[LIST_A_MODULE_COUNT], mlist_uid_b[LIST_B_MODULE_COUNT], mlist_uid_d[LIST_D_MODULE_COUNT], clist_uid[LIST_C_MODULE_COUNT];
+static int use_devmods = 0, use_clist = 0;
 
 static char* clist_str[LIST_C_MODULE_COUNT];
-static char e2xlist[16 * 16];
 
 static char *mlist_str_a[] = {
 	"sysmem.skprx",
@@ -68,47 +72,86 @@ static char *mlist_str_d[] = {
 	"deci4p_sdrfp.skprx"
 };
 
-static void prepare_modlists(void) {
-	char dispmodel[16];
-	uint32_t cfgstr[16];
-	int blist_sz = 0;
-	
-	// setup arg that will be given to patchers
-	cfgstr[0] = 69;
-	KblGetHwConfig(&cfgstr); // get some globals from e2x's hwcfg hook
-	patch_args.uids_a = mlist_uid_a; // set default list part 1
-	patch_args.uids_b = mlist_uid_b; // set default list part 2
-	patch_args.uids_d = NULL; // 0 unless devkit (later check)
-	patch_args.get_file = (void*)cfgstr[E2X_CHWCFG_GET_FILE]; // e2x's get_file func
-	patch_args.nskbl_exports = (void*)cfgstr[E2X_CHWCFG_NSKBL_EXPORTS]; // copy nskbl exports_start addr
-	patch_args.kbl_param = (void*)cfgstr[E2X_CHWCFG_KBLPARAM];
-	patch_args.load_exe = (void*)cfgstr[E2X_CHWCFG_LOAD_EXE]; // e2x's load_exe func
-	patch_args.ctrldata = cfgstr[E2X_CHWCFG_CTRL]; // current ctrl status
-	
-	// custom
-	int (*get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset) = patch_args.get_file;
-	if (CTRL_BUTTON_HELD(patch_args.ctrldata, E2X_EPATCHES_SKIP)) {
-		clist_str[0] = "e2xrecovr.skprx"; // recovery script
-		clist_str[1] = "e2xhfwmod.skprx"; // always run the hfw-compat script
-		use_clist = 2;
-	} else { // TODO: REWORK
-		blist_sz = get_file("os0:ex/boot_list.txt", NULL, 0, 0); // bootlist size
-		if (blist_sz > 0 && get_file("os0:ex/boot_list.txt", e2xlist, (blist_sz < 0x100) ? blist_sz : 0x100, 0) == 0 && (e2xlist[2] == 'X') && (e2xlist[12] == '=')) { // "E2XMODCOUNT:=XX\0"
-			for (int i = 1; i < (((e2xlist[13] - 0x30) * 10) + (e2xlist[14] - 0x30) + 1); i-=-1) {
-				if (i > 14)
-					break;
-				clist_str[i - 1] = &e2xlist[i * 16];
-				e2xlist[(i * 16) + 15] = 0x00;
-				use_clist = i;
-			}
-		} else {
-			clist_str[0] = "e2xhencfg.skprx";
-			clist_str[1] = "e2xculogo.skprx";
-			clist_str[2] = "e2xhfwmod.skprx";
-			use_clist = 3;
-		}
+char* find_endline(char* start, char* end) {
+	for (char* ret = start; ret < end; ret++) {
+		if (*(uint16_t*)ret == 0x0A0D || *(uint8_t*)ret == 0x0A)
+			return ret;
 	}
-	
+	return end;
+}
+
+char* find_nextline(char* current_line_end, char* end) {
+	for (char* next_line = current_line_end; next_line < end; next_line++) {
+		if (*(uint8_t*)next_line != 0x0D && *(uint8_t*)next_line != 0x0A && *(uint8_t*)next_line != 0x00)
+			return next_line;
+	}
+	return NULL;
+}
+
+void parse_bootlist(void* data_start, uint32_t data_size) {
+	char* startlist = data_start;
+	char* endlist = startlist + data_size;
+
+	char* current_line = startlist;
+	char* end_line = startlist;
+	while (current_line < endlist) {
+		end_line = find_endline(current_line, endlist);
+		if (current_line[0] != '#' && current_line != end_line) {
+			for (int i = 0; i < (end_line - current_line); i++) {
+				if (current_line[i] == ' ' || current_line[i] == '#') {
+					*(uint8_t*)(current_line + i) = 0;
+					break;
+				}
+			}
+			end_line[0] = 0;
+			clist_str[use_clist++] = current_line;
+		}
+		current_line = find_nextline(end_line, endlist);
+		if (!current_line)
+			break;
+	}
+	return;
+}
+
+static void prepare_modlists(char** module_dir_s) {
+	char dispmodel[16];
+
+	// get enso_ex funcs & useful data
+	patchedHwcfgStruct *cfg = &patch_args;
+	cfg->get_ex_ports = E2X_MAGIC;
+	if (KblGetHwConfig(cfg) == E2X_MAGIC) { // core version check
+		// module directory string paddr
+		*module_dir_s = cfg->ex_ports.module_dir;
+		
+		// setup arg that will be given to patchers
+		patch_args.uids_a = mlist_uid_a; // set default list part 1
+		patch_args.uids_b = mlist_uid_b; // set default list part 2
+		patch_args.uids_d = NULL; // 0 unless devkit (later check)
+
+		// custom
+		if (CTRL_BUTTON_HELD(patch_args.ex_ctrl, E2X_EPATCHES_SKIP)) {
+			clist_str[0] = "e2xrecovr.skprx"; // recovery script
+			clist_str[1] = "e2xhfwmod.skprx"; // always run the hfw-compat script
+			use_clist = 2;
+		} else {
+			uint32_t bootlist_size = (uint32_t)patch_args.ex_get_file(CUSTOM_BOOT_LIST, NULL, 0, 0);
+			void *bootlist = bootlist_size ? patch_args.ex_load_exe(CUSTOM_BOOT_LIST, "boot_list", 0, bootlist_size, E2X_LX_NO_XREMAP | E2X_LX_NO_CCACHE, &bootlist_mb_id) : NULL;
+			if (bootlist && *(uint32_t*)bootlist == CUSTOM_BOOT_LIST_MAGIC) { // ensure we dont use the old list
+				if (bootlist_size & 0xFFF)
+					*(uint8_t*)(bootlist + bootlist_size) = 0;
+				else
+					*(uint8_t*)(bootlist + bootlist_size - 1) = 0; // possibly cut last entry
+				parse_bootlist(bootlist, bootlist_size);
+			} else {
+				clist_str[0] = "e2xhencfg.skprx";
+				clist_str[1] = "e2xculogo.skprx";
+				clist_str[2] = "e2xhfwmod.skprx";
+				use_clist = 3;
+			}
+		}
+	} else
+		use_clist = 0;
+
 	// devkit
 	int iVar1 = KblCheckDipsw(0xc1);
 	if ((((iVar1 != 0) && (iVar1 = KblIsCex(), iVar1 == 0)) && (iVar1 = KblIsModelx102(), iVar1 == 0)) && (iVar1 = KblIsDoubleModel(), iVar1 == 0)) {
@@ -143,10 +186,12 @@ static void prepare_modlists(void) {
 }
 
 void _start() __attribute__ ((weak, alias ("module_start")));
-int module_start(SceSize argc, void *args) {
-	
+int module_start(SceSize argc, void* args) {
+
+	char* module_dir = NULL;
+
 	// prepare all the module lists
-	prepare_modlists();
+	prepare_modlists(&module_dir);
 	
 	// load default modules
 	KblLoadModulesFromList(mlist_str_a, mlist_uid_a, LIST_A_MODULE_COUNT, 0);
@@ -155,9 +200,9 @@ int module_start(SceSize argc, void *args) {
 	KblLoadModulesFromList(mlist_str_b, mlist_uid_b, LIST_B_MODULE_COUNT, 0);
 	
 	// change moddir to os0:ex/ and load custom modules from there
-	if (use_clist > 0) {
-		*(uint8_t *)0x51023de7 = 'e';
-		*(uint8_t *)0x51023de8 = 'x';
+	if (use_clist > 0 && module_dir) {
+		module_dir[0] = 'e';
+		module_dir[1] = 'x';
 		KblLoadModulesFromList(clist_str, clist_uid, use_clist, 0);
 	}
 	
@@ -181,10 +226,14 @@ int module_bootstart(SceSize argc, void *args) {
 	*(uint32_t *)(args + 0x308) = tmpr;
 	
 	// start the custom modules
+	patch_args.this_version = PATCH_ARGS_VERSION; // loader's this struct version
 	patch_args.defarg = args;
-	if (use_clist > 0)
+	if (use_clist > 0) {
 		KblStartModulesFromList(clist_uid, use_clist, 4, &patch_args);
-	
+		if (bootlist_mb_id != -1)
+			patch_args.kbl_free_memblock(bootlist_mb_id);
+	}
+
 	// start default modules part 1
 	KblStartModulesFromList(mlist_uid_a, LIST_A_MODULE_COUNT, 4, args);
 	if (use_devmods > 0)

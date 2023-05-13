@@ -52,33 +52,32 @@ static inline int skip_patches(kbl_param_struct *kblparam) {
 void _start() __attribute__ ((weak, alias ("module_start")));
 int module_start(uint32_t argc, void *args) {
 	
-	patch_args_struct *patch_args = args;
-	
-	if (skip_patches(patch_args->kbl_param))
+    patch_args_struct* patch_args = args;
+    if (patch_args->this_version != PATCH_ARGS_VERSION)
+        return -1;
+    else if (skip_patches(patch_args->kbl_param))
 		return 0;
-	
-	int (*get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset) = patch_args->get_file;
 	
 	SceKernelAllocMemBlockKernelOpt optp;
 	optp.size = 0x58;
 	optp.attr = 2;
 	optp.paddr = 0x1c000000;
 	
-	int mblk = sceKernelAllocMemBlock("bootlogo", 0x6020D006, 0x200000, &optp);
+	int mblk = patch_args->kbl_alloc_memblock("bootlogo", 0x6020D006, 0x200000, &optp);
 	void *xbas = NULL;
-	sceKernelGetMemBlockBase(mblk, (void **)&xbas);
+	patch_args->kbl_get_memblock(mblk, (void**)&xbas);
 	
 	if (xbas == NULL)
 		return 0;
 	
-	int logoerr = get_file("os0:ex/bootlogo.raw", xbas, 0x200000, 0);
+	int logoerr = patch_args->ex_get_file("os0:ex/bootlogo.raw", xbas, 0x200000, 0);
 	
-	sceKernelFreeMemBlock(mblk);
+	patch_args->kbl_free_memblock(mblk);
 	
 	SceObject *obj;
     SceModuleObject *mod;
 	
-	obj = get_obj_for_uid(patch_args->uids_b[4]);
+	obj = patch_args->kbl_get_obj_for_uid(patch_args->uids_b[4]);
 	if (obj != NULL) {
 		mod = (SceModuleObject *)&obj->data;
 		DACR_OFF(

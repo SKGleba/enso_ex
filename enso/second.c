@@ -96,7 +96,7 @@ static int sdif_write_sector_mmc_patched(void* ctx, int sector, char* buffer, in
 		DACR_OFF(
 			disable_bootarea_update = nSectors;
 		);
-		return E2x_BOOTAREA_LOCK_CG_ACK;
+		return E2X_BOOTAREA_LOCK_CG_ACK;
 	}
 	if ((sector < SBLS_END && (sector >= SBLS_START || sector < IDSTOR_START)) && disable_bootarea_update)
 		return -1;
@@ -109,7 +109,7 @@ static int module_load_patched(const SceModuleLoadList* list, int* uids, int cou
 	// load req modules
 	int ret = module_load(list, uids, count, unk);
 	if (ret < 0)
-		printf("[E2X] E: modload[%d] 0x%X\n", count, ret);
+		printf("[E2X] E: lload[%d] 0x%X\n", count, ret);
 
 	// skip all unclean uids
 	for (int i = 0; i < count; i -= -1) {
@@ -117,7 +117,7 @@ static int module_load_patched(const SceModuleLoadList* list, int* uids, int cou
 			printf("[E2X] W: dirty uid[%d]: %s\n", i, (list[i].filename) ? list[i].filename : "NULL");
 			uids[i] = 0;
 		} else
-			printf("[E2X] module loaded [%d]: %s\n", i, (list[i].filename) ? list[i].filename : "NULL");
+			printf("[E2X] module loaded [%d : 0x%X]: %s\n", i, uids[i], (list[i].filename) ? list[i].filename : "NULL");
 	}
 
 	// find and patch sdif
@@ -132,11 +132,11 @@ static int module_load_patched(const SceModuleLoadList* list, int* uids, int cou
 						HOOK_EXPORT(sdif_write_sector_mmc, 0x96D306FA, 0x175543D2);
 						FIND_EXPORT(get_sd_context_part_validate_mmc, 0x96D306FA, 0x6A71987F);
 					} else
-						printf("[E2X] E: no sdif obj\n");
+						printf("[E2X] E: no sdif\n");
 					break;
 				}
 			} else
-				printf("[E2X] W: module[%d]: NULL\n", i);
+				printf("[E2X] W: module[%d] NULL\n", i);
 		}
 	}
 
@@ -280,7 +280,7 @@ static void* load_exe(void* source, char* memblock_name, uint32_t offset, uint32
 static void recovery(unsigned int ctrl, int dolce) {
 	int error = 1, (*rf)(void *kbl_param, unsigned int ctrldata) = NULL;
 
-	printf("[E2X@R] GC-SD recovery mode\n");
+	printf("[E2X@R] GC-SD\n");
 	syscon_common_write(1, SYSCON_CMD_SET_GCSD, 2); // enable the GC slot
 	boot_args->boot_type_indicator_1 |= 0x40000; // enable sd0 mounting
 	clean_dcache((void*)boot_args, 0x100);
@@ -291,12 +291,12 @@ static void recovery(unsigned int ctrl, int dolce) {
 	if (read_sector_default_direct((int*)NSKBL_DEVICE_GCSD_CTX, 0, 1, (int)&mbr) >= 0) {
 		if (*(uint32_t*)mbr == 0x796e6f53) { // "Sony" - EMMC dump/SCE formatted GCSD, use its os0 as main os0
 			gpio_port_set(0, 7);
-			printf("[E2X@R] SCE MBR mode\n");
+			printf("[E2X@R] MBR\n");
 			init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x110000, (unsigned int*)read_sector_default_direct, (unsigned int*)NSKBL_DEVICE_GCSD_CTX);
 			error = 0;
 		} else if (*(uint32_t*)(mbr + 0x38) == 0x20363154) { // base+0x36 = 'FA[T16 ]  ' - fat16 partition
 			gpio_port_set(0, 7);
-			printf("[E2X@R] FAT16 PBR mode\n");
+			printf("[E2X@R] PBR\n");
 			if (*(uint32_t*)mbr == E2X_MAGIC) { // use as sd0, load recovery from it
 				rf = (void*)(load_exe("sd0:" E2X_RECOVERY_FNAME, "recovery", 0, 0, 0, NULL) + 1);
 				error = (rf != (void*)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 1;
@@ -305,7 +305,7 @@ static void recovery(unsigned int ctrl, int dolce) {
 			error = 0;
 		} else if (*(uint32_t*)mbr == E2X_MAGIC) { // enso_ex raw recovery
 			gpio_port_set(0, 7);
-			printf("[E2X@R] E2XR RAW mode\n");
+			printf("[E2X@R] RAW\n");
 			RecoveryBlockStruct* recoveryblock = (RecoveryBlockStruct*)mbr;
 			if (recoveryblock->flags[0]) // use GCSD os0 as main os0
 				init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x110000, (unsigned int*)read_sector_default_direct, (unsigned int*)NSKBL_DEVICE_GCSD_CTX);
@@ -314,7 +314,7 @@ static void recovery(unsigned int ctrl, int dolce) {
 				error = (rf != (void*)0x1) ? ((rf(boot_args, ctrl) == 0) ? 0 : 4) : 2;
 			}
 		} else { // unk magic
-			printf("[E2X@R] E: UNK block 0\n");
+			printf("[E2X@R] E: UNK\n");
 			error = 2;
 		}
 	}
@@ -336,34 +336,42 @@ static void recovery(unsigned int ctrl, int dolce) {
 /*
 	Custom kernel loader patches
 */
-// custom get_hwcfg to give ckldr important offsets
+// custom get_hwcfg to give ckldr important offsets/data
 static int get_hwcfg_patched(uint32_t* dst) {
-	if (dst[0] == 69) {
-		syscon_common_read(&dst[E2X_CHWCFG_CTRL], SYSCON_CMD_GET_DCTRL);
-		dst[E2X_CHWCFG_LOAD_EXE] = (uint32_t)load_exe;
-		dst[E2X_CHWCFG_KBLPARAM] = (uint32_t)(*sysroot_ctx_ptr)->boot_args;
-		dst[E2X_CHWCFG_NSKBL_EXPORTS] = (uint32_t)NSKBL_EXPORTS_ADDR;
-		dst[E2X_CHWCFG_GET_FILE] = (uint32_t)get_file;
-		return 0;
+	
+	if (dst[0] == E2X_MAGIC) {
+		patchedHwcfgStruct* expp = (void*)dst;
+		syscon_common_read(&expp->ex_ports.ctrl, SYSCON_CMD_GET_DCTRL);
+		expp->ex_ports.nskbl_exports_start = (void*)NSKBL_EXPORTS_ADDR;
+		expp->ex_ports.load_exe = load_exe;
+		expp->ex_ports.get_file = get_file;
+		expp->ex_ports.memcpy = memcpy;
+		expp->ex_ports.memset = memset;
+		expp->ex_ports.get_obj_for_uid = (void*)get_obj_for_uid;
+		expp->ex_ports.alloc_memblock = (void*)sceKernelAllocMemBlock;
+		expp->ex_ports.get_memblock = sceKernelGetMemBlockBase;
+		expp->ex_ports.free_memblock = sceKernelFreeMemBlock;
+		expp->ex_ports.module_dir = (char*)NSKBL_LMDOLOAD_DIR;
+		expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->boot_args;
+		return E2X_MAGIC;
 	} else
-		return get_hwcfg(dst);
+		return get_hwcfg((void *)dst);
 }
 
 // Run BootMgr and resume psp2bootconfig load with our custom loader
 static int load_psp2bootconfig_patched(uint32_t myaddr, int* uids, int count, int osloc, int unk) {
-	printf("[E2X] welcome to stage3!\n[E2X] starting kernel load\n");
+	printf("[E2X] stage3: starting kernel load\n");
 	
 	allow_fselfs();
 
 	*(uint32_t*)NSKBL_EXPORTS(NSKBL_EXPORTS_GET_HWCFG_N) = (uint32_t)get_hwcfg_patched;
 	int bootmgr_memblock;
-	int (*tcode)(void) = (void*)(load_exe("os0:" E2X_BOOTMGR_NAME, "bootmgr_e2x", 0, 0, 0, &bootmgr_memblock) + 1);
+	int (*tcode)(void) = (void*)(load_exe("os0:" E2X_BOOTMGR_NAME, "bootmgr", 0, 0, 0, &bootmgr_memblock) + 1);
 	if (tcode != (void*)0x1) {
 		printf("[E2X] run bootmgr\n");
 		if (tcode() & 1)
 			sceKernelFreeMemBlock(bootmgr_memblock);
-	} else
-		printf("[E2X] W: no bootmgr\n");
+	}
 
 	if (get_file("os0:" E2X_CKLDR_NAME, NULL, 0, 0) > 0)
 		myaddr = (uint32_t)E2X_CKLDR_NAME;
@@ -404,12 +412,12 @@ static void init_os0(uint32_t mbr_off) {
 // non-standard init
 static void custom_init(unsigned int ctrl) {
 
-	printf("[E2X@R] EMMC recovery mode\n");
+	printf("[E2X@R] EMMC\n");
 
 	// tiny patch from block 4
 	if (!CTRL_BUTTON_HELD(ctrl, E2X_BPARAM_NOCUC)) {
 		int rconf_memblk = 0;
-		void* cc_buf = load_exe((int*)NSKBL_DEVICE_EMMC_CTX, "rconf", E2X_RCONF_OFFSET, 1, E2X_LX_BLK_SAUCE, &rconf_memblk);
+		void* cc_buf = load_exe((int*)NSKBL_DEVICE_EMMC_CTX, "recovery", E2X_RCONF_OFFSET, 1, E2X_LX_BLK_SAUCE, &rconf_memblk);
 		if (cc_buf) {
 			void (*ccode)(uint32_t get_info_va, uint32_t init_os0_va, uint32_t load_exe_va) = (void*)(cc_buf + 1);
 			printf("[E2X@R] run rconf\n");
@@ -441,7 +449,8 @@ __attribute__((section(".text.start"))) void start(void) {
 	printf("[E2X] welcome to stage2!\n[E2X] patching nskbl\n");
 
 	// ignore module_load error (uids can be unclean now)
-	*(uint32_t*)NSKBL_LMODLOAD_CHKRET = 0xbf00bf00;
+	*(uint16_t*)NSKBL_LMODLOAD_CHKRET = 0xbf00;
+	*(uint16_t*)(NSKBL_LMODLOAD_CHKRET + 2) = 0xbf00;
 	clean_dcache((void*)NSKBL_LMODLOAD_CHKRET_CACHER, 0x20);
 	flush_icache();
 
@@ -452,7 +461,7 @@ __attribute__((section(".text.start"))) void start(void) {
 	// we cannot use the info in kbl param - what if syscon is in safe mode?
 	unsigned int ctrl;
 	syscon_common_read(&ctrl, SYSCON_CMD_GET_DCTRL);
-	printf("[E2X] pressed keys: 0x%08X\n", ctrl);
+	printf("[E2X] ctrl: 0x%08X\n", ctrl);
 
 	// change the kernel loader
 	if (!CTRL_BUTTON_HELD(ctrl, E2X_IPATCHES_SKIP)) {
