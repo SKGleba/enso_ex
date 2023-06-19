@@ -39,3 +39,9 @@ For more information, see the [recovery readme](README-recovery.md).<br>
  - [SD - heartbeat](recovery/external/heartbeat) - overwrites the first sd2vita sector, lets you know that enso_ex is alive
  - [SD - enso_flash](recovery/external/enso_flash) - updates enso_ex from sd2vita <br>
 <br>
+
+
+## Bootarea read/write-lock
+You can bypass MBR redirect by calling `sdif_read_mmc('GRB5', ..)`<br>
+You can lock/unlock EMMC writes to the bootloaders, enso_ex and MBR by calling `sdif_write_mmc('CGB5', 'CGB5', NULL, new_lock_status)`<br>
+<br>
