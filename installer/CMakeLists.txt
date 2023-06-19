@@ -163,19 +163,19 @@ add_dependencies(${SHORT_NAME}.self ${SHORT_NAME}.velf)
 vita_create_vpk(${SHORT_NAME}.vpk ${VITA_TITLEID} ${SHORT_NAME}.self
   VERSION ${VITA_VERSION}
   NAME ${VITA_APP_NAME}
-  FILE ${CMAKE_SOURCE_DIR}/../enso/fat.bin fat.bin
-  FILE ${CMAKE_SOURCE_DIR}/../recovery/rbootstrap.e2xp rconfig.e2xp
-  FILE ${CMAKE_SOURCE_DIR}/../recovery/blob/rblob.e2xp rblob.e2xp
-  FILE ${CMAKE_SOURCE_DIR}/../patches/hencfg/e2xhencfg.skprx e2xhencfg.skprx
-  FILE ${CMAKE_SOURCE_DIR}/../patches/culogo/e2xculogo.skprx e2xculogo.skprx
-  FILE ${CMAKE_SOURCE_DIR}/../patches/loader/e2x_ckldr.skprx e2x_ckldr.skprx
-  FILE ${CMAKE_SOURCE_DIR}/../data/bootlogo.raw bootlogo.raw
-  FILE ${CMAKE_SOURCE_DIR}/../data/boot_list.txt boot_list.txt
   FILE ${CMAKE_BINARY_DIR}/emmc_helper.skprx emmc_helper.skprx
   FILE ${CMAKE_BINARY_DIR}/emmc_helper_user.suprx emmc_helper.suprx
   FILE ${CMAKE_BINARY_DIR}/kernel2.skprx kernel2.skprx
-  FILE ${CMAKE_SOURCE_DIR}/res/icon.png sce_sys/icon0.png
-  FILE ${CMAKE_SOURCE_DIR}/res/template.xml sce_sys/livearea/contents/template.xml
-  FILE ${CMAKE_SOURCE_DIR}/res/bg.png sce_sys/livearea/contents/bg.png
-  FILE ${CMAKE_SOURCE_DIR}/res/startup.png sce_sys/livearea/contents/startup.png
+  FILE ${CMAKE_SOURCE_DIR}/res_int/icon.png sce_sys/icon0.png
+  FILE ${CMAKE_SOURCE_DIR}/res_int/template.xml sce_sys/livearea/contents/template.xml
+  FILE ${CMAKE_SOURCE_DIR}/res_int/bg.png sce_sys/livearea/contents/bg.png
+  FILE ${CMAKE_SOURCE_DIR}/res_int/startup.png sce_sys/livearea/contents/startup.png
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/fat.bin fat.bin
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/rbootstrap.e2xp rconfig.e2xp
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/rblob.e2xp rblob.e2xp
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/e2xhencfg.skprx e2xhencfg.skprx
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/e2xculogo.skprx e2xculogo.skprx
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/e2x_ckldr.skprx e2x_ckldr.skprx
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/bootlogo.raw bootlogo.raw
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/boot_list.txt boot_list.txt
 )

@@ -30,10 +30,12 @@
 
 #include "graphics.h"
 
-#include "../../enso/ex_defs.h"
+#include "../../core/ex_defs.h"
 
 #define printf psvDebugScreenPrintf
 #define ARRAYSIZE(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+#define CHUNK_SIZE 64 * 1024
+#define hasEndSlash(path) (path[strlen(path) - 1] == '/')
 
 int vshPowerRequestColdReset(void);
 int curfw = 69;
@@ -61,30 +63,6 @@ static unsigned buttons[] = {
 	SCE_CTRL_SQUARE,
 };
 
-int fap(const char *from, const char *to) {
-	long psz;
-	FILE *fp = fopen(from,"rb");
-	fseek(fp, 0, SEEK_END);
-	psz = ftell(fp);
-	rewind(fp);
-	char* pbf = (char*) malloc(sizeof(char) * psz);
-	fread(pbf, sizeof(char), (size_t)psz, fp);
-	FILE *pFile = fopen(to, "ab");
-	for (int i = 0; i < psz; ++i) {
-			fputc(pbf[i], pFile);
-	}
-	fclose(fp);
-	fclose(pFile);
-	return 1;
-}
-
-int fcp(const char *from, const char *to) {
-	SceUID fd = sceIoOpen(to, SCE_O_WRONLY | SCE_O_TRUNC | SCE_O_CREAT, 6);
-	sceIoClose(fd);
-	int ret = fap(from, to);
-	return ret;
-}
-
 int ex(const char *fname) {
     FILE *file;
     if ((file = fopen(fname, "r")))
@@ -105,30 +83,152 @@ int getsz(char *fname)
 	return fileSize;
 }
 
-void copyDir(char *src, char *dst) {
-	SceUID dfd = sceIoDopen(src);
+int fcp(const char* src, const char* dst) {
+	sceClibPrintf("Copying %s -> %s (file)... ", src, dst);
+	int res;
+	SceUID fdsrc = -1, fddst = -1;
+	void* buf = NULL;
+
+	res = fdsrc = sceIoOpen(src, SCE_O_RDONLY, 0);
+	if (res < 0)
+		goto err;
+
+	res = fddst = sceIoOpen(dst, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+	if (res < 0)
+		goto err;
+
+	buf = memalign(4096, CHUNK_SIZE);
+	if (!buf) {
+		res = -1;
+		goto err;
+	}
+
+	do {
+		res = sceIoRead(fdsrc, buf, CHUNK_SIZE);
+		if (res > 0)
+			res = sceIoWrite(fddst, buf, res);
+	} while (res > 0);
+
+err:
+	if (buf)
+		free(buf);
+	if (fddst >= 0)
+		sceIoClose(fddst);
+	if (fdsrc >= 0)
+		sceIoClose(fdsrc);
+	sceClibPrintf("%s\n", (res < 0) ? "FAILED" : "OK");
+	return res;
+}
+
+int copyDir(const char* src_path, const char* dst_path) {
+	SceUID dfd = sceIoDopen(src_path);
 	if (dfd >= 0) {
+		sceClibPrintf("Copying %s -> %s (dir)\n", src_path, dst_path);
+		SceIoStat stat;
+		sceClibMemset(&stat, 0, sizeof(SceIoStat));
+		sceIoGetstatByFd(dfd, &stat);
+
+		stat.st_mode |= SCE_S_IWUSR;
+
+		sceIoMkdir(dst_path, 6);
+
 		int res = 0;
+
 		do {
 			SceIoDirent dir;
-			memset(&dir, 0, sizeof(SceIoDirent));
+			sceClibMemset(&dir, 0, sizeof(SceIoDirent));
+
 			res = sceIoDread(dfd, &dir);
 			if (res > 0) {
-				psvDebugScreenSetFgColor(COLOR_PURPLE);
-				printf("  -  %s... ", dir.d_name);
-				char *src_path = malloc(strlen(src) + strlen(dir.d_name) + 2);
-				snprintf(src_path, 255, "%s%s", src, dir.d_name);
-				char *dst_path = malloc(strlen(dst) + strlen(dir.d_name) + 2);
-				snprintf(dst_path, 255, "%s%s", dst, dir.d_name);
-				fcp(src_path, dst_path);
-				psvDebugScreenSetFgColor(COLOR_GREEN);
-				printf("ok!\n");
-				psvDebugScreenSetFgColor(COLOR_WHITE);
+				char* new_src_path = malloc(strlen(src_path) + strlen(dir.d_name) + 2);
+				sceClibSnprintf(new_src_path, 1024, "%s%s%s", src_path, hasEndSlash(src_path) ? "" : "/", dir.d_name);
+
+				char* new_dst_path = malloc(strlen(dst_path) + strlen(dir.d_name) + 2);
+				sceClibSnprintf(new_dst_path, 1024, "%s%s%s", dst_path, hasEndSlash(dst_path) ? "" : "/", dir.d_name);
+
+				int ret = 0;
+
+				if (SCE_S_ISDIR(dir.d_stat.st_mode))
+					ret = copyDir(new_src_path, new_dst_path);
+				else {
+					psvDebugScreenSetFgColor(COLOR_PURPLE);
+					printf("  -  %s... ", dir.d_name);
+					ret = fcp(new_src_path, new_dst_path);
+					if (ret < 0) {
+						psvDebugScreenSetFgColor(COLOR_RED);
+						printf("FAILED!\n");
+					} else {
+						psvDebugScreenSetFgColor(COLOR_GREEN);
+						printf("ok!\n");
+					}
+					psvDebugScreenSetFgColor(COLOR_WHITE);
+				}
+
+				free(new_dst_path);
+				free(new_src_path);
+
+				if (ret < 0) {
+					sceIoDclose(dfd);
+					return ret;
+				}
 			}
 		} while (res > 0);
+
 		sceIoDclose(dfd);
-	}
-	return;
+	} else
+		return fcp(src_path, dst_path);
+
+	return 1;
+}
+
+int removeDir(const char* path) {
+	SceUID dfd = sceIoDopen(path);
+	if (dfd >= 0) {
+		sceClibPrintf("Removing %s (dir)\n", path);
+		SceIoStat stat;
+		sceClibMemset(&stat, 0, sizeof(SceIoStat));
+		sceIoGetstatByFd(dfd, &stat);
+
+		stat.st_mode |= SCE_S_IWUSR;
+
+		int res = 0;
+
+		do {
+			SceIoDirent dir;
+			sceClibMemset(&dir, 0, sizeof(SceIoDirent));
+
+			res = sceIoDread(dfd, &dir);
+			if (res > 0) {
+				char* new_path = malloc(strlen(path) + strlen(dir.d_name) + 2);
+				sceClibSnprintf(new_path, 1024, "%s%s%s", path, hasEndSlash(path) ? "" : "/", dir.d_name);
+
+				int ret = 0;
+
+				if (SCE_S_ISDIR(dir.d_stat.st_mode))
+					ret = removeDir(new_path);
+				else {
+					sceClibPrintf("Removing %s (file)\n", new_path);
+					ret = sceIoRemove(new_path);
+				}
+
+				free(new_path);
+
+				if (ret < 0) {
+					sceIoDclose(dfd);
+					return ret;
+				}
+			}
+		} while (res > 0);
+
+		sceIoDclose(dfd);
+		sceIoRmdir(path);
+	} else if (ex(path)) {
+		sceClibPrintf("Removing %s (file)\n", path);
+		sceIoRemove(path);
+	} else
+		sceClibPrintf("Bad rmdir input: %s\n", path);
+
+	return 1;
 }
 
 uint32_t get_key(void) {
@@ -311,23 +411,26 @@ int do_write_recovery(void) {
 }
 
 int do_sync_eex(void) {
-	int ibootlogo = ex("os0:ex/bootlogo.raw"), ibmgr = ex("os0:" E2X_BOOTMGR_NAME), icklist = ex("os0:ex/boot_list.txt");
-	int obootlogo = ex("os0:bootlogo.raw"), opatch = ex("os0:patches.e2xd"), ocbcfg = ex("os0:qsp2bootconfig.skprx");
 	printf("Syncing enso_ex scripts... \n");
-	
-	if (ibootlogo)
-		sceIoRemove("os0:ex/bootlogo.raw");
-	if (ibmgr)
-		sceIoRemove("os0:" E2X_BOOTMGR_NAME);
-	if (icklist)
-		sceIoRemove("os0:ex/boot_list.txt");
-	if (obootlogo)
+
+	// old
+	if (ex("os0:bootlogo.raw"))
 		sceIoRemove("os0:bootlogo.raw");
-	if (opatch)
+	if (ex("os0:patches.e2xd"))
 		sceIoRemove("os0:patches.e2xd");
-	if (ocbcfg)
+	if (ex("os0:qsp2bootconfig.skprx"))
 		sceIoRemove("os0:qsp2bootconfig.skprx");
-	
+
+	// core extensions
+	if (!(ex("ux0:eex/boot/" E2X_BOOTMGR_NAME)) && ex("os0:" E2X_BOOTMGR_NAME))
+		sceIoRemove("os0:" E2X_BOOTMGR_NAME);
+	if (!(ex("ux0:eex/boot/" E2X_CKLDR_NAME)) && ex("os0:" E2X_CKLDR_NAME))
+		sceIoRemove("os0:" E2X_CKLDR_NAME);
+
+	// remove old plugins
+	removeDir("os0:ex/");
+
+	// copy new extensions and plugins
 	copyDir("ux0:eex/boot/", "os0:");
 	copyDir("ux0:eex/custom/", "os0:ex/");
 	
@@ -500,7 +603,7 @@ int check_henkaku(void) {
 	return 1;
 }
 
-char mmit[][64] = { " -> Install/reinstall the hack."," -> Uninstall the hack."," -> Fix boot configuration."," -> Synchronize enso_ex scripts."," -> Update the enso_ex recovery."," -> Exit" };
+char mmit[][64] = { " -> Install/reinstall the hack"," -> Uninstall the hack"," -> Fix boot configuration"," -> Synchronize enso_ex plugins"," -> Update the enso_ex recovery"," -> Exit" };
 int sel = 0;
 int optct = 6;
 
