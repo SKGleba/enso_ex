@@ -34,7 +34,6 @@ A few useful toggles, triggered by holding certain key combinations, detailed in
  - EMMC recovery: load and run a code blob from EMMC
  - Adi-os0: disable os0 init, useful in case of a serious messup.
 <br>
-<br>
 
 
 ## Installation and configuration
@@ -47,13 +46,12 @@ This option will:
  - synchronize enso_ex plugins
  - install enso_ex core
  - update the enso_ex recovery
-<br>
 
 ### Uninstall the hack
-This option will uninstall enso_ex core and remove `ur0:tai/boot_config.txt` <br>
+This option will uninstall enso_ex core and remove `ur0:tai/boot_config.txt`
 
 ### Fix boot configuration
-This option will create a type-specific `boot_config.txt` in `ur0:tai/` <br>
+This option will create a type-specific `boot_config.txt` in `ur0:tai/`
 
 ### Synchronize enso_ex plugins
 This option will:
@@ -62,14 +60,12 @@ This option will:
  - copy `ux0:eex/boot/*` to `os0:`
    - if `e2x_ckldr.skprx` or `bootmgr.e2xp` are not present in `ux0:eex/boot/`, they will be removed from `os0:`
  - copy `ux0:eex/custom/*` to `os0:ex/`
-<br>
  
 ### Update the enso_ex recovery
 This option will:
  - if exists, write `ux0:eex/recovery/rconfig.e2xp` to EMMC block 4
  - if exists, write `ux0:eex/recovery/rblob.e2xp` to EMMC block 0x30+
  - if exists, write `ux0:eex/recovery/rmbr.bin` to EMMC block 3
-<br>
 <br>
 
 
@@ -82,14 +78,12 @@ By default, enso_ex installer installs the following plugins:
    - if in safe mode, the default redirect is skipped
    - if SQUARE is held, `ux0:eex/boot_config.txt` is used (also works in safe mode)
    - on devkits in pstv mode, `ur0:tai/boot_config_kitv.txt` or `ux0:eex/boot_config_kitv.txt` is used
-<br>
 
 ### e2xculogo.skprx
  - replaces the default playstation boot logo with `os0:ex/bootlogo.raw`
    - format is RGBA32 960x544
    - if no logo found, no logo will be displayed
    - disabled in safe mode
-<br>
 <br>
 
 
@@ -98,28 +92,23 @@ By default, enso_ex installer installs the following plugins:
  - [For developers](README-dev.md)
  - Core flow: [light](enso_ex-core-diagram.png) / [dark](enso_ex-core-diagram-dark.png)
 <br>
-<br>
 
 
 ## FAQ
 ### How does the jailbreak work?
  - Check out [xyz's writeup](https://blog.xyz.is/2018/enso.html) and [yifanlu's writeup](https://yifan.lu/2017/07/31/henkaku-enso-bootloader-hack-for-vita/)
-<br>
 
 ### How to change, remove or restore the bootlogo?
  - To change the bootlogo, put the new image in `ux0:eex/custom/bootlogo.raw` and "Synchronize" via the enso_ex installer
  - To remove the bootlogo, remove `ux0:eex/custom/bootlogo.raw` and "Synchronize" via the enso_ex installer
  - To restore stock bootlogo, remove `ux0:eex/custom/e2xculogo.skprx` and "Synchronize" via the enso_ex installer
-<br>
 
 ### How to uninstall enso_ex?
  - enso_ex can be uninstalled via the provided installer.
  - As a safety measure, enso_ex is also disabled (but not removed) on system update.
-<br>
 
 ### How to update enso_ex?
  - Using the "Install/reinstall" installer option will update enso_ex
-<br>
 <br>
 
 
