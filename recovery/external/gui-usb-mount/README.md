@@ -5,8 +5,9 @@
  - It does not matter what type/image.
 3) Copy the following files to the root of the sd card:
  - enso_ex's custom kernel loader (in vpk) as `e2x_ckldr.skprx`
- - `psp2config.skprx`
+ - `psp2config.skprx` as `psp2config.skprx` and `psp2config_vita.skprx`
  - [recoVery](https://github.com/SKGleba/VitaTools/tree/main/recoVery) as `recovery.skprx`
+ - [vlog](https://github.com/SKGleba/VitaTools/tree/main/vlog) as `vlog.skprx`
  - (opt) all the *.recovery files
 4) Copy the following files to the `ex` directory:
  - `boot_list.txt`
