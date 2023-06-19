@@ -22,7 +22,7 @@ To add/change the Boot Manager put it in `ux0:eex/boot/bootmgr.e2xp` and "Synchr
 
 ## RAW recovery
 Both EMMC and SD recovery are raw code blobs that, when recovery mode is triggered, are loaded and executed during stage 2 after enso_ex patches the non-secure kernel bootloader - this allows recovery to function as a enso_ex stage 2 extension.<br>
-For more information see the [recovery readme](README-recovery.md).<br>
+For more information, see the [recovery readme](README-recovery.md).<br>
 ### EMMC Recovery
  - EMMC Recovery is a single 0x200 bytes raw code blob loaded and executed from EMMC sector 4.
  - Arguments are a [get_hardware_config](https://github.com/SKGleba/enso_ex/blob/master/core/second.c#L342), [initialize_os0](https://github.com/SKGleba/enso_ex/blob/master/core/second.c#L392) and [load_executable](https://github.com/SKGleba/enso_ex/blob/master/core/second.c#L229) function pointers.
@@ -33,7 +33,7 @@ For more information see the [recovery readme](README-recovery.md).<br>
 ### SD Recovery
  - SD recovery is a raw code blob loaded and executed from sd2vita based on [information](https://github.com/SKGleba/enso_ex/blob/master/core/ex_defs.h#L38) from sector 0.
  - Arguments are KBL param and key/ctrl data.
- - It should be compiled as a position-independent code, there is no size limit.<br>
+ - It should be compiled as a position-independent code. There is no size limit.<br>
 ### Examples
  - [EMMC - default](recovery/internal/default) - a simple bootstrap + blob EMMC recovery example
  - [SD - heartbeat](recovery/external/heartbeat) - overwrites the first sd2vita sector, lets you know that enso_ex is alive

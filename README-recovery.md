@@ -13,7 +13,7 @@
 <br>
 
 ## SD2VITA recovery
-GC-SD recovery mode is activated by holding SELECT at boot, in this mode enso_ex will read the first sector from sd2vita and depending on the contents follow their respective recovery routes.<br>
+GC-SD recovery mode is activated by holding SELECT at boot. In this mode enso_ex will read the first sector from sd2vita and depending on the contents follow their respective recovery routes.<br>
 ### RAW mode
  - If the first 0x10 bytes contain a specific *magic* value, then they are treated as a [recovery block structure](https://github.com/SKGleba/enso_ex/blob/master/core/ex_defs.h#L38) for enso_ex to load and execute a raw code blob<br>
 ### FAT16 mode
@@ -34,7 +34,7 @@ GC-SD recovery mode is activated by holding SELECT at boot, in this mode enso_ex
 <br>
 
 ## EMMC recovery
-EMMC recovery mode is activated by holding START at boot, in this mode enso_ex will load data from EMMC sector 4 and execute it as a raw code blob.<br>
+EMMC recovery mode is activated by holding START at boot. In this mode enso_ex will load data from EMMC sector 4 and execute it as a raw code blob.<br>
  - It can be updated via the enso_ex installer's "Synchronize" option after placing the blob in `ux0:eex/recovery/rconfig.e2xp`.
  - It is intended to be used as a bootstrap for a bigger code blob located at sector 0x30+ that can be updated via the enso_ex installer's "Synchronize" option after placing the blob in `ux0:eex/recovery/rblob.e2xp`.<br>
 ### Examples

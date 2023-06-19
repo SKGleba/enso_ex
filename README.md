@@ -1,26 +1,26 @@
 # enso_ex
-### Untethered jailbreak and CFW loader for Playstation Vita/TV units on firmware 3.65 <br>
+### Untethered jailbreak and CFW loader for PlayStation Vita/TV units on firmware 3.65 <br>
 <br>
 
 ## Features
 ### Custom kernel loader
 Provided is a kernel loader that replicates vanilla functionality with added support for a custom module list read from a text file.<br>
 Custom modules are loaded after the base kernel, but started before the base kernel - this allows the modules to function as 'plugins' and patch the base kernel in a pristine state.<br>
-The provided loader also passes a hooking/patching 'API' from enso_ex to user's custom modules, detailed in the developer readme.<br>
+The provided loader also passes a hooking/patching 'API' from enso_ex to the user's custom modules, detailed in the developer readme.<br>
 
 ### Support for unsigned base kernel modules
 In conjunction with enso_ex's custom kernel loader, this allows the user to add their own *.skprx plugins to the base kernel.<br>
 It is also possible to outright replace base kernel modules with decrypted/unsigned alternatives. <br>
 By default, provided are two plugins - a homebrew enabler and a bootlogo replacer, their functionality is detailed later in this readme.<br>
  
-### Code execution on bootloader level
+### Code execution on the bootloader level
 Before the kernel loader, enso_ex attempts to load and run a raw code blob from the os0 partition.<br>
-This is intended to be used as an enso_ex extension that alters core information or functionality such as Firmware version, ConsoleID, QA flags, security coprocessor behavior etc.<br>
+This is intended to be used as an enso_ex extension that alters core information or functionality such as Firmware version, ConsoleID, QA flags, security coprocessor behavior, etc.<br>
 
 ### SD2VITA-based recovery
 Included is a bootloader-level recovery mechanism.
-When triggered, enso_ex will initialize and use the sd2vita as emmc replacement, os0 replacement, or source of a recovery code blob.<br>
-This feature provides a safeguard against any kind of filesystem corruption, partition wipes, update failures, enso_ex bugs and much more.<br>
+When triggered, enso_ex will initialize and use the sd2vita as an emmc replacement, os0 replacement, or source of a recovery code blob.<br>
+This feature provides a safeguard against any kind of filesystem corruption, partition wipes, update failures, enso_ex bugs, and much more.<br>
 It also opens doors to more advanced mods and tinkering, such as hybrid firmware or 'dual nand'.<br>
 
 ### Kernel module load/start errors are ignored
@@ -28,11 +28,11 @@ enso_ex "forces" base kernel boot, even if some modules fail to load or start.<b
 This feature provides an additional recovery layer and unlocks the ability to boot vanilla firmwares of different types, such as testkit firmware on a retail unit.<br>
 
 ### Miscellaneous boot toggles
-A few useful toggles, triggered by holding certain key combinations, detailed in the recovery readme.
+A few useful toggles, triggered by holding certain key combinations, are detailed in the recovery readme.
  - emuMBR: use a different block as MBR
- - bootarea write-lock: block writes to the MBR, bootloaders and enso_ex
+ - bootarea write-lock: block writes to the MBR, bootloaders, and enso_ex
  - EMMC recovery: load and run a code blob from EMMC
- - Adi-os0: disable os0 init, useful in case of a serious messup.
+ - Adi-os0: disable os0 init, useful in case of a serious misshap.
 <br>
 
 
@@ -77,10 +77,10 @@ By default, enso_ex installer installs the following plugins:
  - Redirects `os0:psp2config_%model%.skprx` to `ur0:tai/boot_config.txt`
    - if in safe mode, the default redirect is skipped
    - if SQUARE is held, `ux0:eex/boot_config.txt` is used (also works in safe mode)
-   - on devkits in pstv mode, `ur0:tai/boot_config_kitv.txt` or `ux0:eex/boot_config_kitv.txt` is used
+   - on devkits in PSTV mode, `ur0:tai/boot_config_kitv.txt` or `ux0:eex/boot_config_kitv.txt` is used
 
 ### e2xculogo.skprx
- - replaces the default playstation boot logo with `os0:ex/bootlogo.raw`
+ - replaces the default PlayStation boot logo with `os0:ex/bootlogo.raw`
    - format is RGBA32 960x544
    - if no logo found, no logo will be displayed
    - disabled in safe mode
