@@ -487,6 +487,26 @@ __attribute__((section(".text.start"))) void start(void) {
 	else if (is_genuine_dolce() && !(CTRL_BUTTON_HELD(ctrl, CTRL_POWER)))
 		recovery(ctrl, 1);
 
-	printf("[E2X] return to stage1\n");
+	printf("[E2X] resuming nskbl\n");
+
+	// restore context and resume boot
+	uint32_t* sp = *(uint32_t**)(ENSO_SP_AREA_OFFSET + ENSO_SP_TOP_CORE0); // sp top for core 0
+	uint32_t* old_sp = sp - ENSO_SP_TOP_OLD_CORE0;
+
+	// r0: 0x51167784 os0_dev
+	// r1: 0xfffffffe
+	// r2: sp - 0x110
+	// r3: 0
+	__asm__ volatile (
+		"movw r0, #0x7784\n"
+		"movt r0, #0x5116\n"
+		"movw r1, #0xfffe\n"
+		"movt r1, #0xffff\n"
+		"mov r2, %0\n"
+		"mov r3, #0\n"
+		"mov sp, %1\n"
+		"mov r4, %2\n"
+		"bx r4\n" :: "r" (sp - 0x110), "r" (old_sp), "r" (0x5101F779) : "r0", "r1", "r2", "r3", "r4"
+		);
 }
 // --------------------

@@ -1,1 +1,1 @@
-#define FATCHECK 0xf841a4ac
+#define FATCHECK 0x785d9627

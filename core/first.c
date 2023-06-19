@@ -13,7 +13,7 @@
 // this is because we only have 0x180 bytes for first payload
 void go(void) {
     // say hello
-    printf("\nenso_ex v5.0 by skgleba | @stage1!\n\n");
+    printf("\nWelcome to enso_ex v5.0 by skgleba | @stage1!\n\n");
 
     // clean after us
     memset((char*)ENSO_CORRUPTED_AREA_START, 0, ENSO_CORRUPTED_AREA_SIZE);
@@ -42,28 +42,8 @@ void go(void) {
     void (*stage2_start)() = (void*)(stage2 + 1);
     stage2_start();
 
-    // say bye
-    printf("[E2X] resume nskbl\n");
-
-    // restore context and resume boot
-    uint32_t* sp = *(uint32_t**)(ENSO_SP_AREA_OFFSET + ENSO_SP_TOP_CORE0); // sp top for core 0
-    uint32_t* old_sp = sp - ENSO_SP_TOP_OLD_CORE0;
-
-    // r0: 0x51167784 os0_dev
-    // r1: 0xfffffffe
-    // r2: sp - 0x110
-    // r3: 0
-    __asm__ volatile (
-        "movw r0, #0x7784\n"
-        "movt r0, #0x5116\n"
-        "movw r1, #0xfffe\n"
-        "movt r1, #0xffff\n"
-        "mov r2, %0\n"
-        "mov r3, #0\n"
-        "mov sp, %1\n"
-        "mov r4, %2\n"
-        "bx r4\n" :: "r" (sp - 0x110), "r" (old_sp), "r" (0x5101F779) : "r0", "r1", "r2", "r3", "r4"
-    );
+    // shouldnt be here, maybe fit some recovery?
+    printf("[E2X] what am i doing here??\n");
 }
 
 __attribute__ ((section (".text.start"), naked)) void start(void)  {
