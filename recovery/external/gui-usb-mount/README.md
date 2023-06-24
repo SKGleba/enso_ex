@@ -5,14 +5,13 @@
  - It does not matter what type/image.
 3) Copy the following files to the root of the sd card:
  - enso_ex's custom kernel loader (in vpk) as `e2x_ckldr.skprx`
- - `psp2config.skprx` as `psp2config.skprx` and `psp2config_vita.skprx`
- - [recoVery](https://github.com/SKGleba/VitaTools/tree/main/recoVery) as `recovery.skprx`
+ - [psp2config](files/psp2config.skprx) as `psp2config_vita.skprx`
+ - [recoVery menu](https://github.com/SKGleba/VitaTools/tree/main/recoVery) as `recovery.skprx`
  - [vlog](https://github.com/SKGleba/VitaTools/tree/main/vlog) as `vlog.skprx`
- - (opt) all the *.recovery files
 4) Copy the following files to the `ex` directory:
- - `boot_list.txt`
- - [e2xrecovr](patch) as `e2xrecovr.skprx`
- - (opt) `rcvr_logo.raw`
+ - [`boot_list.txt`](files/boot_list.txt)
+ - [e2xrecovr patch](https://github.com/SKGleba/VitaTools/tree/main/recoVery) as `e2xrecovr.skprx`
+ - (optional) [`rcvr_logo.raw`](files/rcvr_logo.raw)
 <br>
 
 ### Booting the PS Vita while holding SELECT will load recoVery from the sd2vita.
