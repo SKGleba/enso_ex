@@ -107,7 +107,7 @@ void parse_bootlist(void* data_start, int data_size) {
 			clist_str[use_clist++] = current_line;
 		}
 		current_line = find_nextline(end_line, endlist);
-		if (!current_line)
+		if (!current_line || use_clist >= LIST_C_MODULE_COUNT)
 			break;
 	}
 	return;
