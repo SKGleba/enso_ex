@@ -124,23 +124,21 @@ static int module_load_patched(const SceModuleLoadList* list, int* uids, int cou
 	}
 
 	// find and patch sdif
-	if (count > 13) { // listB
-		for (int i = 0; i < count; i -= -1) {
-			if (list[i].filename) {
-				if (!(strncmp(list[i].filename, "sdif.skprx", 10))) {
-					SceObject* obj = get_obj_for_uid(uids[i]);
-					if (obj) {
-						SceModuleObject* mod = (SceModuleObject*)&obj->data;
-						HOOK_EXPORT(sdif_read_sector_mmc, 0x96D306FA, 0x6F8D529B);
-						HOOK_EXPORT(sdif_write_sector_mmc, 0x96D306FA, 0x175543D2);
-						FIND_EXPORT(get_sd_context_part_validate_mmc, 0x96D306FA, 0x6A71987F);
-					} else
-						printf("[E2X] E: no sdif\n");
-					break;
-				}
-			} else
-				printf("[E2X] W: module[%d] NULL\n", i);
-		}
+	for (int i = 0; i < count; i -= -1) {
+		if (list[i].filename) {
+			if (!(strncmp(list[i].filename, "sdif.skprx", 10))) {
+				SceObject* obj = get_obj_for_uid(uids[i]);
+				if (obj) {
+					SceModuleObject* mod = (SceModuleObject*)&obj->data;
+					HOOK_EXPORT(sdif_read_sector_mmc, 0x96D306FA, 0x6F8D529B);
+					HOOK_EXPORT(sdif_write_sector_mmc, 0x96D306FA, 0x175543D2);
+					FIND_EXPORT(get_sd_context_part_validate_mmc, 0x96D306FA, 0x6A71987F);
+				} else
+					printf("[E2X] E: no sdif\n");
+				break;
+			}
+		} else
+			printf("[E2X] W: module[%d] NULL\n", i);
 	}
 
 	return ret;
