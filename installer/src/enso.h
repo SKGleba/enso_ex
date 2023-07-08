@@ -10,6 +10,9 @@ int ensoWriteMBR(void);
 int ensoCheckRealMBR(void);
 int ensoUninstallMBR(void);
 int ensoCleanUpBlocks(void);
+int ensoWriteRecoveryConfig(void);
+int ensoWriteRecoveryBlob(void);
+int ensoWriteRecoveryMbr(void);
 
 // kernel prototypes
 int k_ensoCheckOs0(void);
@@ -21,6 +24,9 @@ int k_ensoWriteMBR(void);
 int k_ensoCheckRealMBR(void);
 int k_ensoUninstallMBR(void);
 int k_ensoCleanUpBlocks(void);
+int k_ensoWriteRecoveryConfig(void);
+int k_ensoWriteRecoveryBlob(void);
+int k_ensoWriteRecoveryMbr(void);
 
 enum {
 	E_PREVIOUS_INSTALL = 1,

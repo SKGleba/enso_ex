@@ -1,82 +1,119 @@
 # enso_ex
-A mod of https://github.com/henkaku/enso for PSP2 Vita.
+### Untethered jailbreak and CFW loader for PlayStation Vita/TV units on firmware 3.65 <br>
+<br>
 
-# Features
- - pre-nskernel recovery from a GC-SD device.
- - easy low-level code exec for custom kernel patches.
- - support for firmwares 3.60 and 3.65.
- 
-# Usage
+## Features
+### Custom kernel loader
+Provided is a kernel loader that replicates vanilla functionality with added support for a custom module list read from a text file.<br>
+Custom modules are loaded after the base kernel, but started before the base kernel - this allows the modules to function as 'plugins' and patch the base kernel in a pristine state.<br>
+The provided loader also passes a hooking/patching 'API' from enso_ex to the user's custom modules, detailed in the developer readme.<br>
 
-## Building
- Just run "create_vpk.sh", it will build everything and copy the package to the root directory.
+### Support for unsigned base kernel modules
+In conjunction with enso_ex's custom kernel loader, this allows the user to add their own *.skprx plugins to the base kernel.<br>
+It is also possible to outright replace base kernel modules with decrypted/unsigned alternatives. <br>
+By default, provided are two plugins - a homebrew enabler and a bootlogo replacer, their functionality is detailed later in this readme.<br>
+ 
+### Code execution on the bootloader level
+Before the kernel loader, enso_ex attempts to load and run a raw code blob from the os0 partition.<br>
+This is intended to be used as an enso_ex extension that alters core information or functionality such as Firmware version, ConsoleID, QA flags, security coprocessor behavior, etc.<br>
 
-## Installing
- 0) If you currently have enso, make sure that it is either https://github.com/henkaku/enso or https://github.com/TheOfficialFloW/enso.
- 1) Install the VPK, run the "enso_ex" app and agree to the """ToS""".
-	- If you get an error, reboot the device holding LTRIGGER and try again.
- 2) Select "Install/reinstall the hack", press CROSS, the installer will install enso_ex.
-	- All non-critical errors can be skipped by pressing CROSS, it is safe to do so.
- 
-## Patches
- - "os0:e2x_ckldr.skprx" will load custom modules after all base kernel modules are loaded (but not started)
- - It can be skipped by holding VOLDOWN at boot, custom modules load can be skipped by holding VOLUP.
- - To change it you need to change "ux0:eex/boot/e2x_ckldr.skprx" and sync.
- 
-### Adding patches
- - Patches are *.skprx kernel modules with no imports.
- - Patches are located in the "ux0:eex/custom/" directory ("os0:ex/" after sync).
- - Patches load list is located in "ux0:eex/custom/boot_list.txt" ("os0:ex/boot_list.txt" after sync).
- - A list entry should be 15 characters long and have a line break (0xA) as the 16th character.
- - Max custom module count in boot_list.txt is 15.
- 
-### Default patches
- - e2xculogo.skprx: Use a raw RGBA 960x544 image as the bootlogo, it is located @"os0:ex/bootlogo.raw".
-	- In safe/update mode the PS logo is used.
-	- You can change it by replacing the file in "ux0:eex/custom/" and syncing.
-	- If the file is not found there will be no logo, useful for boot animations.
- - e2xhencfg.skprx:
-	- Adds FSELF patches allowing homebrews at boot.
-	- If not in safe/update mode, plaintext "ur0:tai/boot_config.txt" is used instead of "os0:psp2config.skprx".
-	- If SQUARE is held at boot, "ux0:eex/boot_config.txt" is used instead of the ur0: one.
-		- It works in safe/update mode.
-	
-## BootMgr
- - The "os0:bootmgr.e2xp" is a code blob that is executed just before psp2bootconfig load.
- - BootMgr can be skipped by holding VOLDOWN at boot.
- - To add/change it you need to add/change "ux0:eex/boot/bootmgr.e2xp" and sync.
+### SD2VITA-based recovery
+Included is a bootloader-level recovery mechanism.
+When triggered, enso_ex will initialize and use the sd2vita as an emmc replacement, os0 replacement, or source of a recovery code blob.<br>
+This feature provides a safeguard against any kind of filesystem corruption, partition wipes, update failures, enso_ex bugs, and much more.<br>
+It also opens doors to more advanced mods and tinkering, such as hybrid firmware or 'dual nand'.<br>
 
-## Recovery
- - The "recovery" is a code blob loaded from a GC-SD device in GC slot or the os0 partition.
- - Recovery can be loaded by holding SELECT at boot, the device must be connected to a power source.
- 
-### Supported recovery types
-1) RAW recovery (recommended)
-	- Use the tool in /sdrecovery/ to flash your recovery blob to the SD card.
-	- If the SD card contains the EMMC image you can set a flag to use its os0 for low-level modules.
-	- You can force it to use the FILE recovery found in GC-SD's os0.
-2) FILE recovery
-	- To add a os0 recovery you need to put "recovery.e2xp" in "ux0:eex/boot/" and sync.
-	- To use the SD one you need to FAT16-format your SD card and put the recovery in "SD:recovery.e2xp".
-	- By default the device will NOT continue the boot process after this recovery method is used.
-	- TODO: add a cleanup sample to continue boot.
- 
-### Recovery errors
- - If the recovery returned 0, the console will continue the boot process.
- - If an error happened the user will need to confirm that he is aware of it by pressing the correct key:
-	- "No recovery found" - press TRIANGLE.
-	- "Error running recovery" - press CIRCLE.
-	- "Recovery did NOT return 0" - press CROSS.
-	
-### "dual nand"
- - You can use the SD's os0 partition instead of EMMC's os0 partition by holding START at boot.
- - You can also format the SD card to FAT16, holding START will mount the SD card as os0.
- - If an error happened the user will need to confirm that he is aware of it by pressing the correct key:
-	- "Error reading GC-SD" - press TRIANGLE.
-	- "Incorrect SD magic (not SCE/FAT16)" - press CIRCLE.
+### Kernel module load/start errors are ignored
+enso_ex "forces" base kernel boot, even if some modules fail to load or start.<br>
+This feature provides an additional recovery layer and unlocks the ability to boot vanilla firmwares of different types, such as testkit firmware on a retail unit.<br>
 
-# Credits
- - Team molecule for henkaku, taihen, enso, and HenKaku wiki entries.
- - xerpi for his work on baremetal stuff.
- - CelesteBlue and PrincessOfSleeping for help with NSKBL RE.
- - Testers from the HenKaku discord server.
+### Miscellaneous boot toggles
+A few useful toggles, triggered by holding certain key combinations, are detailed in the recovery readme.
+ - emuMBR: use a different block as MBR
+ - bootarea write-lock: block writes to the MBR, bootloaders, and enso_ex
+ - EMMC recovery: load and run a code blob from EMMC
+ - Adi-os0: disable os0 init, useful in case of a serious misshap.
+<br>
+
+
+## Installation and configuration
+Provided is a VPK file containing the enso_ex installer, which has the following options:
+
+### Install/reinstall the hack
+This option will:
+ - create a type-specific `boot_config.txt` in `ur0:tai/`
+ - prepare the enso_ex installation in `ux0:eex/`
+ - synchronize enso_ex plugins
+ - install enso_ex core
+ - update the enso_ex recovery
+
+### Uninstall the hack
+This option will uninstall enso_ex core and remove `ur0:tai/boot_config.txt`
+
+### Fix boot configuration
+This option will create a type-specific `boot_config.txt` in `ur0:tai/`
+
+### Synchronize enso_ex plugins
+This option will:
+ - remove deprecated extensions
+ - remove `os0:ex/`
+ - copy `ux0:eex/boot/*` to `os0:`
+   - if `e2x_ckldr.skprx` or `bootmgr.e2xp` are not present in `ux0:eex/boot/`, they will be removed from `os0:`
+ - copy `ux0:eex/custom/*` to `os0:ex/`
+ 
+### Update the enso_ex recovery
+This option will:
+ - if exists, write `ux0:eex/recovery/rconfig.e2xp` to EMMC block 4
+ - if exists, write `ux0:eex/recovery/rblob.e2xp` to EMMC block 0x30+
+ - if exists, write `ux0:eex/recovery/rmbr.bin` to EMMC block 3
+<br>
+
+
+## Base kernel plugins
+To add a custom base kernel plugin put it in `ux0:eex/custom/`, add it to the `ux0:eex/custom/boot_list.txt` and "Synchronize" via the enso_ex installer.<br>
+By default, enso_ex installer installs the following plugins:
+### e2xhencfg.skprx
+ - Adds support for unsigned kernel modules
+ - Redirects `os0:psp2config_%model%.skprx` to `ur0:tai/boot_config.txt`
+   - if in safe mode, the default redirect is skipped
+   - if SQUARE is held, `ux0:eex/boot_config.txt` is used (also works in safe mode)
+   - on devkits in PSTV mode, `ur0:tai/boot_config_kitv.txt` or `ux0:eex/boot_config_kitv.txt` is used
+
+### e2xculogo.skprx
+ - replaces the default PlayStation boot logo with `os0:ex/bootlogo.raw`
+   - format is RGBA32 960x544
+   - if no logo found, no logo will be displayed
+   - disabled in safe mode
+<br>
+
+
+## Advanced usage
+ - [Using the built-in recovery mechanism](README-recovery.md)
+ - [For developers](README-dev.md)
+ - Core flow: [light](enso_ex-core-diagram.png) / [dark](enso_ex-core-diagram-dark.png)
+<br>
+
+
+## FAQ
+### How does the jailbreak work?
+ - Check out [xyz's writeup](https://blog.xyz.is/2018/enso.html) and [yifanlu's writeup](https://yifan.lu/2017/07/31/henkaku-enso-bootloader-hack-for-vita/)
+
+### How to change, remove or restore the bootlogo?
+ - To change the bootlogo, put the new image in `ux0:eex/custom/bootlogo.raw` and "Synchronize" via the enso_ex installer
+ - To remove the bootlogo, remove `ux0:eex/custom/bootlogo.raw` and "Synchronize" via the enso_ex installer
+ - To restore stock bootlogo, remove `ux0:eex/custom/e2xculogo.skprx` and "Synchronize" via the enso_ex installer
+
+### How to uninstall enso_ex?
+ - enso_ex can be uninstalled via the provided installer.
+ - As a safety measure, enso_ex is also disabled (but not removed) on system update.
+
+### How to update enso_ex?
+ - Using the "Install/reinstall" installer option will update enso_ex
+<br>
+
+
+## Credits
+ - Team molecule for taihenkaku and enso.
+ - xerpi for his work on vita-libbaremetal.
+ - Henkaku wiki contributors.
+ - Everyone that helped me with this project over the years.

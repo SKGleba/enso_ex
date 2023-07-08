@@ -17,3 +17,6 @@ emmc_helper_user:
         - ensoCheckRealMBR
         - ensoUninstallMBR
         - ensoCleanUpBlocks
+        - ensoWriteRecoveryBlob
+        - ensoWriteRecoveryConfig
+        - ensoWriteRecoveryMbr

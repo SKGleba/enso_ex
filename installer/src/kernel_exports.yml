@@ -18,3 +18,6 @@ emmc_helper:
         - k_ensoCheckRealMBR
         - k_ensoUninstallMBR
         - k_ensoCleanUpBlocks
+        - k_ensoWriteRecoveryBlob
+        - k_ensoWriteRecoveryConfig
+        - k_ensoWriteRecoveryMbr
