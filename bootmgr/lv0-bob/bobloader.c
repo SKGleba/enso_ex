@@ -8,10 +8,16 @@ static const unsigned char bob_loader_nmp[] = {
   0xf0, 0xff, 0x1f, 0x00
 };
 
+typedef struct bob_config {
+	uint32_t ce_framework_parms_addr[2];
+	uint32_t uart_params; // (bus << 0x18) | clk
+	int run_tests;
+} bob_config;
+
 typedef struct bob_info {
 	uint32_t bob_addr;
 	uint32_t bob_size;
-	uint32_t bob_config[];
+	bob_config config;
 } bob_info;
 
 void bob_loader(void) {
@@ -37,9 +43,9 @@ void bob_loader(void) {
 			return;
 		}
 
-		memset(tachyon_edram, 0, (uint32_t)bob_size);
+		memset(tachyon_edram, 0, (uint32_t)bob_size + 0x20);
 
-		if (get_file("os0:bob.bin", tachyon_edram + 0x10, (uint32_t)bob_size, 0) < 0) {
+		if (get_file("os0:bob.bin", tachyon_edram + 0x20, (uint32_t)bob_size, 0) < 0) {
 			printf("[BOOTMGR] E: could not read bob\n");
 			return;
 		}
@@ -47,12 +53,14 @@ void bob_loader(void) {
 		bob_info* bobinfo = (bob_info*)tachyon_edram; // some pallocated mem for bobloader args
 
 		// bobloader args
-		bobinfo->bob_addr = 0x1C000010; // bob addr
+		bobinfo->bob_addr = 0x1C000020; // bob addr
 		bobinfo->bob_size = (uint32_t)bob_size; // bob size
 
 		// bob init args
-		bobinfo->bob_config[0] = 0x1f850000; // spl framework/only runs at arm interrupt
-		bobinfo->bob_config[1] = 0; // broombroom framework/runs in a loop when idle
+		bobinfo->config.ce_framework_parms_addr[0] = 0x1F850000; // spl framework/only runs at arm interrup
+		bobinfo->config.ce_framework_parms_addr[1] = 0; // broombroom framework/runs in a loop when idle
+		bobinfo->config.uart_params = (0 << 0x18) | 0x1001A; // uart bus | uart baud
+		bobinfo->config.run_tests = 1; // run the test func
 
 		// add brom if exists
 		if (get_file("os0:brom.bin", NULL, 0, 0) > 0) {
@@ -60,6 +68,15 @@ void bob_loader(void) {
 			memset(tachyon_edram + 0x00100000, 0, 0x4000);
 			if (get_file("os0:brom.bin", tachyon_edram + 0x00100000, 0, 0) < 0)
 				printf("[BOOTMGR] W: could not read brom\n");
+		}
+		
+		// add brom if exists
+		int alice_size = get_file("os0:alice.bin", NULL, 0, 0);
+		if ((alice_size > 0) && (alice_size <= 0x000fc000)) {
+			printf("[BOOTMGR] found alice, adding alice\n");
+			memset(tachyon_edram + 0x00104000, 0, (uint32_t)alice_size);
+			if (get_file("os0:alice.bin", tachyon_edram + 0x00104000, 0, 0) < 0)
+				printf("[BOOTMGR] W: could not read alice\n");
 		}
 	}
 

@@ -38,6 +38,8 @@ enum {
 	RBLOB_SIZE = 0x39000,
 
 	OS0_SIZE = 0x3820 * BLOCK_SIZE,
+
+	SL_CRC_NEW = 0xDB02B893
 };
 
 typedef struct {
@@ -54,7 +56,13 @@ typedef struct {
 	char magic[0x20];
 	uint32_t version;
 	uint32_t device_size;
-	char unk1[0x28];
+	char unk0[0x8];
+	uint32_t loader_start;
+	uint32_t loader_size;
+	uint32_t act_sbls_off;
+	uint32_t sbls_off[2];
+	uint32_t act_os_off;
+	char unk1[0x8];
 	partition_t partitions[0x10];
 	char unk2[0x5e];
 	char unk3[0x10 * 4];
@@ -428,7 +436,7 @@ int k_ensoWriteConfig() {
 	ret = run_on_thread(write_config);
 	if (!ret && (ksceSblAimgrIsTool() || ksceSblAimgrIsTest())) {
 		kitv_config = 1;
-		ret = run_on_thread(write_config());
+		ret = run_on_thread(write_config);
 		kitv_config = 0;
 	}
 	EXIT_SYSCALL(state);
@@ -651,6 +659,16 @@ int module_start(int args, void *argv) {
 	(void)argv;
 	emmc = ksceSdifGetSdContextPartValidateMmc(0);
 	if (!emmc)
+		return SCE_KERNEL_START_FAILED;
+
+	uint8_t buf[0x200];
+	master_block_t *master = buf;
+	master->loader_start = 0;
+	int ret = ksceSdifReadSectorMmc(emmc, 0, master, 1);
+	if (ret < 0 || !master->loader_start)
+		return SCE_KERNEL_START_FAILED;
+	ret = ksceSdifReadSectorMmc(emmc, master->loader_start, buf, 1);
+	if (ret < 0 || (crc32(0, buf + 0x40, 0x10) != SL_CRC_NEW))
 		return SCE_KERNEL_START_FAILED;
 
 	memblock_id = ksceKernelAllocMemBlock("eex_i_mb", 0x10000000 | 0xC00000 | 0x8000 | 0x6, 0x2000 * BLOCK_SIZE, NULL);
