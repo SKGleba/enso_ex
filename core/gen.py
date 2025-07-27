@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 from sys import argv, exit
 import struct
@@ -25,14 +25,14 @@ def main():
 	with open(argv[3], "rb") as fin:
 		second_bin = fin.read()
 
-	print "first_len: " + hex(len(first_bin)) + " max 0x180"
-	print "second_len: " + hex(len(second_bin)) + " max 0x1000"
+	print("first_len: " + hex(len(first_bin)) + " max 0x180")
+	print("second_len: " + hex(len(second_bin)) + " max 0x1000")
 
 	if len(first_bin) >= 0x180:
-		print "your first payload is too big!"
+		print("your first payload is too big!")
 		exit(-1)
 	if len(second_bin) >= 0x1000:
-		print "your second payload is too big!"
+		print("your second payload is too big!")
 		exit(-1)
 
 	temp_store = 0x511671A0

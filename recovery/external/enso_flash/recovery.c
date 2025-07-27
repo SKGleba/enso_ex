@@ -198,6 +198,7 @@ EXIT:
 	return ret;
 }
 
+// firmware recovery from GC-SD
 __attribute__((section(".text.start"), optimize("O0"))) int start(void* kbl_param, unsigned int ctrldata) {
 	// prepare buf for comm
 	uint32_t buf[0x80];

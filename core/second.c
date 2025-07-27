@@ -86,7 +86,7 @@ static int sdif_read_sector_mmc_patched(void* ctx, int sector, char* buffer, int
 			if (ret >= 0 && nSectors > 1)
 				ret = sdif_read_sector_mmc(ctx, 1, buffer + SDIF_SECTOR_SIZE, nSectors - 1);
 			return ret;
-		} else if (ctx == E2X_READ_REAL_MBR_KEY) // use fake ctx as an indicator that we want to read the real mbr
+		} else if ((uint32_t)ctx == E2X_READ_REAL_MBR_KEY) // use fake ctx as an indicator that we want to read the real mbr
 			ctx = get_sd_context_part_validate_mmc(0);
 	}
 	

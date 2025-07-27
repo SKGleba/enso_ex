@@ -11,7 +11,8 @@ static const unsigned char bob_loader_nmp[] = {
 typedef struct bob_config {
 	uint32_t ce_framework_parms_addr[2];
 	uint32_t uart_params; // (bus << 0x18) | clk
-	int run_tests;
+    uint32_t run_tests;   // 0: nothing, 1: test(), > 1: paddr to run
+    int test_arg;         // arg passed to test() or custom test
 } bob_config;
 
 typedef struct bob_info {
@@ -57,7 +58,7 @@ void bob_loader(void) {
 		bobinfo->bob_size = (uint32_t)bob_size; // bob size
 
 		// bob init args
-		bobinfo->config.ce_framework_parms_addr[0] = 0x1F850000; // spl framework/only runs at arm interrup
+		bobinfo->config.ce_framework_parms_addr[0] = 0x1f850000; // spl framework/only runs at arm interrup
 		bobinfo->config.ce_framework_parms_addr[1] = 0; // broombroom framework/runs in a loop when idle
 		bobinfo->config.uart_params = (0 << 0x18) | 0x1001A; // uart bus | uart baud
 		bobinfo->config.run_tests = 1; // run the test func

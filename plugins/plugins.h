@@ -104,5 +104,5 @@ typedef struct patch_args_struct {
   int* uids_a; // first uid list
   int* uids_b; // second uid list
   int *uids_d; // devkit uid list
-} __attribute__((packed)) patch_args_struct;
+} patch_args_struct;
 #define PATCH_ARGS_VERSION 3

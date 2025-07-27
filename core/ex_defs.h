@@ -40,7 +40,7 @@ typedef struct RecoveryBlockStruct {
   uint32_t offset_in_sectors; // recovery offset on GCSD, in sectors
   uint32_t size_in_sectors; // recovery size on GCSD, in sectors
   uint32_t offset_in_bytes; // recovery offset inside recovery sector, in bytes, |=1 for thumb
-} __attribute__((packed)) RecoveryBlockStruct;
+} RecoveryBlockStruct;
 
 // load_exe() mode arg
 enum E2X_LOAD_EXE_MODES {
@@ -63,7 +63,7 @@ typedef struct ex_ports_struct {
   int (*alloc_memblock)(const char* name, int type, int size, void* opt);
   int (*get_memblock)(int32_t uid, void** basep);
   int (*free_memblock)(int32_t uid);
-} __attribute__((packed)) ex_ports_struct;
+} ex_ports_struct;
 
 // hooked get_hwcfg(array) exit array
 typedef struct patchedHwcfgStruct {
@@ -72,4 +72,4 @@ typedef struct patchedHwcfgStruct {
     uint8_t hardware_config[0x10];
     ex_ports_struct ex_ports;
   };
-} __attribute__((packed)) patchedHwcfgStruct;
+} patchedHwcfgStruct;
