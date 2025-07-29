@@ -1,19 +1,19 @@
 TARGET	= rblob
-SRCDIR	= src
-INCDIR	= include
-OBJS	= main.o bm_ext.o paper.o stage2.o stage3.o
+SRCDIRS := src FatFs
+INCDIRS := include FatFs
+SRCFILES := $(foreach dir,$(SRCDIRS),$(wildcard $(dir)/*.c))
+OBJS := $(SRCFILES:.c=.o)
 
 PREFIX	= arm-vita-eabi
 CC	= $(PREFIX)-gcc
 AS	= $(PREFIX)-as
 OBJCOPY	= $(PREFIX)-objcopy
-CFLAGS	= -I$(INCDIR) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access \
+CFLAGS	= $(foreach dir,$(INCDIRS),-I$(dir)) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access \
 	  -O2 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable
 LDFLAGS	= -T linker.ld -nostartfiles -nostdlib -lgcc -lm -lbaremetal
-ASFLAGS	=
-DEPS	= $(OBJS:.o=.d)
 
 all: $(TARGET).e2xp
+	@rm -f $(OBJS)
 
 %.e2xp: %.elf
 	$(OBJCOPY) -S -O binary $^ $@
@@ -21,15 +21,10 @@ all: $(TARGET).e2xp
 $(TARGET).elf: $(OBJS)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-%.o: $(SRCDIR)/%.c
-	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
-
-%.o: $(SRCDIR)/%.s
-	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean send
 
 clean:
-	@rm -f $(TARGET).e2xp $(TARGET).elf $(OBJS) $(DEPS)
-
--include $(DEPS)
+	@rm -f $(TARGET).e2xp $(TARGET).elf $(OBJS)

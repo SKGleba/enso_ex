@@ -7,6 +7,8 @@
 static int (*nskbl_printf)() = (void *)0x51013919;
 #define LOG(fmt, ...) nskbl_printf("[E2X@R] " fmt, ##__VA_ARGS__)
 
+static void *ns_kbl_param = (void *)0x51167528;
+
 typedef struct SceKernelAllocMemBlockKernelOpt {
     uint32_t size;
     uint32_t field_4;
@@ -34,5 +36,28 @@ static char *(*nskbl_strncpy)(char *dst, const char *src, unsigned int len) = (v
 static void (*nskbl_clean_dcache)(void *dst, int len) = (void *)0x510146DD;
 static void (*nskbl_flush_icache)() = (void *)0x51014691;
 static int (*nskbl_module_load_direct)(void *list, int *uids, int count, int osloc, int unk) = (void *)0x5100148d;
+
+#define NSKBL_DEVICE_EMMC_CTX 0x51028010  // for init_part and read_sector_default
+#define NSKBL_DEVICE_GCSD_CTX 0x51028018
+#define NSKBL_DEVICE_EMMC_TGT_CTX 0x51028014  // for read_sector_target, there is part_ctx @ *this
+#define NSKBL_DEVICE_GCSD_TGT_CTX 0x5102801C
+#define NSKBL_PARTITION_OS0 0x51167784
+#define NSKBL_PARTITION_SD0 0x51167728
+static int (*read_sector_sd)(int *part_ctx, uint32_t sector, void *buffer, int nsectors) = (void *)0x5101E879;
+static int (*read_sector_mmc_direct)(int *ctx, unsigned int block_offset, void *target_buf, int block_count) = (void *)0x5101c515;
+static int (*lsdif_mmc_verify_args)(int *ctx, unsigned int block_offset, int block_count) = (void *)0x5101c23d;
+static int (*lsdif_mmc_prep_ctx)() = (void *)0x5101c091;
+static int (*lsysclib_concat_unk)() = (void *)0x510221fc;
+static int (*lsdif_mmc_prepare_args)() = (void *)0x5101bbf9;
+static int (*lsdif_mmc_write_args)() = (void *)0x5101c0a5;
+static int (*lsdif_ctrl_apply_cmd)() = (void *)0x5101bf65;
+
+static int (*nskbl_init_sd)(unsigned int *in_master_dev, int *some_ret) = (void *)0x5101da29;
+static int (*nskbl_init_part)(unsigned int *partition, unsigned int flags, unsigned int *read_func, unsigned int *master_dev) = (void *)0x5101FF21;
+static int (*nskbl_switch_read_dev)(int *ctx, int sector, int nSectors, int buffer) = (void *)0x510010c5;
+
+#define NSKBL_SETUP_EMMC_INIT_OS0_CALL 0x510012f6
+#define NSKBL_SETUP_EMMC_INIT_OS0_CALL_CACHER 0x510012f0
+static int (*nskbl_setup_emmc)() = (void *)0x5100124D;
 
 #endif

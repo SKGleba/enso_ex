@@ -184,6 +184,6 @@ int main(int stage) {
 }
 
 __attribute__((section(".text.start"), optimize("O0"))) int start(uint32_t get_info_va, uint32_t init_os0_va, void *me) {
-    init((struct sysroot_buffer *)0x51167528, (void (*)(int))init_os0_va);
+    init((struct sysroot_buffer *)ns_kbl_param, (void (*)(int))init_os0_va);
     return main(2);
 }

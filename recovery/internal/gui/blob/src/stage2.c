@@ -22,11 +22,12 @@
 #include "nskbl.h"
 #include "paper.h"
 #include "stage2.h"
+#include "stor.h"
 
 struct menu_s stage2_menu_s = {
 	.draw = stage2_menu,
 	.select = stage2_menu,
-	.entry_count = 4,
+	.entry_count = 5,
 	.selection = 0,
 	.exp_buttons = CTRL_CROSS,
     .prs_buttons = 0,
@@ -34,14 +35,16 @@ struct menu_s stage2_menu_s = {
     .selector_color = MENU_SELECTOR_COLR
 };
 
-static struct stage2_options {
+struct stage2_options {
     int recovery_mbr;  // Use recovery MBR
     int stage3_recovery;  // Enter stage 3 recovery
     int vanilla_boot;  // Boot vanilla OS
+    int gcsd_mode;  // 0: disable, 1: sd0, 2: os0, 3: init
 } stage2_opts = {
     .recovery_mbr = 0,
     .stage3_recovery = 0,
     .vanilla_boot = 0,
+    .gcsd_mode = STAGE2_GCSD_MODE_DISABLED
 };
 
 static void stage2_status_update(void) {
@@ -52,6 +55,25 @@ static void stage2_status_update(void) {
         pprintf_align(&status_paper, RIGHT, "use R MBR <-\n");
     if (stage2_opts.stage3_recovery)
         pprintf_align(&status_paper, RIGHT, "goto s3 <-\n");
+    if (stage2_opts.vanilla_boot)
+        pprintf_align(&status_paper, RIGHT, "vanilla boot <-\n");
+    if (stage2_opts.gcsd_mode != STAGE2_GCSD_MODE_DISABLED) {
+        switch (stage2_opts.gcsd_mode) {
+            case STAGE2_GCSD_MODE_SD0:
+                pprintf_align(&status_paper, RIGHT, "GC-SD: sd0 <-\n");
+                break;
+            case STAGE2_GCSD_MODE_OS0:
+                pprintf_align(&status_paper, RIGHT, "GC-SD: os0 <-\n");
+                break;
+            case STAGE2_GCSD_MODE_INIT:
+                pprintf_align(&status_paper, RIGHT, "GC-SD: init <-\n");
+                break;
+            default:
+                pprintf_align(&status_paper, RIGHT, "GC-SD: wtf <-\n");
+                break;
+        }
+    }
+    
 }
 
 static int (*eex_load_psp2bootconfig)(uint32_t myaddr, int* uids, int count, int osloc, int unk) = NULL;
@@ -63,7 +85,7 @@ static void stage2_set_ckldr(void *addr) {
     scrprintf("Installed psp2bootconfig hook\n");
 }
 
-int stage2_load_psp2bootconfig_patched(uint32_t myaddr, int* uids, int count, int osloc, int unk) {
+static int stage2_load_psp2bootconfig_patched(uint32_t myaddr, int* uids, int count, int osloc, int unk) {
     if (stage2_opts.stage3_recovery) {
         LOG("stage2_hook: entered stage 3 recovery\n");
         main(3);  // Call main with stage 3
@@ -77,6 +99,7 @@ int stage2_load_psp2bootconfig_patched(uint32_t myaddr, int* uids, int count, in
 }
 
 int stage2_menu(int selection) {
+    int ret = 0;
     if (selection < 0) {  // initial draw
         ppaper_clear(stage2_menu_s.paper, stage2_menu_s.paper->color);
         ppen_reset(stage2_menu_s.paper->pen, stage2_menu_s.paper->pen->color);
@@ -84,6 +107,7 @@ int stage2_menu(int selection) {
         pprintf(stage2_menu_s.paper, "2. Use recovery MBR\n");
         pprintf(stage2_menu_s.paper, "3. Enter stage 3 recovery\n");
         pprintf(stage2_menu_s.paper, "4. Vanilla boot\n");
+        pprintf(stage2_menu_s.paper, "5. Change GC-SD mode for nskbl\n");
         return 0;
     }
     if (BMX_CTRL_BUTTON_HELD(stage2_menu_s.prs_buttons, CTRL_CROSS)) {
@@ -93,6 +117,10 @@ int stage2_menu(int selection) {
                     eex_init_os0(E2X_RECOVERY_MBR_OFFSET);
                 else
                     eex_init_os0(ENSO_EMUMBR_OFFSET);
+                if (stage2_opts.gcsd_mode) {
+                    scrprintf("Initializing GC-SD...\n");
+                    scrprintf("sd0 init %s\n", sd_init(3, (stage2_opts.gcsd_mode == STAGE2_GCSD_MODE_INIT) ? 0 : stage2_opts.gcsd_mode) ? "failed" : "OK");
+                }
                 if (stage2_opts.stage3_recovery) {
                     scrprintf("Entering stage 3 recovery...\n");
                     return MENU_RET_FINISH;  // exit without deinit
@@ -127,6 +155,13 @@ int stage2_menu(int selection) {
                 } else {
                     scrprintf("Disabled hook opt for vanilla boot\n");
                 }
+                stage2_status_update();
+                return MENU_RET_CONTINUE;
+            case 4:  // Initialize gc-sd
+                stage2_opts.gcsd_mode++;
+                if (stage2_opts.gcsd_mode > STAGE2_GCSD_MODE_INIT)
+                    stage2_opts.gcsd_mode = STAGE2_GCSD_MODE_DISABLED;
+                scrprintf("GC-SD init flag set to %d\n", stage2_opts.gcsd_mode);
                 stage2_status_update();
                 return MENU_RET_CONTINUE;
             default:
