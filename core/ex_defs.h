@@ -25,6 +25,7 @@
 #define E2X_MAX_EPATCHES_N 32 // [CKLDR] max amount of custom boot plugins
 #define E2X_EPATCHES_SKIP CTRL_VOLUP // [CKLDR] skip custom boot plugins
 #define E2X_USE_BBCONFIG CTRL_SQUARE // [HEN] use ux0:eex/boot_config.txt instead of the one in ur0:tai
+#define E2X_EPATCHES_DIR "os0:ex/" // [CKLDR] directory for custom boot plugins
 
 #define E2X_BOOTAREA_LOCK_KEY 'CGB5' // [SDIF HOOK] this key lets the caller set the bootarea read-only flag
 #define E2X_READ_REAL_MBR_KEY 'GRB5' // [SDIF HOOK] this key lets the caller read the real MBR

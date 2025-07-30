@@ -261,8 +261,6 @@ void press_reboot(void) {
 
 int g_kernel_module, g_user_module, g_kernel2_module;
 
-#define APP_PATH "ux0:app/MLCL00003/"
-
 int load_helper(void) {
 	int ret = 0;
 
@@ -271,22 +269,22 @@ int load_helper(void) {
 	args.args = 0;
 	args.argp = "";
 
-	if ((ret = g_kernel2_module = taiLoadStartKernelModuleForUser(APP_PATH "kernel2.skprx", &args)) < 0) {
-		printf("Failed to load kernel workaround: 0x%08x\n", ret);
+    if ((ret = g_kernel2_module = taiLoadStartKernelModuleForUser(INSTALLER_PREK_PATH, &args)) < 0) {
+        printf("Failed to load kernel workaround: 0x%08x\n", ret);
 		return -1;
-	}
+    }
 
-	if ((ret = g_kernel_module = taiLoadStartKernelModuleForUser(APP_PATH "emmc_helper.skprx", &args)) < 0) {
-		printf("Failed to load kernel module: 0x%08x\n", ret);
+    if ((ret = g_kernel_module = taiLoadStartKernelModuleForUser(INSTALLER_MAINK_PATH, &args)) < 0) {
+        printf("Failed to load kernel module: 0x%08x\n", ret);
 		return -1;
-	} 
+    }
 
-	if ((ret = g_user_module = sceKernelLoadStartModule(APP_PATH "emmc_helper.suprx", 0, NULL, 0, NULL, NULL)) < 0) {
-		printf("Failed to load user module: 0x%08x\n", ret);
+    if ((ret = g_user_module = sceKernelLoadStartModule(INSTALLER_MAINU_PATH, 0, NULL, 0, NULL, NULL)) < 0) {
+        printf("Failed to load user module: 0x%08x\n", ret);
 		return -1;
-	}
+    }
 
-	return 0;
+    return 0;
 }
 
 int stop_helper(void) {
@@ -359,8 +357,8 @@ int do_write_recovery(void) {
 	int ret = 0;
 	printf("Updating recovery configuration data\n");
 
-	if (ex("ux0:eex/recovery/rconfig.e2xp")) {
-		psvDebugScreenSetFgColor(COLOR_PURPLE);
+    if (ex(RCONFIG_SOURCE)) {
+        psvDebugScreenSetFgColor(COLOR_PURPLE);
 		printf(" - recovery config... ");
 		ret = ensoWriteRecoveryConfig();
 		if (ret < 0) {
@@ -372,9 +370,9 @@ int do_write_recovery(void) {
 			printf("ok!\n");
 			psvDebugScreenSetFgColor(COLOR_WHITE);
 		}
-	}
+    }
 
-	if (ex("ux0:eex/recovery/rblob.e2xp")) {
+    if (ex(RBLOB_SOURCE)) {
 		psvDebugScreenSetFgColor(COLOR_PURPLE);
 		printf(" - recovery blob... ");
 		ret = ensoWriteRecoveryBlob();
@@ -389,7 +387,7 @@ int do_write_recovery(void) {
 		}
 	}
 
-	if (ex("ux0:eex/recovery/rmbr.bin")) {
+	if (ex(RMBR_SOURCE)) {
 		psvDebugScreenSetFgColor(COLOR_PURPLE);
 		printf(" - recovery mbr... ");
 		ret = ensoWriteRecoveryMbr();
@@ -414,27 +412,27 @@ int do_sync_eex(void) {
 	printf("Syncing enso_ex scripts... \n");
 
 	// old
-	if (ex("os0:bootlogo.raw"))
-		sceIoRemove("os0:bootlogo.raw");
-	if (ex("os0:patches.e2xd"))
-		sceIoRemove("os0:patches.e2xd");
-	if (ex("os0:qsp2bootconfig.skprx"))
-		sceIoRemove("os0:qsp2bootconfig.skprx");
+    if (ex(OLD_BOOTLOGO_PATH))
+        sceIoRemove(OLD_BOOTLOGO_PATH);
+	if (ex(OLD_PATCHES_PATH))
+		sceIoRemove(OLD_PATCHES_PATH);
+	if (ex(OLD_CKLDR_PATH))
+		sceIoRemove(OLD_CKLDR_PATH);
 
 	// core extensions
-	if (!(ex("ux0:eex/boot/" E2X_BOOTMGR_NAME)) && ex("os0:" E2X_BOOTMGR_NAME))
-		sceIoRemove("os0:" E2X_BOOTMGR_NAME);
-	if (!(ex("ux0:eex/boot/" E2X_CKLDR_NAME)) && ex("os0:" E2X_CKLDR_NAME))
+    if (!(ex(BOOTEXT_DIR E2X_BOOTMGR_NAME)) && ex("os0:" E2X_BOOTMGR_NAME))
+        sceIoRemove("os0:" E2X_BOOTMGR_NAME);
+	if (!(ex(BOOTEXT_DIR E2X_CKLDR_NAME)) && ex("os0:" E2X_CKLDR_NAME))
 		sceIoRemove("os0:" E2X_CKLDR_NAME);
 
 	// remove old plugins
-	removeDir("os0:ex/");
+    removeDir(E2X_EPATCHES_DIR);
 
-	// copy new extensions and plugins
-	copyDir("ux0:eex/boot/", "os0:");
-	copyDir("ux0:eex/custom/", "os0:ex/");
-	
-	psvDebugScreenSetFgColor(COLOR_GREEN);
+    // copy new extensions and plugins
+    copyDir(BOOTEXT_DIR, "os0:");
+    copyDir(KERNEXT_DIR, E2X_EPATCHES_DIR);
+
+    psvDebugScreenSetFgColor(COLOR_GREEN);
 	printf("synced!\n");
 	psvDebugScreenSetFgColor(COLOR_WHITE);
 	return 0;
@@ -457,8 +455,8 @@ int do_install(void) {
 	printf("ok!\n");
 	psvDebugScreenSetFgColor(COLOR_WHITE);
 
-	if (ex("ur0:tai/boot_config.txt") == 0) {
-		printf("Writing config... ");
+    if (ex(ENSO_PSP2CONFIG_VITA_PATH) == 0) {
+        printf("Writing config... ");
 		ret = ensoWriteConfig();
 		if (ret < 0) {
 			printf("failed\n");
@@ -467,24 +465,24 @@ int do_install(void) {
 		psvDebugScreenSetFgColor(COLOR_GREEN);
 		printf("ok!\n");
 		psvDebugScreenSetFgColor(COLOR_WHITE);
-	}
-	
-	printf("Copying files... ");
-	sceIoMkdir("ux0:eex/", 6);
-	sceIoMkdir("ux0:eex/custom/", 6);
-	sceIoMkdir("ux0:eex/boot/", 6);
-	sceIoMkdir("ux0:eex/recovery/", 6);
-	sceIoMkdir("os0:ex/", 6);
-	fcp("app0:e2xculogo.skprx", "ux0:eex/custom/e2xculogo.skprx");
-	fcp("app0:e2xhencfg.skprx", "ux0:eex/custom/e2xhencfg.skprx");
-	fcp("app0:" E2X_CKLDR_NAME, "ux0:eex/boot/" E2X_CKLDR_NAME);
-	fcp("app0:bootlogo.raw", "ux0:eex/custom/bootlogo.raw");
-	fcp("app0:boot_list.txt", "ux0:eex/custom/boot_list.txt");
-	fcp("ur0:tai/boot_config.txt", "ux0:eex/boot_config.txt");
-	if (ex("ur0:tai/boot_config_kitv.txt"))
-		fcp("ur0:tai/boot_config_kitv.txt", "ux0:eex/boot_config_kitv.txt");
-	fcp("app0:rconfig.e2xp", "ux0:eex/recovery/rconfig.e2xp");
-	fcp("app0:rblob.e2xp", "ux0:eex/recovery/rblob.e2xp");
+    }
+
+    printf("Copying files... ");
+    sceIoMkdir(EEX_ADDONS_PATH, 6);
+    sceIoMkdir(KERNEXT_DIR, 6);
+	sceIoMkdir(BOOTEXT_DIR, 6);
+	sceIoMkdir(RECVEXT_DIR, 6);
+	sceIoMkdir(E2X_EPATCHES_DIR, 6);
+    fcp("app0:" LOCAL_CULOGO_PATH, EXT_CULOGO_PATH);
+    fcp("app0:" LOCAL_HENCFG_PATH, EXT_HENCFG_PATH);
+    fcp("app0:" LOCAL_CKLDR_PATH, BOOTEXT_DIR E2X_CKLDR_NAME);
+    fcp("app0:" LOCAL_BOOTLOGO_PATH, EXT_BOOTLOGO_PATH);
+	fcp("app0:" LOCAL_BOOTLIST_PATH, EXT_BOOTLIST_PATH);
+    fcp(ENSO_PSP2CONFIG_VITA_PATH, EXT_BACKUP_PSP2CONFIG_VITA_PATH);
+    if (ex(ENSO_PSP2CONFIG_DEVKITV_PATH))
+        fcp(ENSO_PSP2CONFIG_DEVKITV_PATH, EXT_BACKUP_PSP2CONFIG_DEVKITV_PATH);
+    fcp("app0:" LOCAL_RCONFIG_PATH, EXT_RCONFIG_PATH);
+	fcp("app0:" LOCAL_RBLOB_PATH, EXT_RBLOB_PATH);
 	psvDebugScreenSetFgColor(COLOR_GREEN);
 	printf("ok!\n");
 	psvDebugScreenSetFgColor(COLOR_WHITE);
@@ -557,8 +555,8 @@ int do_uninstall(void) {
 	psvDebugScreenSetFgColor(COLOR_WHITE);
 
 	printf("Deleting boot config... ");
-	sceIoRemove("ur0:tai/boot_config.txt");
-	psvDebugScreenSetFgColor(COLOR_GREEN);
+    sceIoRemove(ENSO_PSP2CONFIG_VITA_PATH);
+    psvDebugScreenSetFgColor(COLOR_GREEN);
 	printf("ok!\n");
 	psvDebugScreenSetFgColor(COLOR_WHITE);
 
@@ -592,11 +590,11 @@ int check_safe_mode(void) {
 int check_henkaku(void) {
 	int fd;
 
-	if ((fd = sceIoOpen("ur0:tai/taihen.skprx", SCE_O_RDONLY, 0)) < 0) {
+	if ((fd = sceIoOpen(TAIHEN_PATH, SCE_O_RDONLY, 0)) < 0) {
 		return 0;
 	}
 	sceIoClose(fd);
-	if ((fd = sceIoOpen("ur0:tai/henkaku.skprx", SCE_O_RDONLY, 0)) < 0) {
+	if ((fd = sceIoOpen(HENKAKU_PATH, SCE_O_RDONLY, 0)) < 0) {
 		return 0;
 	}
 	sceIoClose(fd);
@@ -610,7 +608,7 @@ int optct = 6;
 void smenu(){
 	psvDebugScreenClear(COLOR_BLACK);
 	psvDebugScreenSetFgColor(COLOR_CYAN);
-	printf("                        enso_ex v5.0                             \n");
+	printf("                        " INSTALLER_VERSION "                             \n");
 	printf("                         By SKGleba                              \n");
 	psvDebugScreenSetFgColor(COLOR_RED);
 	for(int i = 0; i < optct; i++){

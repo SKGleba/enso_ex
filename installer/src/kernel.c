@@ -27,21 +27,6 @@ uint32_t crc32(uint32_t crc, const void* buf, size_t size);
 void* memblock_va = NULL;
 static int emmc = 0, memblock_id = 0, kitv_config = 0;
 
-enum {
-	BLOCK_SIZE = 0x200,
-	OFF_PARTITION_TABLE = 0,
-	OFF_REAL_PARTITION_TABLE = 1 * BLOCK_SIZE,
-	OFF_FAKE_OS0 = 2 * BLOCK_SIZE,
-	FAT_BIN_SIZE = 0x6000, // NOTE: first 0x400 bytes are not written
-	FAT_BIN_USEFUL_SIZE = 0x6000 - 0x400,
-
-	RBLOB_SIZE = 0x39000,
-
-	OS0_SIZE = 0x3820 * BLOCK_SIZE,
-
-	SL_CRC_NEW = 0xDB02B893
-};
-
 typedef struct {
 	uint32_t off;
 	uint32_t sz;
@@ -77,7 +62,7 @@ int printf_file(const char *format, ...) {
 	vsnprintf(line, 512, format, arg);
 	va_end(arg);
 
-	int fd = ksceIoOpen("ux0:data/enso.log", SCE_O_WRONLY | SCE_O_APPEND | SCE_O_CREAT, 0777);
+	int fd = ksceIoOpen(LOG_OUTPUT, SCE_O_WRONLY | SCE_O_APPEND | SCE_O_CREAT, 0777);
 	if (fd < 0)
 		return 0;
 	ksceIoWrite(fd, line, strlen(line));
@@ -118,7 +103,7 @@ const char *part_type(int type) {
 	return "unknown";
 }
 
-const char *device = "sdstor0:int-lp-act-entire";
+const char *device = SDSTOR_TARGET_DEV;
 
 int run_on_thread(void *func) {
 	int ret = 0;
@@ -168,9 +153,9 @@ int find_active_os0(master_block_t *master) {
 
 int is_mbr(void *data) {
 	master_block_t *master = data;
-	if (memcmp(master->magic, "Sony Computer Entertainment Inc.", 0x20) != 0)
+	if (memcmp(master->magic, MBR_MAGIC_STR, MBR_MAGIC_STR_LEN) != 0)
 		return 0;
-	if (master->sig != 0xAA55)
+	if (master->sig != MBR_SECTOR_SIG)
 		return 0;
 	return 1;
 }
@@ -178,7 +163,7 @@ int is_mbr(void *data) {
 int is_empty(void *data) {
 	uint8_t *buf = data;
 	for (int i = 0; i < BLOCK_SIZE; ++i)
-		if (buf[i] != 0xAA)
+		if (buf[i] != EMPTY_SECTOR_BYTE)
 			return 0;
 	return 1;
 }
@@ -332,7 +317,7 @@ int write_config() {
 	pstv = kitv_config ? 1 : ksceSblAimgrIsGenuineDolce();
 	printf("writing config for %s\n", pstv ? "PSTV" : "PS Vita");
 
-	ret = uid = ksceKernelLoadModule(pstv ? "os0:psp2config_dolce.skprx" : "os0:psp2config_vita.skprx", 0, NULL);
+	ret = uid = ksceKernelLoadModule(pstv ? PSP2CONFIG_PSTV_PATH : PSP2CONFIG_VITA_PATH, 0, NULL);
 	if (ret < 0) {
 		printf("failed to load psp2config module: 0x%08x\n", ret);
 		ret = -1;
@@ -355,17 +340,17 @@ int write_config() {
 		goto cleanup;
 	}
 
-	memcpy(config, (char*)info.segments[0].vaddr + 0xD4, info.segments[0].memsz - 0xD4);
+    memcpy(config, (char *)info.segments[0].vaddr + PSP2CONFIG_TXT_START, info.segments[0].memsz - PSP2CONFIG_TXT_START);
 
-	if (memcmp(config, "#\n# PSP2", 8) != 0) {
-		printf("config is corrupt\n");
+    if (memcmp(config, PSP2CONFIG_TXT_MAGIC, PSP2CONFIG_TXT_MAGIC_LEN) != 0) {
+        printf("config is corrupt\n");
 		ret = -1;
 		goto cleanup;
-	}
+    }
 
-	ret = fd = ksceIoOpen(kitv_config ? "ur0:tai/boot_config_kitv.txt" : "ur0:tai/boot_config.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-	if (ret < 0) {
-		printf("failed to open ur0:tai/boot_config.txt for write: 0x%08x\n", ret);
+    ret = fd = ksceIoOpen(kitv_config ? ENSO_PSP2CONFIG_DEVKITV_PATH : ENSO_PSP2CONFIG_VITA_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+    if (ret < 0) {
+		printf("failed to open %s for write: 0x%08x\n", kitv_config ? ENSO_PSP2CONFIG_DEVKITV_PATH : ENSO_PSP2CONFIG_VITA_PATH, ret);
 		ret = -1;
 		goto cleanup;
 	}
@@ -400,7 +385,7 @@ int write_config() {
 	}
 
 	// write 3rd part: patch: load taihen and henkaku
-	const char *patch2 = "\n- load\tur0:tai/taihen.skprx\n- load\tur0:tai/henkaku.skprx\n";
+	const char *patch2 = TAIHENKAKU_PSP2CONFIG_PATCH;
 	len = strlen(patch2);
 	if ((ret = ksceIoWrite(fd, patch2, len)) != len) {
 		printf("failed to write config 3rd part: wrote 0x%08x expected 0x%08x\n", ret, len);
@@ -451,13 +436,13 @@ int k_ensoWriteRecoveryMbr(void) {
 
 	ENTER_SYSCALL(state);
 	memset(memblock_va, 0, BLOCK_SIZE);
-	ret = fd = ksceIoOpen("ux0:eex/recovery/rmbr.bin", SCE_O_RDONLY, 0);
-	if (fd >= 0) {
+    ret = fd = ksceIoOpen(RMBR_SOURCE, SCE_O_RDONLY, 0);
+    if (fd >= 0) {
 		ret = ksceIoRead(fd, memblock_va, BLOCK_SIZE);
 		ksceIoClose(fd);
 		if (*(uint32_t*)memblock_va) {
-			ret = ksceSdifWriteSectorMmc(emmc, 3, memblock_va, 1);
-			if (ret < 0)
+            ret = ksceSdifWriteSectorMmc(emmc, RMBR_TARGET, memblock_va, 1);
+            if (ret < 0)
 				printf("failed to write mbr3\n");
 		} else {
 			printf("failed to read mbr3 or mbr3 empty: 0x%08X\n", ret);
@@ -477,13 +462,13 @@ int k_ensoWriteRecoveryConfig(void) {
 
 	ENTER_SYSCALL(state);
 	memset(memblock_va, 0, BLOCK_SIZE);
-	ret = fd = ksceIoOpen("ux0:eex/recovery/rconfig.e2xp", SCE_O_RDONLY, 0);
-	if (fd >= 0) {
+    ret = fd = ksceIoOpen(RCONFIG_SOURCE, SCE_O_RDONLY, 0);
+    if (fd >= 0) {
 		ret = ksceIoRead(fd, memblock_va, BLOCK_SIZE);
 		ksceIoClose(fd);
 		if (*(uint32_t*)memblock_va) {
-			ret = ksceSdifWriteSectorMmc(emmc, 4, memblock_va, 1);
-			if (ret < 0)
+            ret = ksceSdifWriteSectorMmc(emmc, RCONFIG_TARGET, memblock_va, 1);
+            if (ret < 0)
 				printf("failed to write config\n");
 		} else {
 			printf("failed to read config or config empty: 0x%08X\n", ret);
@@ -503,13 +488,13 @@ int k_ensoWriteRecoveryBlob(void) {
 
 	ENTER_SYSCALL(state);
 	memset(memblock_va, 0, RBLOB_SIZE);
-	ret = fd = ksceIoOpen("ux0:eex/recovery/rblob.e2xp", SCE_O_RDONLY, 0);
+	ret = fd = ksceIoOpen(RBLOB_SOURCE, SCE_O_RDONLY, 0);
 	if (fd >= 0) {
 		ret = ksceIoRead(fd, memblock_va, RBLOB_SIZE);
 		ksceIoClose(fd);
 		if (*(uint32_t*)memblock_va) {
-			ret = ksceSdifWriteSectorMmc(emmc, 0x30, memblock_va, RBLOB_SIZE / BLOCK_SIZE);
-			if (ret < 0)
+            ret = ksceSdifWriteSectorMmc(emmc, RBLOB_TARGET, memblock_va, RBLOB_SIZE / BLOCK_SIZE);
+            if (ret < 0)
 				printf("failed to write blob\n");
 		} else {
 			printf("failed to read blob or blob empty: 0x%08X\n", ret);
@@ -529,14 +514,14 @@ int k_ensoWriteBlocks(void) {
 
 	ENTER_SYSCALL(state);
 	memset(memblock_va, 0, FAT_BIN_SIZE);
-	ret = fd = ksceIoOpen("ux0:app/MLCL00003/fat.bin", SCE_O_RDONLY, 0);
+	ret = fd = ksceIoOpen(FAT_BIN_SOURCE, SCE_O_RDONLY, 0);
 	if (fd >= 0) {
 		ret = ksceIoRead(fd, memblock_va, FAT_BIN_SIZE);
 		ksceIoClose(fd);
 		if (ret == FAT_BIN_SIZE) {
 			if (crc32(0, memblock_va, FAT_BIN_SIZE) == FATCHECK) {
-				ret = ksceSdifWriteSectorMmc(emmc, 2, memblock_va + (2 * BLOCK_SIZE), (FAT_BIN_SIZE / BLOCK_SIZE) - 2);
-				if (ret < 0)
+                ret = ksceSdifWriteSectorMmc(emmc, FAT_BIN_TARGET, memblock_va + FAT_BIN_USEFUL_START, (FAT_BIN_USEFUL_SIZE / BLOCK_SIZE));
+                if (ret < 0)
 					printf("failed to write enso_ex\n");
 			} else {
 				printf("crc doesnt match\n");
@@ -668,7 +653,7 @@ int module_start(int args, void *argv) {
 	if (ret < 0 || !master->loader_start)
 		return SCE_KERNEL_START_FAILED;
 	ret = ksceSdifReadSectorMmc(emmc, master->loader_start, buf, 1);
-	if (ret < 0 || (crc32(0, buf + 0x40, 0x10) != SL_CRC_NEW))
+	if (ret < 0 || (crc32(0, buf + 0x40, 0x10) != VALID_SL_CRC))
 		return SCE_KERNEL_START_FAILED;
 
 	memblock_id = ksceKernelAllocMemBlock("eex_i_mb", 0x10000000 | 0xC00000 | 0x8000 | 0x6, 0x2000 * BLOCK_SIZE, NULL);
