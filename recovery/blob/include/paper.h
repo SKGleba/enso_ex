@@ -10,29 +10,28 @@
 #include "nskbl.h"
 #include "view.h"
 
-struct pen_dets {
-    struct {
-        int x;
-        int y;
-    } pos;  // Current position of the pen
-    struct {
-        int x;
-        int y;
-    } width;         // Width of the pen
-    uint32_t color;  // Color of the pen
-};
 #define DFL_PEN_WIDTH_X 16
 #define DFL_PEN_WIDTH_Y 16
 #define DFL_PEN_COLR WHITE
 
-struct paper_dets {
+struct paper_s {
     int view_idx;
     struct {
         int x;
         int y;
     } min, max;
     uint32_t color;
-    struct pen_dets *pen;
+    struct {
+        struct {
+            int x;
+            int y;
+        } pos;  // Current position of the pen
+        struct {
+            int x;
+            int y;
+        } width;         // Width of the pen
+        uint32_t color;  // Color of the pen
+    } pen;
     int blank_mode;
     int align;
     struct {
@@ -70,8 +69,7 @@ enum PAPER_BLANK_MODE {
 #define DFL_PAPER_OPAD_Y DFL_PEN_WIDTH_Y
 #define DFL_PAPER_BLANK_MODE PAPER_BLANK_MODE_NONE
 
-extern struct pen_dets default_pen;
-extern struct paper_dets default_paper;
+extern struct paper_s default_paper;
 
 #define paper_clear(_paper, _colr)                                                                                               \
     do {                                                                                                                         \
@@ -87,23 +85,23 @@ extern struct paper_dets default_paper;
         (_paper)->max.y = max_y;                   \
     } while (0)
 
-#define pen_reset(_pen, colr)                        \
+#define pen_reset(_paper, colr)                        \
     do {                                       \
-        (_pen)->width.x = DFL_PEN_WIDTH_X;       \
-        (_pen)->width.y = DFL_PEN_WIDTH_Y;       \
-        (_pen)->pos.x = (_pen)->width.x;            \
-        (_pen)->pos.y = (_pen)->width.y;            \
-        (_pen)->color = colr;                    \
+        (_paper)->pen.width.x = DFL_PEN_WIDTH_X;       \
+        (_paper)->pen.width.y = DFL_PEN_WIDTH_Y;       \
+        (_paper)->pen.pos.x = (_paper)->padding.outer.x; \
+        (_paper)->pen.pos.y = (_paper)->padding.outer.y; \
+        (_paper)->pen.color = colr;                    \
     } while (0)
-#define pen_pos(_pen, x, y)  \
+#define pen_pos(_paper, x, y)  \
     do {               \
-        (_pen)->pos.x = x; \
-        (_pen)->pos.y = y; \
+        (_paper)->pen.pos.x = x; \
+        (_paper)->pen.pos.y = y; \
     } while (0)
 
-void paper_write(struct paper_dets *paper, const char *text, int count);
-void paper_print(struct paper_dets *paper, const char *text, int align, int count);
-void paper_printf(struct paper_dets *paper, const char *fmt, ...);
+void paper_write(struct paper_s *paper, const char *text, int count);
+void paper_print(struct paper_s *paper, const char *text, int align, int count);
+void paper_printf(struct paper_s *paper, const char *fmt, ...);
 
 #define pprintf(_paper, fmt, ...) \
     paper_printf((_paper), fmt, ##__VA_ARGS__);
@@ -116,6 +114,14 @@ void paper_printf(struct paper_dets *paper, const char *fmt, ...);
         (_paper)->align = _prev_align; \
     } while (0)
 
-void paper_draw_rectangle(struct paper_dets *paper, int x, int y, int width, int height, uint32_t color, int fill_pixels);
+#define pprintf_color(_paper, _color, fmt, ...) \
+    do { \
+        uint32_t _prev_color = (_paper)->pen.color; \
+        (_paper)->pen.color = _color; \
+        paper_printf(_paper, fmt, ##__VA_ARGS__); \
+        (_paper)->pen.color = _prev_color; \
+    } while (0)
+
+void paper_draw_rectangle(struct paper_s *paper, int x, int y, int width, int height, uint32_t color, int fill_pixels);
 
 #endif /* __PAPER_H__ */

@@ -11,8 +11,10 @@ void dbg_log(int targets, const char *fmt, ...) {
     va_end(args);
 	if (targets & LOG_TARGET_CONSOLE)
 		nskbl_printf("[R] %s", buffer);
-	if (targets & LOG_TARGET_PAPER)
+	if (targets & LOG_TARGET_LOGPAPER)
         paper_write(&default_paper, buffer, sizeof(buffer));
+	if (targets & LOG_TARGET_FRONTPAGE)
+		paper_write(&info_paper, buffer, sizeof(buffer));
 }
 
 void dbg_hexdump(void *addr, int size, bool show_addr, char delim) {

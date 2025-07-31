@@ -1,13 +1,28 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
+#include <baremetal/gpio.h>
+
+#include "main.h"
 #include "nskbl.h"
 #include "paper.h"
 #include "stor.h"
 
 #define LOG(fmt, ...) dbg_log(g_log_targets, fmt, ##__VA_ARGS__)
 #define conlog(fmt, ...) dbg_log(LOG_TARGET_CONSOLE, fmt, ##__VA_ARGS__)
-#define scrlog(fmt, ...) dbg_log(LOG_TARGET_PAPER, fmt, ##__VA_ARGS__)
+#define alllog(fmt, ...) dbg_log(-1, fmt, ##__VA_ARGS__)
+#define inflog(fmt, ...) dbg_log(LOG_TARGET_FRONTPAGE, fmt, ##__VA_ARGS__)
+#define scrlog(fmt, ...) dbg_log(LOG_TARGET_LOGPAPER, fmt, ##__VA_ARGS__)
+
+#define BGW_START() gpio_port_set(0, GPIO_PORT_PS_LED) // turn on the PS LED, indicates longer bg job
+#define BGW_END() gpio_port_clear(0, GPIO_PORT_PS_LED)
+
+#define IHBGW(stmt) \
+	do { \
+		BGW_START(); \
+		stmt; \
+		BGW_END(); \
+	} while (0)
 
 #define MMCWRITE(_sector, _buffer, _nsectors) write_sector_mmc((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
 #define MMCREAD(_sector, _buffer, _nsectors) read_sector_mmc_direct((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
@@ -38,7 +53,8 @@
 enum LOG_TARGETS {
 	LOG_TARGET_NONE = 0,
 	LOG_TARGET_CONSOLE = 1 << 0,
-	LOG_TARGET_PAPER = 1 << 1,
+	LOG_TARGET_LOGPAPER = 1 << 1,
+	LOG_TARGET_FRONTPAGE = 1 << 2,
 };
 
 extern int g_log_targets;

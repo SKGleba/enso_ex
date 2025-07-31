@@ -13,7 +13,7 @@
 // this is because we only have 0x180 bytes for first payload
 void go(void) {
     // say hello
-    printf("\nWelcome to enso_ex v5.0 by skgleba | @stage1!\n\n");
+    printf("\nWelcome to enso_ex v5.1 by skgleba | @stage1!\n\n");
 
     // clean after us
     memset((char*)ENSO_CORRUPTED_AREA_START, 0, ENSO_CORRUPTED_AREA_SIZE);
@@ -39,11 +39,15 @@ void go(void) {
 
     // run stage2
     printf("-x\n");
-    void (*stage2_start)() = (void*)(stage2 + 1);
-    stage2_start();
+    void (*stage2_start)(void *me) = (void*)(stage2 + 1);
+    stage2_start(stage2);
 
-    // shouldnt be here, maybe fit some recovery?
-    printf("[E2X] what am i doing here??\n");
+    // shouldnt be here, try running a recovery payload
+    printf("[E2X] E: s2r->R\n");
+    void (*rconf_start)(int x) = (void*)(RECOVERY_PAYLOAD_DEST | 1);
+    if (read_sector_default_direct((int*)NSKBL_DEVICE_GCSD_CTX, RECOVERY_PAYLOAD_OFFSET, RECOVERY_PAYLOAD_SIZE / SDIF_SECTOR_SIZE, (int)RECOVERY_PAYLOAD_DEST) < 0)
+        read_sector_default((int*)NSKBL_DEVICE_EMMC_CTX, RECOVERY_PAYLOAD_OFFSET, RECOVERY_PAYLOAD_SIZE / SDIF_SECTOR_SIZE, (int)RECOVERY_PAYLOAD_DEST);
+    rconf_start((int)RECOVERY_PAYLOAD_DEST);
 }
 
 __attribute__ ((section (".text.start"), naked)) void start(void)  {

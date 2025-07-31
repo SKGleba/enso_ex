@@ -74,14 +74,37 @@ enum MOUNT_MASTER_TYPES {
 #define SCEMBR_U32_MAGIC 'ynoS'
 #define FAT_MBR_MAGIC 0xAA55
 
-extern int mount_masters_ii[2];  // 0: emmc, 1: gcsd
-
 #define IS_GCSD_INITIALIZED() (!!(*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX))
 
 #define STOR_MAX_MOUNTS 2
 
+enum STOR_PARTITIONS {
+    STOR_PART_ENTIRE = 0,
+    STOR_PART_IDSTOR,
+    STOR_PART_SLOADER,
+    STOR_PART_OS,
+    STOR_PART_VSH,
+    STOR_PART_VSHDATA,
+    STOR_PART_VTRM,
+    STOR_PART_USER,
+    STOR_PART_USEREXT,
+    STOR_PART_GAMERO,
+    STOR_PART_GAMERW,
+    STOR_PART_UPDATER,
+    STOR_PART_SYSDATA,
+    STOR_PART_MEDIAID,
+    STOR_PART_PIDATA,
+    STOR_PART_UNUSED
+};
+
+enum STOR_PART_ACTIVES {
+    STOR_PART_ACTIVE_NOT = 0,
+    STOR_PART_ACTIVE_YES,
+    STOR_PART_ACTIVE_BOTH
+};
+
 int stor_init_master(int mount_master);
-int stor_init_mount(int idx, int mount_master, int partition_id);
+int stor_init_mount(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIONS partition_id, enum STOR_PART_ACTIVES active);
 int stor_ff_init_mount(int idx);
 int stor_read_mount(int idx, uint32_t sector, void *buffer, int nsectors);
 int stor_write_mount(int idx, uint32_t sector, const void *buffer, int nsectors);

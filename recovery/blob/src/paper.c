@@ -1,17 +1,15 @@
 #include "paper.h"
 
-struct pen_dets default_pen = {
-	.pos = {DFL_PEN_WIDTH_X, DFL_PEN_WIDTH_Y},
-	.width = {DFL_PEN_WIDTH_X, DFL_PEN_WIDTH_Y},
-	.color = DFL_PEN_COLR
-};
-
-struct paper_dets default_paper = {
-    .view_idx = 0,
+struct paper_s default_paper = {
+    .view_idx = VIEW_DEFAULT,
 	.min = {DFL_PAPER_START_X, DFL_PAPER_START_Y},
 	.max = {DFL_PAPER_END_X, DFL_PAPER_END_Y},
 	.color = DFL_PAPER_COLR,
-	.pen = &default_pen,
+	.pen =  {
+        .pos = {DFL_PAPER_OPAD_X, DFL_PAPER_OPAD_Y},
+        .width = {DFL_PEN_WIDTH_X, DFL_PEN_WIDTH_Y},
+        .color = DFL_PEN_COLR
+    },
     .blank_mode = DFL_PAPER_BLANK_MODE,
     .align = PAPER_ALIGN_LEFT,
     .padding = {
@@ -31,7 +29,7 @@ static char *my_strchr(const char *s, int c) {
     return NULL;
 }
 
-void paper_draw_rectangle(struct paper_dets *paper, int x, int y, int width, int height, uint32_t color, int fill_pixels) {
+void paper_draw_rectangle(struct paper_s *paper, int x, int y, int width, int height, uint32_t color, int fill_pixels) {
     x = paper->min.x + x;
     y = paper->min.y + y;
     if ((width + x) > paper->max.x)
@@ -55,7 +53,7 @@ void paper_draw_rectangle(struct paper_dets *paper, int x, int y, int width, int
     }
 }
 
-static void paper_draw_char(struct paper_dets *paper, char c) {
+static void paper_draw_char(struct paper_s *paper, char c) {
     int i, j;
     uint8_t *glyph = &msx_font[c * 8];
 
@@ -67,39 +65,41 @@ static void paper_draw_char(struct paper_dets *paper, char c) {
             uint32_t c = paper->color;  // Default color is paper color
 
             if (*glyph & (128 >> j))
-                c = paper->pen->color;
+                c = paper->pen.color;
 
-            paper_draw_rectangle(paper, paper->pen->pos.x + (2 * j), paper->pen->pos.y + (2 * i), 2, 2, c, 0);
+            paper_draw_rectangle(paper, paper->pen.pos.x + (2 * j), paper->pen.pos.y + (2 * i), 2, 2, c, 0);
         }
         glyph++;
     }
 }
 
-void paper_write(struct paper_dets *paper, const char *text, int count) {
+static void paper_pen_nexty(struct paper_s *paper) {
+    paper->pen.pos.x = paper->padding.outer.x;
+    paper->pen.pos.y += (paper->pen.width.y + paper->padding.inner.y);
+    if (paper->pen.pos.y + paper->pen.width.y + paper->padding.outer.y + paper->min.y > paper->max.y) {
+        paper->pen.pos.y = paper->padding.outer.y;
+        if (paper->blank_mode & PAPER_BLANK_MODE_AREA_CLEAR)
+            paper_draw_rectangle(paper, 0, 0, paper->max.x - paper->min.x, paper->max.y - paper->min.y, paper->color, 0);
+    }
+
+    if (paper->blank_mode & PAPER_BLANK_MODE_LINE_CLEAR)
+        paper_draw_rectangle(paper, 0, paper->pen.pos.y, paper->max.x - paper->min.x, paper->pen.width.y, paper->color, 0);
+}
+
+void paper_write(struct paper_s *paper, const char *text, int count) {
     while (count-- && *text) {
         if (*text != '\n') {
             paper_draw_char(paper, *text);
-            paper->pen->pos.x += (paper->pen->width.x + paper->padding.inner.x);
+            paper->pen.pos.x += (paper->pen.width.x + paper->padding.inner.x);
         }
-        if ((*text == '\n') || (paper->pen->pos.x + (2 * paper->pen->width.x) + paper->padding.inner.x > paper->max.x)) {
-            paper->pen->pos.x = paper->padding.outer.x;
-            paper->pen->pos.y += (paper->pen->width.y + paper->padding.inner.y);
-            if (paper->min.y + paper->pen->pos.y + paper->padding.outer.y > paper->max.y) {
-                paper->pen->pos.y = paper->padding.outer.y;
-                if (paper->blank_mode & PAPER_BLANK_MODE_AREA_CLEAR)
-                    paper_draw_rectangle(paper, 0, 0, paper->max.x - paper->min.x, paper->max.y - paper->min.y, paper->color, 0);
-            }
-            if (paper->blank_mode & PAPER_BLANK_MODE_LINE_CLEAR) {
-                paper_draw_rectangle(paper, 0, paper->pen->pos.y,
-                                     paper->max.x - paper->min.x, paper->pen->width.y,
-                                     paper->color, 0);
-            }
+        if ((*text == '\n') || (paper->pen.pos.x + paper->pen.width.x + paper->min.x > paper->max.x)) {
+            paper_pen_nexty(paper);
         }
         text++;
     }
 }
 
-void paper_print(struct paper_dets *paper, const char *text, int align, int count) {
+void paper_print(struct paper_s *paper, const char *text, int align, int count) {
     while (*text && count--) {
         const char *line_start = text;
         const char *line_end = my_strchr(line_start, '\n');
@@ -112,37 +112,32 @@ void paper_print(struct paper_dets *paper, const char *text, int align, int coun
 
         if (line_end != line_start) {
             int line_length = line_end - line_start;
-            int line_width = line_length * (paper->pen->width.x + paper->padding.inner.x);
+            if (*line_end == '\n')
+                line_length--;  // Exclude the newline character
+            int line_width = (line_length * (paper->pen.width.x + paper->padding.inner.x)) - paper->padding.inner.x;
 
             if (align == PAPER_ALIGN_CENTER)
-                paper->pen->pos.x = ((paper->max.x - paper->min.x) - line_width) / 2;
+                paper->pen.pos.x = ((paper->max.x - paper->min.x) - line_width) / 2;
             else if (align == PAPER_ALIGN_RIGHT)
-                paper->pen->pos.x = (paper->max.x - paper->min.x) - line_width;
+                paper->pen.pos.x = (paper->max.x - paper->min.x - paper->padding.outer.x) - line_width;
             else
-                paper->pen->pos.x = paper->padding.outer.x;
+                paper->pen.pos.x = paper->padding.outer.x;
+
+            if (paper->pen.pos.x < paper->padding.outer.x)
+                paper->pen.pos.x = paper->padding.outer.x;
 
             paper_write(paper, line_start, line_length);
         }
 
         if (*line_end == '\n') {
-            paper->pen->pos.y += (paper->pen->width.y + paper->padding.inner.y);
-            if (paper->pen->pos.y + (2 * paper->pen->width.y) + paper->padding.inner.y > paper->max.y) {
-                paper->pen->pos.y = paper->padding.outer.y;
-                if (paper->blank_mode & PAPER_BLANK_MODE_AREA_CLEAR)
-                    paper_draw_rectangle(paper, 0, 0, paper->max.x - paper->min.x, paper->max.y - paper->min.y, paper->color, 0);
-            }
-            if (paper->blank_mode & PAPER_BLANK_MODE_LINE_CLEAR) {
-                paper_draw_rectangle(paper, 0, paper->pen->pos.y,
-                                     paper->max.x - paper->min.x, paper->pen->width.y,
-                                     paper->color, 0);
-            }
+            paper_pen_nexty(paper);
             text = line_end + 1;
         } else
             break;
     }
 }
 
-void paper_printf(struct paper_dets *paper, const char *fmt, ...) {
+void paper_printf(struct paper_s *paper, const char *fmt, ...) {
     char buffer[256];
     va_list args;
     va_start(args, fmt);

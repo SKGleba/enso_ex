@@ -95,14 +95,15 @@ static int sdif_read_sector_mmc_patched(void* ctx, int sector, char* buffer, int
 
 // block from writing boot sectors unless prev asked
 static int sdif_write_sector_mmc_patched(void* ctx, int sector, char* buffer, int nSectors) {
-	if (unlikely((sector == E2X_BOOTAREA_LOCK_KEY) && (uint32_t)ctx == E2X_BOOTAREA_LOCK_KEY)) { // change lock mode
-		DACR_OFF(
+    if (unlikely((uint32_t)ctx == E2X_BOOTAREA_LOCK_KEY) && (sector == E2X_BOOTAREA_LOCK_KEY)) {  // change lock mode
+        DACR_OFF(
 			disable_bootarea_update = nSectors;
 		);
 		return E2X_BOOTAREA_LOCK_CG_ACK;
-	}
-	if ((sector < SBLS_END && (sector >= SBLS_START || sector < IDSTOR_START)) && disable_bootarea_update)
-		return -1;
+    }
+    if (((sector < SBLS_END && (sector >= SBLS_START || sector < IDSTOR_START)) && disable_bootarea_update) && (get_sd_context_part_validate_mmc(0) == ctx)) {
+        return -1;
+    }
 	return sdif_write_sector_mmc(ctx, sector, buffer, nSectors);
 }
 
@@ -275,66 +276,6 @@ static void* load_exe(void* source, char* memblock_name, uint32_t offset, uint32
 // --------------------
 
 /*
-	recovery
-*/
-// recovery from GC-SD
-static void recovery(unsigned int ctrl, int dolce) {
-	int error = 1;
-
-	printf("[E2X@R] GC-SD\n");
-	syscon_common_write(1, SYSCON_CMD_SET_GCSD, 2); // enable the GC slot
-	boot_args->boot_type_indicator_1 |= 0x40000; // enable sd0 mounting
-	clean_dcache((void*)boot_args, 0x100);
-	flush_icache();
-	setup_emmc(); // reinit main storages
-
-	unsigned char mbr[SDIF_SECTOR_SIZE];
-	if (read_sector_default_direct((int*)NSKBL_DEVICE_GCSD_CTX, 0, 1, (int)mbr) >= 0) {
-		if (*(uint32_t*)mbr == 'ynoS') { // "Sony" - EMMC dump/SCE formatted GCSD, use its os0 as main os0
-			gpio_port_set(0, 7);
-			printf("[E2X@R] MBR\n");
-			error = init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x110000, (unsigned int*)read_sector_default_direct, (unsigned int*)NSKBL_DEVICE_GCSD_CTX);
-		} else if (*(uint32_t*)mbr == E2X_MAGIC) { // enso_ex raw recovery code blob
-			gpio_port_set(0, 7);
-			printf("[E2X@R] RAW\n");
-			RecoveryBlockStruct* rbr = (RecoveryBlockStruct*)mbr;
-			void* rblob = load_exe((int*)NSKBL_DEVICE_GCSD_CTX, "recovery", rbr->offset_in_sectors, rbr->size_in_sectors, E2X_LX_BLK_SAUCE, NULL);
-			if (rblob) {
-				int (*rccode)(void* kbl_param, unsigned int ctrldata) = (void*)(rblob + rbr->offset_in_bytes);
-				error = rccode(boot_args, ctrl);
-			}
-		} else if (*(uint32_t*)(mbr + 0x38) == ' 61T') { // mbr+0x36 = 'FA[T16 ]  ' - fat16 partition, use as os0
-			gpio_port_set(0, 7);
-			printf("[E2X@R] PBR\n");
-			error = init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x100000, (unsigned int*)read_sector_default_direct, (unsigned int*)NSKBL_DEVICE_GCSD_CTX);
-		} else { // unk magic
-			printf("[E2X@R] E: UNK\n");
-			error = 2;
-		}
-	}
-
-	printf("[E2X@R] status: 0x%X\n", error);
-
-	if (!dolce) {
-		while (error) {
-			syscon_common_read(&ctrl, SYSCON_CMD_GET_DCTRL);
-			if (error == 1) { // No SD found or SD read failed
-				if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_NOENT))
-					break;
-			} else if (error == 2) { // Incorrect SD magic
-				if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_UNKSD))
-					break;
-			} else { // Recovery returned !0
-				if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RETERR))
-					break;
-			}
-		}
-	}
-	gpio_port_clear(0, 7);
-}
-// --------------------
-
-/*
 	Custom kernel loader patches
 */
 // custom get_hwcfg to give ckldr important offsets/data
@@ -367,10 +308,10 @@ static int load_psp2bootconfig_patched(uint32_t myaddr, int* uids, int count, in
 
 	*(uint32_t*)NSKBL_EXPORTS(NSKBL_EXPORTS_GET_HWCFG_N) = (uint32_t)get_hwcfg_patched;
 	int bootmgr_memblock;
-	int (*tcode)(void) = (void*)(load_exe("os0:" E2X_BOOTMGR_NAME, "bootmgr", 0, 0, 0, &bootmgr_memblock) + 1);
-	if (tcode != (void*)0x1) {
+    int (*tcode)(uint32_t get_info_va) = (void*)(load_exe("os0:" E2X_BOOTMGR_NAME, "bootmgr", 0, 0, 0, &bootmgr_memblock) + 1);
+    if (tcode != (void*)0x1) {
 		printf("[E2X] run bootmgr\n");
-		if (tcode() & 1)
+		if (tcode((uint32_t)get_hwcfg_patched) & E2X_EXE_RET_NORESIDENT)
 			sceKernelFreeMemBlock(bootmgr_memblock);
 	}
 
@@ -420,11 +361,13 @@ static void custom_init(unsigned int ctrl) {
 		int rconf_memblk = 0;
 		void* cc_buf = load_exe((int*)NSKBL_DEVICE_EMMC_CTX, "recovery", E2X_RCONF_OFFSET, 1, E2X_LX_BLK_SAUCE, &rconf_memblk);
 		if (cc_buf) {
-			void (*ccode)(uint32_t get_info_va, uint32_t init_os0_va, uint32_t load_exe_va) = (void*)(cc_buf + 1);
+			void (*ccode)(uint32_t get_info_va, uint32_t init_os0_va, int *protect_boot) = (void*)(cc_buf + 1);
 			printf("[E2X@R] run rconf\n");
-			ccode((uint32_t)get_hwcfg_patched, (uint32_t)init_os0, (uint32_t)load_exe); // DO NOT pass fakembr/disable_bootarea_update
-			sceKernelFreeMemBlock(rconf_memblk);
-		}
+            int protect_boot = disable_bootarea_update;
+            ccode((uint32_t)get_hwcfg_patched, (uint32_t)init_os0, &protect_boot); // DO NOT pass fakembr/disable_bootarea_update directly
+            sceKernelFreeMemBlock(rconf_memblk);
+            DACR_OFF(disable_bootarea_update = protect_boot;);
+        }
 	} else {
 		// block bootarea writes
 		if (CTRL_BUTTON_HELD(ctrl, E2X_BPARAM_LOCKBAREA)) {
@@ -442,9 +385,76 @@ static void custom_init(unsigned int ctrl) {
 		}
 	}
 }
+// --------------------
+
+/*
+    recovery
+*/
+// recovery from GC-SD
+static void recovery(unsigned int ctrl, int dolce) {
+    int error = 2;
+
+    printf("[E2X@R] GC-SD\n");
+    syscon_common_write(1, SYSCON_CMD_SET_GCSD, 2);  // enable the GC slot
+    boot_args->boot_type_indicator_1 |= 0x40000;     // enable sd0 mounting
+    clean_dcache((void*)boot_args, 0x100);
+    flush_icache();
+    setup_emmc();  // reinit main storages
+
+    unsigned char mbr[SDIF_SECTOR_SIZE];
+    if (read_sector_default_direct((int*)NSKBL_DEVICE_GCSD_CTX, 0, 1, (int)mbr) >= 0) {
+        if (*(uint32_t*)mbr == 'ynoS') {  // "Sony" - EMMC dump/SCE formatted GCSD, use its os0 as main os0
+            gpio_port_set(0, 7);
+            printf("[E2X@R] MBR\n");
+            error = init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x110000, (unsigned int*)read_sector_default_direct, (unsigned int*)NSKBL_DEVICE_GCSD_CTX);
+        } else if (*(uint32_t*)mbr == E2X_MAGIC) {  // enso_ex raw recovery code blob
+            gpio_port_set(0, 7);
+            printf("[E2X@R] RAW\n");
+            RecoveryBlockStruct* rbr = (RecoveryBlockStruct*)mbr;
+            int recovery_memblock_id = 0;
+            void* rblob =
+                load_exe((int*)NSKBL_DEVICE_GCSD_CTX, "recovery", rbr->offset_in_sectors, rbr->size_in_sectors, E2X_LX_BLK_SAUCE, &recovery_memblock_id);
+            if (rblob) {
+                int (*rccode)(uint32_t get_info_va) = (void*)(rblob + rbr->offset_in_bytes);
+                error = rccode((uint32_t)get_hwcfg_patched);
+                if (error & E2X_EXE_RET_NORESIDENT) {  // no resident
+                    sceKernelFreeMemBlock(recovery_memblock_id);
+                    error = 0;  // no error, we can continue
+                }
+            }
+        } else if (*(uint32_t*)(mbr + 0x38) == ' 61T') {  // mbr+0x36 = 'FA[T16 ]  ' - fat16 partition, use as os0
+            gpio_port_set(0, 7);
+            printf("[E2X@R] PBR\n");
+            error = init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x100000, (unsigned int*)read_sector_default_direct, (unsigned int*)NSKBL_DEVICE_GCSD_CTX);
+        } else {  // unk magic
+            printf("[E2X@R] E: UNK\n");
+            error = 3;
+        }
+    }
+
+    printf("[E2X@R] status: 0x%X\n", error);
+
+    if (!dolce) {
+        while (error) {
+            syscon_common_read(&ctrl, SYSCON_CMD_GET_DCTRL);
+            if (error == 2) {  // No SD found or SD read failed
+                if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_NOENT))
+                    break;
+            } else if (error == 3) {  // Incorrect SD magic
+                if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_UNKSD))
+                    break;
+            } else {  // Recovery returned !0
+                if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RETERR))
+                    break;
+            }
+        }
+    }
+    gpio_port_clear(0, 7);
+}
+// --------------------
 
 // main
-__attribute__((section(".text.start"))) void start(void) {
+__attribute__((section(".text.start"))) void start(void* me) {
 	gpio_port_clear(0, 7);
 
 	printf("[E2X] welcome to stage2!\n[E2X] patching nskbl\n");

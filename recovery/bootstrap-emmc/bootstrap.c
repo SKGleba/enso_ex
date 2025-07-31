@@ -8,7 +8,7 @@
 #define BLOB_OFFSET RBLOB_TARGET
 #define BLOB_MEMLOC 0x51f00000
 
-void _start(uint32_t get_info_va, uint32_t init_os0_va, uint32_t load_exe_va) {
+void _start(uint32_t get_info_va, uint32_t init_os0_va, int *protect_boot) {
     // print hello
     printf("[E2X@R] welcome to rbootstrap(0x%08X | 0x%08X)!\n", get_info_va, init_os0_va);
 
@@ -23,10 +23,9 @@ void _start(uint32_t get_info_va, uint32_t init_os0_va, uint32_t load_exe_va) {
     // prep args
     struct eex_param_s params = {
         .init_os0 = (void *)init_os0_va,
-        .load_exe = (void *)load_exe_va,
         .get_hwcfg_patched = (void *)get_info_va,
         .kbl_param = (void *)boot_args,
-        .disable_bootarea_update = NULL
+        .disable_bootarea_update = protect_boot
     };
 
     // run blob

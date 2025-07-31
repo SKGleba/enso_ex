@@ -16,24 +16,23 @@ __attribute__((section(".text._my_info"))) const RecoveryBlockStruct _my_info = 
     0x11        // this recovery offset inside recovery sector, in bytes, |=1 for thumb
 };
 
-__attribute__((section(".text.start"))) int start(void *kbl_param, unsigned int ctrldata) {
+__attribute__((section(".text.start"))) int start(uint32_t get_info_va) {
     // print hello
-    printf("[E2X@R] welcome to rbootstrap(0x%08X | 0x%08X)!\n", (uint32_t)kbl_param, ctrldata);
+    printf("[E2X@R] welcome to rbootstrap(0x%08X)!\n", (uint32_t)get_info_va);
 
     // read blob
     printf("[E2X@R] rblob[0x%08X@0x%08X] r -> 0x%08X\n", BLOB_SIZE * BLOCK_SIZE, BLOB_OFFSET * BLOCK_SIZE, BLOB_MEMLOC);
     int ret = read_sector_default_direct((int *)NSKBL_DEVICE_GCSD_CTX, BLOB_OFFSET, BLOB_SIZE, (int)BLOB_MEMLOC);
     if (ret < 0) {
         printf("[E2X@R] rblob read failed: 0x%08X\n", ret);
-        return -1;
+        return -2;
     }
 
     // prep args
     struct eex_param_s params = {
         .init_os0 = NULL,
-        .load_exe = NULL,
-        .get_hwcfg_patched = NULL,
-        .kbl_param = kbl_param,
+        .get_hwcfg_patched = (void *)get_info_va,
+        .kbl_param = (void *)boot_args,
         .disable_bootarea_update = NULL
     };
 
@@ -46,5 +45,5 @@ __attribute__((section(".text.start"))) int start(void *kbl_param, unsigned int 
     // print bye
     printf("[E2X@R] exiting rbootstrap\n");
 
-    return 0;
+    return 1;
 }

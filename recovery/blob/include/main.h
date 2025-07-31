@@ -30,13 +30,23 @@ enum STATUS_DRAW_PARAMS {
     STATUS_PEN_COLR = CYAN,
 };
 
-enum LOG_DRAW_PARAMS {  // uses default_paper and default_pen
+enum INFO_DRAW_PARAMS {
+    INFO_PAPER_COLR = WHITE,
+    INFO_PAPER_START_X = 20,
+    INFO_PAPER_START_Y = 244,
+    INFO_PAPER_END_X = 940,
+    INFO_PAPER_END_Y = 524,
+    INFO_PAPER_BLANK_MODE = PAPER_BLANK_MODE_LINE_CLEAR | PAPER_BLANK_MODE_AREA_CLEAR,
+    INFO_PEN_COLR = BLACK,
+};
+
+enum LOG_DRAW_PARAMS {
     LOG_PAPER_COLR = WHITE,
     LOG_PAPER_START_X = 20,
-    LOG_PAPER_START_Y = 244,
+    LOG_PAPER_START_Y = 60,
     LOG_PAPER_END_X = 940,
     LOG_PAPER_END_Y = 524,
-    LOG_PAPER_BLANK_MODE = PAPER_BLANK_MODE_LINE_CLEAR | PAPER_BLANK_MODE_AREA_CLEAR,
+    LOG_PAPER_BLANK_MODE = PAPER_BLANK_MODE_LINE_CLEAR,
     LOG_PEN_COLR = BLACK,
 };
 
@@ -50,15 +60,13 @@ struct menu_s {
     int selection;
     uint32_t exp_buttons;
     uint32_t prs_buttons;
-    struct paper_dets *paper;
+    struct paper_s *paper;
     uint32_t selector_color;
 };
 
-extern struct pen_dets menu_pen;
-extern struct paper_dets menu_paper;
-
-extern struct pen_dets status_pen;
-extern struct paper_dets status_paper;
+extern struct paper_s menu_paper;
+extern struct paper_s status_paper;
+extern struct paper_s info_paper;
 
 extern struct eex_param_s g_eex_params;
 

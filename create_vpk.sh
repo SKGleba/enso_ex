@@ -6,11 +6,9 @@ cd ../;
 if [ $? -ne 0 ]; then echo "$0: create CORE failed!"; exit 0; fi
 
 # default recovery
-cd recovery/internal/default/blob/ &&
+cd recovery &&
 make &&
-cd ../ &&
-make &&
-cd ../../../;
+cd ../;
 if [ $? -ne 0 ]; then echo "$0: create RECOVERY failed!"; exit 0; fi
 
 # plugins & plugin loader
@@ -27,8 +25,8 @@ if [ $? -ne 0 ]; then echo "$0: create PLUGINS failed!"; exit 0; fi
 mkdir installer/res_ext &&
 cp core/fat.bin installer/res_ext/fat.bin &&
 echo "#define FATCHECK 0x$(crc32 core/fat.bin)" > installer/src/fatcheck.h &&
-cp recovery/internal/default/rbootstrap.e2xp installer/res_ext/rbootstrap.e2xp &&
-cp recovery/internal/default/blob/rblob.e2xp installer/res_ext/rblob.e2xp &&
+cp recovery/output/rconfig.e2xp installer/res_ext/rbootstrap.e2xp &&
+cp recovery/output/rblob.e2xp installer/res_ext/rblob.e2xp &&
 cp plugins/loader/e2x_ckldr.skprx installer/res_ext/e2x_ckldr.skprx &&
 cp plugins/loader/example_list.txt installer/res_ext/boot_list.txt &&
 cp plugins/hencfg/e2xhencfg.skprx installer/res_ext/e2xhencfg.skprx &&
@@ -62,10 +60,6 @@ rm e2x_ckldr.*;
 rm kernel.o;
 cd ../../core/;
 rm *.bin;
-cd ../recovery/internal/default/;
-rm *.elf && rm *.o && rm *.e2xp;
-cd blob/;
-rm *.elf && rm *.o && rm *.e2xp;
 
 echo "";
 echo "ALL DONE! [ enso_ex.vpk ]";

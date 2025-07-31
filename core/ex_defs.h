@@ -13,6 +13,8 @@
 #define E2X_RECOVERY_UNKSD CTRL_CIRCLE // ack that gcsd recovery found unknown data on gcsd
 #define E2X_RECOVERY_RETERR CTRL_CROSS // // ack that gcsd recovery returned !0
 
+#define E2X_EXE_RET_NORESIDENT 1 // exe memblock can be freed
+
 #define E2X_CHANGE_BPARAM CTRL_START // run internal recovery/set custom boot params
 #define E2X_BPARAM_LOCKBAREA CTRL_TRIANGLE // make the bootloaders and enso read-only
 #define E2X_BPARAM_NOCUC CTRL_CIRCLE // DONT run internal recovery/custom config @block 4

@@ -4,7 +4,13 @@
 #include <baremetal/display.h>
 
 #define VIEW_COUNT 4
-#define VIEW_DEFAULT 0
+
+enum VIEW_ASSIGNS {
+    VIEW_DEFAULT = 0, // default (log) view
+    VIEW_MENU, // main menu view
+    VIEW_FMGR, // file manager view
+    VIEW_TEMP // temporary view for various purposes
+};
 
 struct frame_s {
     uint32_t *addr;
@@ -20,6 +26,7 @@ extern struct frame_s view_frame;
 
 int view_init(void);
 void view_switch(int new_view);
+int view_copy(int src_view, int dst_view);
 
 #define view_draw_pixel(_idx, _x, _y, _colr) {view_vas[_idx][((_y) * view_frame.width) + (_x)] = _colr;}
 

@@ -13,10 +13,9 @@
 // MUST be copied in
 struct eex_param_s {
     void (*init_os0)(int mbr_off);
-    void* (*load_exe)(void* source, char* memblock_name, uint32_t offset, uint32_t size, int flags, int* ret_memblock_id);
     int (*get_hwcfg_patched)(uint32_t* dst);
 	void *kbl_param;
-    int* disable_bootarea_update; // MUST disable DACR for this
+    int* disable_bootarea_update;
 };
 
 #endif // __BOOTSTRAP_H__

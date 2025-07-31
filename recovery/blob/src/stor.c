@@ -29,7 +29,7 @@ static void set_sd_write_mode(int mode) {
 
 // xd
 int write_sector_sd(int *part_ctx, uint32_t sector, const void *buffer, int nsectors) {
-    conlog("WRITE to SD, sector: %u, nsectors: %d\n", sector, nsectors);
+    LOG("WRITE to SD, sector: %u, nsectors: %d\n", sector, nsectors);
     set_sd_write_mode(1);
     int ret = read_sector_sd(part_ctx, sector, (const void *)buffer, nsectors);
     set_sd_write_mode(0);
@@ -159,7 +159,7 @@ EXIT:
 
 int g_disable_bootarea_update = 1;
 int write_sector_mmc(int *ctx, unsigned int block_offset, const void *target_buf, int block_count) {
-    conlog("WRITE to MMC, block_offset: %u, block_count: %d\n", block_offset, block_count);
+    LOG("WRITE to MMC, block_offset: %u, block_count: %d\n", block_offset, block_count);
     if (g_disable_bootarea_update && (ctx == (int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX)) {
         if (block_offset < SBLS_END && (block_offset >= SBLS_START || block_offset < IDSTOR_START))
             return -1;
@@ -272,7 +272,7 @@ int stor_init_master(int mount_master) {
     char s0[SECTOR_SIZE];
     switch(mount_master) {
         case MOUNT_MASTER_EMMC:
-            ret = MMCREAD(0, s0, sizeof(master_block_t) / SECTOR_SIZE);
+            ret = MMCREAD(1, s0, sizeof(master_block_t) / SECTOR_SIZE); // read sector 1 for emuMBR
             break;
         case MOUNT_MASTER_GCSD:
             if (!IS_GCSD_INITIALIZED()) {
@@ -326,13 +326,13 @@ int stor_init_master(int mount_master) {
     return 0;
 }
 
-static partition_t *find_partition_by_id(master_block_t *master, int part_id) {
-    if (part_id < 1 || part_id >= ARRAYSIZE(master->partitions)) {
+static partition_t *find_partition_by_id(master_block_t *master, int part_id, enum STOR_PART_ACTIVES active) {
+    if (part_id < STOR_PART_IDSTOR || part_id > STOR_PART_UNUSED) {
         LOG("Invalid partition ID: %d\n", part_id);
         return NULL;
     }
     for (int i = 0; i < ARRAYSIZE(master->partitions); i++) {
-        if (master->partitions[i].code == part_id)
+        if (master->partitions[i].code == part_id && ((active == STOR_PART_ACTIVE_BOTH) || (master->partitions[i].active == active)))
             return &master->partitions[i];
     }
     return NULL;
@@ -340,7 +340,7 @@ static partition_t *find_partition_by_id(master_block_t *master, int part_id) {
 
 static struct mount_ctx mount_dev[STOR_MAX_MOUNTS];
 
-int stor_init_mount(int idx, int mount_master, int partition_id) {
+int stor_init_mount(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIONS partition_id, enum STOR_PART_ACTIVES active) {
     if (idx < 0 || idx >= STOR_MAX_MOUNTS) {
         LOG("Invalid mount index: %d\n", idx);
         return -1;
@@ -363,16 +363,16 @@ int stor_init_mount(int idx, int mount_master, int partition_id) {
     ctx->master = mm;
 
     if (partition_id) {
-        partition_t *part = find_partition_by_id(&ctx->master->sector0, partition_id);
+        partition_t *part = find_partition_by_id(&ctx->master->sector0, partition_id, active);
         if (!part) {
-            LOG("Partition not found: %d [%s] on mount master %d\n", partition_id, get_partition_name(partition_id), mount_master);
+            LOG("Partition not found: %d [%s] (act:%d) on mount master %d\n", partition_id, get_partition_name(partition_id), active, mount_master);
             return -1;
         }
         ctx->params = part;
     } else
         ctx->params = &ctx->master->sector0.partitions[0];  // default to first partition
 
-    LOG("Mount context %d initialized for partition %s on mount master %d\n", idx, get_partition_name(ctx->params->code), mount_master);
+    LOG("Mount context %d initialized for partition %s (act:%d) on mount master %d\n", idx, get_partition_name(ctx->params->code), active, mount_master);
     return 0;
 }
 
@@ -406,7 +406,7 @@ static uint32_t get_validate_msector(struct mount_ctx *ctx, int sector, int nsec
 }
 
 int stor_read_mount(int idx, uint32_t sector, void *buffer, int nsectors) {
-    conlog("READ from mount %d, sector: %u, nsectors: %d\n", idx, sector, nsectors);
+    //LOG("READ from mount %d, sector: %u, nsectors: %d\n", idx, sector, nsectors);
     struct mount_ctx *ctx = get_validate_mctx(idx);
     if (!ctx)
         return -1;
@@ -417,7 +417,7 @@ int stor_read_mount(int idx, uint32_t sector, void *buffer, int nsectors) {
 }
 
 int stor_write_mount(int idx, uint32_t sector, const void *buffer, int nsectors) {
-    conlog("WRITE to mount %d, sector: %u, nsectors: %d\n", idx, sector, nsectors);
+    //LOG("WRITE to mount %d, sector: %u, nsectors: %d\n", idx, sector, nsectors);
     struct mount_ctx *ctx = get_validate_mctx(idx);
     if (!ctx)
         return -1;

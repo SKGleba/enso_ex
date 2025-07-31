@@ -38,8 +38,6 @@ int view_init(void) {
     }
 
 	view_current = VIEW_DEFAULT;
-    view_vas[view_current] = (uint32_t *)(view_frame.addr + ((view_current + 1) * view_frame.pixcount));
-    memcpy(view_frame.addr, view_vas[view_current], view_frame.size);
 	view_vas[view_current] = view_frame.addr;
 
 	LOG("View initialized: fva=%08X, fsize=%08X, width=%d, height=%d, pixcount=%d\n",
@@ -55,4 +53,14 @@ void view_switch(int new_view) {
 
     memcpy(view_frame.addr, view_vas[view_current], view_frame.size);
     view_vas[view_current] = view_frame.addr;
+}
+
+int view_copy(int src_view, int dst_view) {
+	if (src_view < 0 || src_view >= VIEW_COUNT || dst_view < 0 || dst_view >= VIEW_COUNT) {
+		LOG("Invalid view index: src=%d, dst=%d\n", src_view, dst_view);
+		return -1;
+	}
+	memcpy(view_vas[dst_view], view_vas[src_view], view_frame.size);
+	LOG("Copied view %d to view %d\n", src_view, dst_view);
+	return 0;
 }
