@@ -1,6 +1,16 @@
 #include "utils.h"
-#include "paper.h"
 #include "nskbl.h"
+#include "main.h"
+
+// libcx
+char *my_strchr(const char *s, int c) {
+    while (*s) {
+        if (*s == (char)c)
+            return (char *)s;
+        s++;
+    }
+    return NULL;
+}
 
 int g_log_targets = LOG_TARGET_NONE;
 void dbg_log(int targets, const char *fmt, ...) {
@@ -23,12 +33,12 @@ void dbg_hexdump(void *addr, int size, bool show_addr, char delim) {
 	char line[80];
 	for (i = 0; i < size; i += 16) {
 		if (show_addr)
-			snprintf(line, sizeof(line), "%08X: ", i);
+			my_snprintf(line, sizeof(line), "%08X: ", i);
 		else
 			line[0] = '\0';
 
 		for (j = 0; j < 16 && (i + j) < size; j++) {
-			snprintf(line + strlen(line), sizeof(line) - strlen(line), "%02X%c", ptr[i + j], delim);
+			my_snprintf(line + strlen(line), sizeof(line) - strlen(line), "%02X%c", ptr[i + j], delim);
 		}
 
 		LOG("%s\n", line);

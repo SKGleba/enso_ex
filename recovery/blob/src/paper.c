@@ -20,15 +20,6 @@ struct paper_s default_paper = {
 
 extern uint8_t msx_font[];
 
-static char *my_strchr(const char *s, int c) {
-    while (*s) {
-        if (*s == (char)c)
-            return (char *)s;
-        s++;
-    }
-    return NULL;
-}
-
 void paper_draw_rectangle(struct paper_s *paper, int x, int y, int width, int height, uint32_t color, int fill_pixels) {
     x = paper->min.x + x;
     y = paper->min.y + y;
@@ -92,9 +83,8 @@ void paper_write(struct paper_s *paper, const char *text, int count) {
             paper_draw_char(paper, *text);
             paper->pen.pos.x += (paper->pen.width.x + paper->padding.inner.x);
         }
-        if ((*text == '\n') || (paper->pen.pos.x + paper->pen.width.x + paper->min.x > paper->max.x)) {
+        if ((*text == '\n') || (paper->pen.pos.x + paper->pen.width.x + paper->min.x > paper->max.x))
             paper_pen_nexty(paper);
-        }
         text++;
     }
 }
@@ -112,8 +102,8 @@ void paper_print(struct paper_s *paper, const char *text, int align, int count) 
 
         if (line_end != line_start) {
             int line_length = line_end - line_start;
-            if (*line_end == '\n')
-                line_length--;  // Exclude the newline character
+            //if (*line_end == '\n')
+            //    line_length--;  // Exclude the newline character
             int line_width = (line_length * (paper->pen.width.x + paper->padding.inner.x)) - paper->padding.inner.x;
 
             if (align == PAPER_ALIGN_CENTER)

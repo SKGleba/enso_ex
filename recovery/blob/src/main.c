@@ -166,12 +166,27 @@ static int menu_view_handler(int *next_uview) {
 
 int main(int stage) {
     // TITLES
-    LOG("Initializing the log view..\n");
+    LOG("Initializing the default view..\n");
     if (stage == 2) { // keeps the logs & titles going from stage 2 to 3
         paper_area(&default_paper, DFL_PAPER_START_X, DFL_PAPER_START_Y, DFL_PAPER_END_X, DFL_PAPER_END_Y);
         for (int i = 0; i < VIEW_TEMP; i++) {
             default_paper.view_idx = i;                  // set the view index for each paper
             paper_clear(&default_paper, BG_PAPER_COLR);  // reset the whole screen
+            pen_reset(&default_paper, TITLE_PEN_COLR);
+            switch (i) {
+                case VIEW_DEFAULT:
+                    pprintf_align(&default_paper, LEFT, "<<(L) FILES");
+                    pprintf_align(&default_paper, RIGHT, "MENU (R)>>");
+                    break;
+                case VIEW_MENU:
+                    pprintf_align(&default_paper, LEFT, "<<(L) LOGS");
+                    pprintf_align(&default_paper, RIGHT, "FILES (R)>>");
+                    break;
+                case VIEW_FMGR:
+                    pprintf_align(&default_paper, LEFT, "<<(L) MENU");
+                    pprintf_align(&default_paper, RIGHT, "LOGS (R)>>");
+                    break;
+            }
             pen_reset(&default_paper, TITLE_PEN_COLR);
             pprintf_align(&default_paper, CENTER, "enso_ex recovery menu\nby skgleba\n");
         }

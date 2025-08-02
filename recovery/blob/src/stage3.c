@@ -23,11 +23,9 @@
 #include "stor.h"
 #include "utils.h"
 
-#include "ff.h"
-
 struct menu_s stage3_menu_s = {.draw = stage3_menu,
                                .select = stage3_menu,
-                               .entry_count = 5,
+                               .entry_count = 1,
                                .selection = 0,
                                .exp_buttons = CTRL_CROSS,
                                .prs_buttons = 0,
@@ -39,28 +37,12 @@ int stage3_menu(int selection) {
         paper_clear(stage3_menu_s.paper, stage3_menu_s.paper->color);
         pen_reset(stage3_menu_s.paper, stage3_menu_s.paper->pen.color);
         pprintf(stage3_menu_s.paper, "1. Continue boot\n");
-        pprintf(stage3_menu_s.paper, "2. Init mounts\n");
-        pprintf(stage3_menu_s.paper, "3. Try FF volume mounts\n");
-        pprintf(stage3_menu_s.paper, "4. Get current time\n");
-        pprintf(stage3_menu_s.paper, "5. Try file create\n");
         return 0;
     }
     if (BMX_CTRL_BUTTON_HELD(stage3_menu_s.prs_buttons, CTRL_CROSS)) {
         switch (selection) {
             case 0:  // Continue boot
                 return MENU_RET_FINISH_DEINIT;  // deinit & exit
-            case 1:  // Init mounts
-                fmgr_init_mounts();
-                return MENU_RET_CONTINUE;  // continue the loop
-            case 2:  // Try FF volume mounts
-                fmgr_init_mounts();
-                return MENU_RET_CONTINUE;  // continue the loop
-            case 3:  // Get current time
-                alllog("Current time: %08X\n", bmx_get_time(NULL));
-                return MENU_RET_CONTINUE;  // continue the loop
-            case 4:  // Try file create
-                fmgr_init_mounts();
-                return MENU_RET_CONTINUE;  // continue the loop
             default:
                 LOG("Invalid selection %d\n", selection);
                 return MENU_RET_CONTINUE;  // continue the loop

@@ -4,6 +4,7 @@
 #include <baremetal/draw.h>
 
 #include "utils.h"
+#include "main.h"
 
 enum FMGR_PAPERS {
 	FMGR_PAPERS_LV = 0, // left panel
@@ -44,14 +45,49 @@ enum FMGR_BORDER_VIEWS_PARAMS {
 	FMGR_LRB_PAPER_OPAD_X = 0,
 };
 
-#define FMGR_XV_MAX_NAME_LEN 32 // includes the null terminator
-#define FMGR_XV_ENTRY_COUNT 16
+enum FMGR_ENTRY_TYPES {
+    FMGR_ENTRY_TYPE_FILE = 0,
+    FMGR_ENTRY_TYPE_DIR,
+    FMGR_ENTRY_TYPE_MOUNT_ACTIVE,
+    FMGR_ENTRY_TYPE_MOUNT_INACTIVE,
+    FMGR_ENTRY_TYPE_PARTITION,
+    FMGR_ENTRY_TYPE_OPTION,
+    FMGR_ENTRY_TYPE_COUNT
+};
+
+enum FMGR_XV_LOCATIONS {
+    FMGR_XV_LOC_ROOT = 0,
+    FMGR_XV_LOC_PARTITIONS,
+    FMGR_XV_LOC_MOUNT,
+    FMGR_XV_LOC_DIR,
+    FMGR_XV_LOC_OPTS
+};
+
+enum FMGR_MASTER_SCAN_RESULTS {
+    FMGR_MASTER_SCANNED_MASTER = 0,
+    FMGR_MASTER_SCANNED_PARTITION = 8,
+    FMGR_MASTER_SCANNED_ACTIVE = 16
+};
+#define FMGR_MASTER_SCAN_PACK(_master, _partition, _active) \
+    (((_master) & 0xFF) | ((_partition) << FMGR_MASTER_SCANNED_PARTITION) | ((_active) << FMGR_MASTER_SCANNED_ACTIVE))
+#define FMGR_MASTER_SCAN_UNPACK(_field, _res) \
+    (((_res) >> FMGR_MASTER_SCANNED_##_field) & 0xFF)
+
+#define FMGR_XV_MAX_NAME_LEN 27 // includes the null terminator
+#define FMGR_XV_ENTRY_COUNT 18
 #define FMGR_MAX_PATH_LEN 256
 
 #define HAS_ENDSLASH(path) ((path)[strlen(path) - 1] == '/')
 
+enum FMGR_FILE_OPTS {
+    FMGR_FILE_OP_COPY = 0,
+    FMGR_FILE_OP_MOVE,
+    FMGR_FILE_OP_DELETE,
+    FMGR_FILE_OP_COUNT
+};
+
 int fmgr_init(void);
 int fmgr_view_handler(int *next_uview);
-void fmgr_init_mounts(void);
+int fmgr_set_square_handler(enum FMGR_ENTRY_TYPES exp_entype, void (*handler)(char *path, char *entry));
 
 #endif

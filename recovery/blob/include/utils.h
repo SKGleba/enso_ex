@@ -3,7 +3,6 @@
 
 #include <baremetal/gpio.h>
 
-#include "main.h"
 #include "nskbl.h"
 #include "paper.h"
 #include "stor.h"
@@ -66,5 +65,8 @@ void dbg_hexdump(void *addr, int size, bool show_addr, char delim);
 #define _hexdump_addr(addr, size, show_addr) dbg_hexdump((void *)(addr), (size), show_addr, ' ')
 #define _hexdump_full(addr, size, show_addr, delim) dbg_hexdump((void *)(addr), (size), show_addr, delim)
 #define hexdump(...) FUN_VAR4(__VA_ARGS__, _hexdump_full, _hexdump_addr, _hexdump)(__VA_ARGS__)
+
+char *my_strchr(const char *s, int c);
+#define my_snprintf(_buf, _size, _fmt, ...) nskbl_snprintf((_buf), (_size), (_fmt), ##__VA_ARGS__)
 
 #endif

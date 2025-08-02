@@ -338,6 +338,24 @@ static partition_t *find_partition_by_id(master_block_t *master, int part_id, en
     return NULL;
 }
 
+enum MOUNT_MASTER_TYPES stor_get_master_info(enum MOUNT_MASTERS mount_master, uint32_t *partitions) {
+    if (mount_master < MOUNT_MASTER_EMMC || mount_master > MOUNT_MASTER_GCSD) {
+        LOG("Invalid mount master: %d\n", mount_master);
+        return MOUNT_MASTER_TYPE_NONE;
+    }
+    struct mount_master_ctx *mm = &l_mount_master[mount_master];
+    if (!partitions || (mm->type != MOUNT_MASTER_TYPE_SCE))
+        return mm->type;
+    *partitions = 0;
+    for (int i = 1; i < 0x10; i++) {
+        if (find_partition_by_id(&mm->sector0, i, STOR_PART_ACTIVE_NOT))
+            *partitions |= BITN(i);
+        if (find_partition_by_id(&mm->sector0, i, STOR_PART_ACTIVE_YES))
+            *partitions |= BITN(i + 16);
+    }
+    return MOUNT_MASTER_TYPE_SCE;
+}
+
 static struct mount_ctx mount_dev[STOR_MAX_MOUNTS];
 
 int stor_init_mount(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIONS partition_id, enum STOR_PART_ACTIVES active) {
@@ -373,6 +391,24 @@ int stor_init_mount(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIO
         ctx->params = &ctx->master->sector0.partitions[0];  // default to first partition
 
     LOG("Mount context %d initialized for partition %s (act:%d) on mount master %d\n", idx, get_partition_name(ctx->params->code), active, mount_master);
+    ctx->is_initialized = 1;
+    return 0;
+}
+
+int stor_umount(int idx) {
+    if (idx < 0 || idx >= STOR_MAX_MOUNTS) {
+        LOG("Invalid mount index: %d\n", idx);
+        return -1;
+    }
+    struct mount_ctx *ctx = &mount_dev[idx];
+    if (!ctx->is_initialized) {
+        LOG("Mount context %d not initialized\n", idx);
+        return -1;
+    }
+    ctx->is_initialized = 0;
+    ctx->master = NULL;
+    ctx->params = NULL;
+    LOG("Mount context %d unmounted successfully\n", idx);
     return 0;
 }
 
@@ -382,6 +418,10 @@ static struct mount_ctx *get_validate_mctx(int idx) {
         return NULL;
     }
     struct mount_ctx *ctx = &mount_dev[idx];
+    if (!ctx->is_initialized) {
+        //LOG("Mount context %d not initialized\n", idx);
+        return NULL;
+    }
     if (!ctx->master || !ctx->master->type) {
         LOG("Master context not initialized for mount index %d\n", idx);
         return NULL;
@@ -429,7 +469,7 @@ int stor_write_mount(int idx, uint32_t sector, const void *buffer, int nsectors)
 
 int stor_ff_init_mount(int idx) {
     if (!get_validate_mctx(idx)) {
-        LOG("(FF) Invalid mount context for index %d\n", idx);
+        //LOG("(FF) Invalid mount context for index %d\n", idx);
         return -1;
     }
     return 0;

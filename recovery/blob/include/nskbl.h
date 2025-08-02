@@ -28,6 +28,7 @@ static int (*sceKernelFreeMemBlock)(int32_t uid) = (void *)0x51007449;
 #define MEMBLOCK_TYPE_RX 0x1020D005  // cached for speed, rember to clean cache(s)
 
 static char *(*nskbl_strncpy)(char *dst, const char *src, unsigned int len) = (void *)0x51014611;
+static int (*nskbl_snprintf)(char *buf, unsigned int size, const char *fmt, ...) = (void *)0x510145c9;
 
 #define NSKBL_LBOOTM_LPSP2BCFG 0x51001688
 #define NSKBL_LBOOTM_LPSP2BCFG_CACHER 0x51001680

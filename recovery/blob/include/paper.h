@@ -9,6 +9,7 @@
 #include <string.h>
 #include "nskbl.h"
 #include "view.h"
+#include "utils.h"
 
 #define DFL_PEN_WIDTH_X 16
 #define DFL_PEN_WIDTH_Y 16
@@ -93,10 +94,10 @@ extern struct paper_s default_paper;
         (_paper)->pen.pos.y = (_paper)->padding.outer.y; \
         (_paper)->pen.color = colr;                    \
     } while (0)
-#define pen_pos(_paper, x, y)  \
+#define pen_pos(_paper, _x, _y)  \
     do {               \
-        (_paper)->pen.pos.x = x; \
-        (_paper)->pen.pos.y = y; \
+        (_paper)->pen.pos.x = _x; \
+        (_paper)->pen.pos.y = _y; \
     } while (0)
 
 void paper_write(struct paper_s *paper, const char *text, int count);

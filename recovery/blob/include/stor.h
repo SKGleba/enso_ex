@@ -54,6 +54,7 @@ struct mount_master_ctx {
 };
 
 struct mount_ctx {
+    int is_initialized;
     struct mount_master_ctx *master;
     partition_t *params;
 };
@@ -63,6 +64,7 @@ const char *get_partition_name(int part);
 enum MOUNT_MASTERS {
     MOUNT_MASTER_EMMC = 0,
     MOUNT_MASTER_GCSD,
+    MOUNT_MASTER_COUNT
 };
 
 enum MOUNT_MASTER_TYPES {
@@ -108,5 +110,7 @@ int stor_init_mount(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIO
 int stor_ff_init_mount(int idx);
 int stor_read_mount(int idx, uint32_t sector, void *buffer, int nsectors);
 int stor_write_mount(int idx, uint32_t sector, const void *buffer, int nsectors);
+enum MOUNT_MASTER_TYPES stor_get_master_info(enum MOUNT_MASTERS mount_master, uint32_t *partitions);
+int stor_umount(int idx);
 
 #endif
