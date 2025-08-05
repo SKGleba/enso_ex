@@ -92,7 +92,6 @@ typedef struct patch_args_struct {
   uint32_t ex_ctrl; // ex ctrl data
   void* nskbl_exports_start; // nskbl exports start
   kbl_param_struct* kbl_param;
-  void* (*ex_load_exe)(void* source, char* memblock_name, uint32_t offset, uint32_t size, int flags, int* ret_memblock_id); // e2x's load_exe func
   int (*ex_get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset); // e2x's get_file func
   void* (*kbl_memset)(void* dst, int ch, int sz);
   void* (*kbl_memcpy)(void* dst, const void* src, int sz);
@@ -100,9 +99,12 @@ typedef struct patch_args_struct {
   int (*kbl_alloc_memblock)(const char* name, int type, int size, void* opt);
   int (*kbl_get_memblock)(int32_t uid, void** basep);
   int (*kbl_free_memblock)(int32_t uid);
+  int *ex_protect_boot; // pointer to boot area protection flag
+  int (*ex_init_os0)(uint32_t mbr_off, unsigned int* ctx, int is_scembr);
+  void (*printf)(const char* fmt, ...);
   void* defarg; // default arg passed to all boot modules at start
   int* uids_a; // first uid list
   int* uids_b; // second uid list
   int *uids_d; // devkit uid list
 } patch_args_struct;
-#define PATCH_ARGS_VERSION 3
+#define PATCH_ARGS_VERSION 4

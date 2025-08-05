@@ -8,12 +8,14 @@
 #include <inttypes.h>
 #include "nskbl.h"
 #include "enso.h"
+#include "misc_bm.h"
+#include "ex_defs.h"
 
 // first payload says hello, cleans up and reads second payload from emmc
 // this is because we only have 0x180 bytes for first payload
 void go(void) {
     // say hello
-    printf("\nWelcome to enso_ex v5.1 by skgleba | @stage1!\n\n");
+    printf("\nenso_ex v5 | @stage1\n\n");
 
     // clean after us
     memset((char*)ENSO_CORRUPTED_AREA_START, 0, ENSO_CORRUPTED_AREA_SIZE);
@@ -22,14 +24,17 @@ void go(void) {
     memcpy(boot_args, (*sysroot_ctx_ptr)->boot_args, sizeof(*boot_args));
 	
     // memblock for stage2
-    printf("[E2X] stage2 a");
+    printf("x stage2 a");
     void* stage2 = NULL;
     int blk = sceKernelAllocMemBlock("", MEMBLOCK_TYPE_RW, SECOND_PAYLOAD_SIZE, NULL);
     sceKernelGetMemBlockBase(blk, &stage2);
     
-    // read stage2 from emmc
+    // read stage2 from emmc or gcsd
     printf("-r");
-    read_sector_default((int*)NSKBL_DEVICE_EMMC_CTX, SECOND_PAYLOAD_OFFSET, SECOND_PAYLOAD_SIZE / SDIF_SECTOR_SIZE, (int)stage2);
+    if (CTRL_BUTTON_HELD(boot_args->field_CC, E2X_RECOVERY_SECOND) && *(uint32_t*)NSKBL_DEVICE_GCSD_TGT_CTX)
+        read_sector_sd((int*)*(uint32_t*)NSKBL_DEVICE_GCSD_TGT_CTX, SECOND_PAYLOAD_OFFSET, stage2, SECOND_PAYLOAD_SIZE / SDIF_SECTOR_SIZE);
+    else
+        read_sector_mmc_direct((int*)*(uint32_t*)NSKBL_DEVICE_EMMC_TGT_CTX, SECOND_PAYLOAD_OFFSET, stage2, SECOND_PAYLOAD_SIZE / SDIF_SECTOR_SIZE);
 
     // rw->rx
     printf("-m");
@@ -41,13 +46,6 @@ void go(void) {
     printf("-x\n");
     void (*stage2_start)(void *me) = (void*)(stage2 + 1);
     stage2_start(stage2);
-
-    // shouldnt be here, try running a recovery payload
-    printf("[E2X] E: s2r->R\n");
-    void (*rconf_start)(int x) = (void*)(RECOVERY_PAYLOAD_DEST | 1);
-    if (read_sector_default_direct((int*)NSKBL_DEVICE_GCSD_CTX, RECOVERY_PAYLOAD_OFFSET, RECOVERY_PAYLOAD_SIZE / SDIF_SECTOR_SIZE, (int)RECOVERY_PAYLOAD_DEST) < 0)
-        read_sector_default((int*)NSKBL_DEVICE_EMMC_CTX, RECOVERY_PAYLOAD_OFFSET, RECOVERY_PAYLOAD_SIZE / SDIF_SECTOR_SIZE, (int)RECOVERY_PAYLOAD_DEST);
-    rconf_start((int)RECOVERY_PAYLOAD_DEST);
 }
 
 __attribute__ ((section (".text.start"), naked)) void start(void)  {

@@ -7,9 +7,9 @@
  */
 #include <inttypes.h>
 
-#include "nskbl.h"
-#include "enso.h"
-#include "ex_defs.h"
+#include "../../core/enso.h"
+#include "../../core/ex_defs.h"
+#include "../../core/nskbl.h"
 
 #define unlikely(expr) __builtin_expect(!!(expr), 0)
 
@@ -34,7 +34,7 @@ do {                                   \
 /*
 	misc peripherals-related funcs
 */
-#include "misc_bm.c"
+#include "../../core/misc_bm.c"
 // --------------------
 
 /*
@@ -240,7 +240,7 @@ static int init_os0(uint32_t mbr_off, unsigned int* ctx, int is_scembr) {
     DACR_OFF(fakembr_offset = mbr_off;);
 
     // init os0
-    int ret = init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x100000 | (is_scembr ? 0x10000 : 0), (unsigned int*)read_sector_default_direct, ctx);
+    int ret = init_part((unsigned int*)NSKBL_PARTITION_OS0, 0x100000 | (is_scembr ? 0x10000 : 0), (unsigned int*)read_sector_default, ctx);
     printf("x init_os0[%d|%08X]: 0x%08X\n", mbr_off, ctx, ret);
 
     // TODO: what do these do? but we need them for some reason
@@ -262,6 +262,7 @@ static int get_hwcfg_patched(uint32_t* dst) {
 	if (dst[0] == E2X_MAGIC) {
 		patchedHwcfgStruct* expp = (void*)dst;
 		syscon_common_read(&expp->ex_ports.ctrl, SYSCON_CMD_GET_DCTRL);
+		expp->ex_ports.ctrl &= ~CTRL_VOLUP;
 		expp->ex_ports.nskbl_exports_start = (void*)NSKBL_EXPORTS_ADDR;
 		expp->ex_ports.get_file = get_file;
 		expp->ex_ports.memcpy = memcpy;
@@ -274,7 +275,6 @@ static int get_hwcfg_patched(uint32_t* dst) {
 		expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->boot_args;
         expp->ex_ports.protect_boot = &disable_bootarea_update;
         expp->ex_ports.init_os0 = init_os0;
-		expp->ex_ports.printf = printf;
 		return E2X_MAGIC;
 	} else
 		return get_hwcfg((void *)dst);
@@ -320,69 +320,13 @@ static int recovery_ccode(int *ctx, uint8_t *buf) {
 
 	return ((int (*)(int *, uint32_t))(buf + rbr->offset))(ctx, (uint32_t)get_hwcfg_patched);
 }
-
-static void recovery(int type, int dolce) {
-    int error = 0;
-    unsigned char* rbuf = (unsigned char*)E2X_RCONF_PADDR;
-
-    if (type == E2X_RECOVERY_GCSD) {
-        printf("xR GC-SD\n");
-		if (!(*(uint32_t*)NSKBL_DEVICE_GCSD_TGT_CTX)) {
-        	syscon_common_write(1, SYSCON_CMD_SET_GCSD, 2);  // enable the GC slot
-        	boot_args->boot_type_indicator_1 |= 0x40000;     // enable sd0 mounting
-        	clean_dcache((void*)boot_args, 0x100);
-        	flush_icache();
-        	setup_emmc();  // reinit main storages
-		}
-		error = 2;
-        if (read_sector_default_direct((int*)NSKBL_DEVICE_GCSD_CTX, 0, 1, (int)rbuf) >= 0) {
-            if (*(uint32_t*)rbuf == 'ynoS') {  // "Sony" - EMMC dump/SCE formatted GCSD, use its os0 as main os0
-                printf("xR MBR\n");
-				error = recovery_ccode((int*)NSKBL_DEVICE_GCSD_CTX, rbuf);
-				if (error < 0)
-                	error = init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_GCSD_CTX, 1);
-            } else if (*(uint32_t*)rbuf == E2X_MAGIC) {  // enso_ex raw recovery code blob
-                printf("xR RAW\n");
-                error = recovery_ccode((int*)NSKBL_DEVICE_GCSD_CTX, rbuf);
-            } else if (*(uint32_t*)(rbuf + 0x38) == ' 61T') {  // mbr+0x36 = 'FA[T16 ]  ' - fat16 partition, use as os0
-                printf("xR PBR\n");
-                error = init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_GCSD_CTX, 0);
-            } else {  // unk magic
-                printf("xR E: UNK\n");
-                error = 3;
-            }
-        }
-    } else {
-        printf("xR eMMC\n");
-        error = recovery_ccode((int*)NSKBL_DEVICE_EMMC_CTX, rbuf);
-        if (error < 0)
-            error = init_os0(E2X_RECOVERY_MBR_OFFSET, (unsigned int*)NSKBL_DEVICE_EMMC_CTX, 1);
-    }
-
-    printf("xR estat: 0x%X\n", error);
-
-    if (!dolce) {
-		unsigned int ctrl = -1;
-        while (error) {
-            syscon_common_read(&ctrl, SYSCON_CMD_GET_DCTRL);
-            if (error == 2) {  // No SD found or SD read failed
-                if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_NOENT))
-                    break;
-            } else if (error == 3) {  // Incorrect SD magic
-                if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_UNKSD))
-                    break;
-            } else {  // Recovery returned !0
-                if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_RETERR))
-                    break;
-            }
-        }
-    }
-}
 // --------------------
 
 // main
 __attribute__((section(".text.start"))) void start(void* me) {
-	printf("x @stage2 - patching nskbl\n");
+	gpio_port_clear(0, 7);
+
+	printf("x @stage2 RECOVERY - patching nskbl\n");
 
 	// ignore module_load error (uids can be unclean now)
 	*(uint16_t*)NSKBL_LMODLOAD_CHKRET = 0xbf00;
@@ -393,30 +337,14 @@ __attribute__((section(".text.start"))) void start(void* me) {
 	// use a custom module_load_from_list
 	*(uint32_t*)NSKBL_EXPORTS(NSKBL_EXPORTS_LMODLOAD_N) = (uint32_t)module_load_patched;
 
-	// get pressed buttons
-	// we cannot use the info in kbl param - what if syscon is in safe mode?
-	unsigned int ctrl;
-	syscon_common_read(&ctrl, SYSCON_CMD_GET_DCTRL);
-	printf("x ctrl: 0x%08X\n", ctrl);
+	*(uint32_t*)NSKBL_LBOOTM_LPSP2BCFG = 0x47806800; // blx to psp2bootconfig string
+	*(uint32_t*)NSKBL_PSP2BCFG_STRING_PTR = (uint32_t)load_psp2bootconfig_patched;
+	clean_dcache((void*)NSKBL_LBOOTM_LPSP2BCFG_CACHER, 0x20);
+	clean_dcache((void*)NSKBL_PSP2BCFG_STRING_PTR_CACHER, 0x20);
+	flush_icache();
 
-	// change the kernel loader
-	if (!CTRL_BUTTON_HELD(ctrl, E2X_IPATCHES_SKIP)) {
-		*(uint32_t*)NSKBL_LBOOTM_LPSP2BCFG = 0x47806800; // blx to psp2bootconfig string
-		*(uint32_t*)NSKBL_PSP2BCFG_STRING_PTR = (uint32_t)load_psp2bootconfig_patched;
-		clean_dcache((void*)NSKBL_LBOOTM_LPSP2BCFG_CACHER, 0x20);
-		clean_dcache((void*)NSKBL_PSP2BCFG_STRING_PTR_CACHER, 0x20);
-		flush_icache();
-	}
-
-	// Recovery if SELECT held
-    if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_GCSD))
-        recovery(E2X_RECOVERY_GCSD, 0);
-    else if (is_genuine_dolce() && !(CTRL_BUTTON_HELD(ctrl, CTRL_POWER)))
-        recovery(E2X_RECOVERY_GCSD, 1);
-	else if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_EMMC))
-		recovery(E2X_RECOVERY_EMMC, 0);
-	else
-        init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_EMMC_CTX, 1);
+	//recovery_ccode((int*)NSKBL_DEVICE_GCSD_CTX, (int*)E2X_RCONF_PADDR);
+    init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_EMMC_CTX, 1);
 
     printf("x resuming nskbl\n");
 

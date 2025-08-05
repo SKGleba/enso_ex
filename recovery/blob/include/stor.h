@@ -105,7 +105,7 @@ enum STOR_PART_ACTIVES {
     STOR_PART_ACTIVE_BOTH
 };
 
-int stor_init_master(int mount_master);
+enum MOUNT_MASTER_TYPES stor_init_master(enum MOUNT_MASTERS mount_master);
 int stor_init_mount(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIONS partition_id, enum STOR_PART_ACTIVES active);
 int stor_ff_init_mount(int idx);
 int stor_read_mount(int idx, uint32_t sector, void *buffer, int nsectors);

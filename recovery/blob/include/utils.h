@@ -49,6 +49,15 @@
 // function selector based on argc
 #define FUN_VAR4(_1, _2, _3, _4, _fun, ...) _fun
 
+#define DACR_OFF(stmt)                                                        \
+    do {                                                                      \
+        unsigned prev_dacr;                                                   \
+        __asm__ volatile("mrc p15, 0, %0, c3, c0, 0 \n" : "=r"(prev_dacr));   \
+        __asm__ volatile("mcr p15, 0, %0, c3, c0, 0 \n" : : "r"(0xFFFF0000)); \
+        stmt;                                                                 \
+        __asm__ volatile("mcr p15, 0, %0, c3, c0, 0 \n" : : "r"(prev_dacr));  \
+    } while (0)
+
 enum LOG_TARGETS {
 	LOG_TARGET_NONE = 0,
 	LOG_TARGET_CONSOLE = 1 << 0,

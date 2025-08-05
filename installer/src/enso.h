@@ -20,12 +20,8 @@
 #define FAT_BIN_TARGET 0x2 // start block for the fat.bin
 
 #define RBLOB_SOURCE "ux0:eex/recovery/rblob.e2xp"
-#define RBLOB_SIZE 0x39000
-#define RBLOB_TARGET 0x30 // start block for the recovery blob
 #define RMBR_SOURCE "ux0:eex/recovery/rmbr.bin"
-#define RMBR_TARGET 0x3 // block index for the recovery MBR
 #define RCONFIG_SOURCE "ux0:eex/recovery/rconfig.e2xp"
-#define RCONFIG_TARGET 0x4 // block index for the recovery config
 
 #define VALID_SL_CRC 0xDB02B893  // 3.65 second_loader
 

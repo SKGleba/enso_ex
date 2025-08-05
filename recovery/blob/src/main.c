@@ -20,16 +20,19 @@
 #include "main.h"
 #include "stage2.h"
 #include "stage3.h"
+#include "stageB.h"
 #include "utils.h"
 #include "bootstrap.h"
 #include "view.h"
 #include "fmgr.h"
 
 struct eex_param_s g_eex_params = {
-    .init_os0 = NULL,
+    .boot_mode = BOOTSTRAP_MODE_EMMC,
     .get_hwcfg_patched = NULL,
-    .kbl_param = NULL,
-    .disable_bootarea_update = NULL
+};
+
+ex_ports_struct g_eex_ports = {
+    .module_dir = (char*)((uint32_t)E2X_MAGIC) // magic for enso_ex to fill
 };
 
 static struct menu_s *current_menu = NULL;
@@ -64,16 +67,18 @@ static int init(struct eex_param_s *eex_params) {
     g_log_targets = LOG_TARGET_CONSOLE;
 	LOG("Baremetal payload started!\n");
 
-    if (eex_params)
+    if (eex_params) {
         memcpy(&g_eex_params, eex_params, sizeof(struct eex_param_s));
-    else
+        LOG("Using eex_params: boot_mode=%d, get_hwcfg_patched=0x%08X\n", g_eex_params.boot_mode, g_eex_params.get_hwcfg_patched);
+        g_eex_params.get_hwcfg_patched((patchedHwcfgStruct *)&g_eex_ports);  // call the patched get_hwcfg function
+    } else
         LOG("WARNING: eex_params is NULL, using default values!\n");
 
-    if (!g_eex_params.kbl_param) {
+    if (!g_eex_ports.kbl_param) {
         LOG("WARNING: kbl_param was not given, using nskbl\n");
-        g_eex_params.kbl_param = ns_kbl_param;
+        g_eex_ports.kbl_param = ns_kbl_param;
     }
-    sysroot_init((struct sysroot_buffer *)g_eex_params.kbl_param);
+    sysroot_init((struct sysroot_buffer *)g_eex_ports.kbl_param);
 
     LOG("initializing cdram & syscon...\n");
     cdram_enable();
@@ -153,7 +158,7 @@ static int menu_view_handler(int *next_uview) {
                 case MENU_RET_FINISH_DEINIT:
                     current_menu = NULL;  // exit the menu loop and deinit
                     *next_uview = -1;
-                    deinit((struct sysroot_buffer *)g_eex_params.kbl_param);
+                    deinit((struct sysroot_buffer *)g_eex_ports.kbl_param);
                     break;
                 default:
                     LOG("ERROR: Unknown menu return value %d\n", ret);
@@ -167,7 +172,7 @@ static int menu_view_handler(int *next_uview) {
 int main(int stage) {
     // TITLES
     LOG("Initializing the default view..\n");
-    if (stage == 2) { // keeps the logs & titles going from stage 2 to 3
+    if (stage == 2 || stage == 0xB) { // keeps the logs & titles going from stage 2 to 3
         paper_area(&default_paper, DFL_PAPER_START_X, DFL_PAPER_START_Y, DFL_PAPER_END_X, DFL_PAPER_END_Y);
         for (int i = 0; i < VIEW_TEMP; i++) {
             default_paper.view_idx = i;                  // set the view index for each paper
@@ -209,12 +214,14 @@ int main(int stage) {
     // -- status
     paper_clear(&status_paper, MENU_PAPER_COLR);
     pen_reset(&status_paper, STATUS_PEN_COLR);
-    pprintf_align(&status_paper, LEFT, "S%d\n", stage);
+    pprintf_align(&status_paper, LEFT, "S%X\n", stage);
     // -- info
     paper_clear(&info_paper, INFO_PAPER_COLR);
     pen_reset(&info_paper, INFO_PEN_COLR);
     inflog("Welcome to the enso_ex recovery menu!\n");
     inflog("Use arrow keys to navigate, X to select.\n");
+    inflog("Pressing L/R will switch active views.\n");
+    inflog("START will apply changes and continue boot.\n");
     // -- options
     paper_clear(&menu_paper, MENU_PAPER_COLR);
     pen_reset(&menu_paper, MENU_PEN_COLR);
@@ -226,9 +233,14 @@ int main(int stage) {
             break;
 		case 3:
 			current_menu = &stage3_menu_s;
-			current_menu->draw(-1);                  // initial draw
-			menu_change_selection(current_menu, 0);  // set initial selection
+			current_menu->draw(-1);
+			menu_change_selection(current_menu, 0);
 			break;
+        case 0xB:
+            current_menu = &stageB_menu_s;
+            current_menu->draw(-1);
+            menu_change_selection(current_menu, 0);
+            break;
         default:
             LOG("ERROR: Unknown stage %d\n", stage);
             break;
@@ -254,6 +266,8 @@ int main(int stage) {
     g_log_targets &= ~LOG_TARGET_LOGPAPER;  // disable paper logging 
 
     LOG("Exiting baremetal payload...\n");
+    if (ret >= 0)
+        ret = 0;
 
     return ret;
 }
@@ -263,6 +277,14 @@ __attribute__((section(".text.start"), optimize("O0"))) int start(struct eex_par
     return main(2);
 }
 
+__attribute__((section(".text.bootstart"), optimize("O0"))) int bootstart(void *get_hwcfg_va) {
+    struct eex_param_s tmp_eex_params = {
+        .boot_mode = BOOTSTRAP_MODE_BOOTMGR,
+        .get_hwcfg_patched = (int (*)(patchedHwcfgStruct *))get_hwcfg_va
+    };
+    init(&tmp_eex_params);
+    return main(0xB);
+}
 
 // ---- PAPERS ----
 struct paper_s menu_paper = {

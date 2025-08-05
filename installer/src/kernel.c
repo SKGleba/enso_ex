@@ -17,6 +17,7 @@
 
 #include "enso.h"
 #include "fatcheck.h"
+#include "../core/ex_defs.h"
 
 #define printf(str, x...) do { printf_file("%s:%d: " str, __PRETTY_FUNCTION__, __LINE__, ## x); } while (0)
 #define ARRAYSIZE(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
@@ -441,7 +442,7 @@ int k_ensoWriteRecoveryMbr(void) {
 		ret = ksceIoRead(fd, memblock_va, BLOCK_SIZE);
 		ksceIoClose(fd);
 		if (*(uint32_t*)memblock_va) {
-            ret = ksceSdifWriteSectorMmc(emmc, RMBR_TARGET, memblock_va, 1);
+            ret = ksceSdifWriteSectorMmc(emmc, E2X_RECOVERY_MBR_OFFSET, memblock_va, 1);
             if (ret < 0)
 				printf("failed to write mbr3\n");
 		} else {
@@ -467,7 +468,7 @@ int k_ensoWriteRecoveryConfig(void) {
 		ret = ksceIoRead(fd, memblock_va, BLOCK_SIZE);
 		ksceIoClose(fd);
 		if (*(uint32_t*)memblock_va) {
-            ret = ksceSdifWriteSectorMmc(emmc, RCONFIG_TARGET, memblock_va, 1);
+            ret = ksceSdifWriteSectorMmc(emmc, E2X_RCONF_OFFSET, memblock_va, 1);
             if (ret < 0)
 				printf("failed to write config\n");
 		} else {
@@ -487,13 +488,13 @@ int k_ensoWriteRecoveryBlob(void) {
 	int fd = 0;
 
 	ENTER_SYSCALL(state);
-	memset(memblock_va, 0, RBLOB_SIZE);
-	ret = fd = ksceIoOpen(RBLOB_SOURCE, SCE_O_RDONLY, 0);
+    memset(memblock_va, 0, E2X_RBLOB_SIZE);
+    ret = fd = ksceIoOpen(RBLOB_SOURCE, SCE_O_RDONLY, 0);
 	if (fd >= 0) {
-		ret = ksceIoRead(fd, memblock_va, RBLOB_SIZE);
+		ret = ksceIoRead(fd, memblock_va, E2X_RBLOB_SIZE);
 		ksceIoClose(fd);
 		if (*(uint32_t*)memblock_va) {
-            ret = ksceSdifWriteSectorMmc(emmc, RBLOB_TARGET, memblock_va, RBLOB_SIZE / BLOCK_SIZE);
+            ret = ksceSdifWriteSectorMmc(emmc, E2X_RBLOB_OFFSET, memblock_va, E2X_RBLOB_SIZE / BLOCK_SIZE);
             if (ret < 0)
 				printf("failed to write blob\n");
 		} else {

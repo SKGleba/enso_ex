@@ -1,4 +1,5 @@
-TARGET	= rblob
+TARGET_BLOB	= rblob
+TARGET_BOOTMGR = bootmgr
 SRCDIRS := src FatFs
 INCDIRS := include FatFs
 SRCFILES := $(foreach dir,$(SRCDIRS),$(wildcard $(dir)/*.c))
@@ -10,16 +11,19 @@ AS	= $(PREFIX)-as
 OBJCOPY	= $(PREFIX)-objcopy
 CFLAGS	= $(foreach dir,$(INCDIRS),-I$(dir)) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access \
 	  -O2 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable
-LDFLAGS	= -T linker.ld -nostartfiles -nostdlib -lgcc -lm -lbaremetal
+LDFLAGS	= -nostartfiles -nostdlib -lgcc -lm -lbaremetal
 
-all: $(TARGET).e2xp
+all: $(TARGET_BLOB).e2xp $(TARGET_BOOTMGR).e2xp
 	@rm -f $(OBJS)
 
 %.e2xp: %.elf
 	$(OBJCOPY) -S -O binary $^ $@
 
-$(TARGET).elf: $(OBJS)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+$(TARGET_BLOB).elf: $(OBJS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) -T linker_rblob.ld
+
+$(TARGET_BOOTMGR).elf: $(OBJS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) -T linker_bootmgr.ld
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

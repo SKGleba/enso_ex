@@ -3,6 +3,7 @@
 
 #include "paper.h"
 #include "bootstrap.h"
+#include "../../../core/ex_defs.h"
 
 enum MENU_RETURNS {
     MENU_RET_CONTINUE = 0, // continue looping
@@ -69,6 +70,7 @@ extern struct paper_s status_paper;
 extern struct paper_s info_paper;
 
 extern struct eex_param_s g_eex_params;
+extern ex_ports_struct g_eex_ports;
 
 int main(int stage);
 

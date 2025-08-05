@@ -21,7 +21,6 @@
 
 #define CUSTOM_BOOT_LIST "os0:ex/boot_list.txt"
 #define CUSTOM_BOOT_LIST_MAGIC 'LXE#' // #EXL
-static int bootlist_mb_id = -1;
 
 static patch_args_struct patch_args;
 
@@ -72,7 +71,7 @@ static char *mlist_str_d[] = {
 	"deci4p_sdrfp.skprx"
 };
 
-char* find_endline(char* start, char* end) {
+static char* find_endline(char* start, char* end) {
 	for (char* ret = start; ret < end; ret++) {
 		if (*(uint16_t*)ret == 0x0A0D || *(uint8_t*)ret == 0x0A)
 			return ret;
@@ -80,7 +79,7 @@ char* find_endline(char* start, char* end) {
 	return end;
 }
 
-char* find_nextline(char* current_line_end, char* end) {
+static char* find_nextline(char* current_line_end, char* end) {
 	for (char* next_line = current_line_end; next_line < end; next_line++) {
 		if (*(uint8_t*)next_line != 0x0D && *(uint8_t*)next_line != 0x0A && *(uint8_t*)next_line != 0x00)
 			return next_line;
@@ -88,7 +87,7 @@ char* find_nextline(char* current_line_end, char* end) {
 	return NULL;
 }
 
-void parse_bootlist(void* data_start, int data_size) {
+static void parse_bootlist(void* data_start, int data_size) {
 	char* startlist = data_start;
 	char* endlist = startlist + data_size;
 
@@ -130,25 +129,24 @@ static void prepare_modlists(char** module_dir_s) {
 
 		// custom
 		if (CTRL_BUTTON_HELD(patch_args.ex_ctrl, E2X_EPATCHES_SKIP)) {
-			clist_str[0] = "e2xrecovr.skprx"; // recovery script
+            cfg->ex_ports.printf("[CKLDR] W: skipping custom patches\n");
+            clist_str[0] = "e2xrecovr.skprx"; // recovery script
 			clist_str[1] = "e2xhfwmod.skprx"; // always run the hfw-compat script
 			use_clist = 2;
 		} else {
-			int bootlist_size = (int)patch_args.ex_get_file(CUSTOM_BOOT_LIST, NULL, 0, 0);
-			void *bootlist = (bootlist_size > 0) ? patch_args.ex_load_exe(CUSTOM_BOOT_LIST, "boot_list", 0, (uint32_t)bootlist_size, E2X_LX_NO_XREMAP | E2X_LX_NO_CCACHE, &bootlist_mb_id) : NULL;
-			if (bootlist && *(uint32_t*)bootlist == CUSTOM_BOOT_LIST_MAGIC) { // ensure we dont use the old list
-				if (bootlist_size & 0xFFF)
-					*(uint8_t*)(bootlist + bootlist_size) = 0;
-				else
-					*(uint8_t*)(bootlist + bootlist_size - 1) = 0; // possibly cut last entry
-				parse_bootlist(bootlist, bootlist_size);
-			} else {
-				clist_str[0] = "e2xhencfg.skprx";
+            cfg->ex_ports.printf("[CKLDR] preparing custom modules\n");
+            void* bootlist = (void*)E2X_CKLDR_CLIST_PADDR;
+            patch_args.kbl_memset(bootlist, 0, E2X_CKLDR_CLIST_SIZE);
+            if (!patch_args.ex_get_file(CUSTOM_BOOT_LIST, bootlist, 0, 0) && (*(uint32_t*)bootlist == CUSTOM_BOOT_LIST_MAGIC))  // ensure we dont use the old list
+                parse_bootlist(bootlist, E2X_CKLDR_CLIST_SIZE);
+            else {
+                cfg->ex_ports.printf("[CKLDR] W: using default custom modules\n");
+                clist_str[0] = "e2xhencfg.skprx";
 				clist_str[1] = "e2xculogo.skprx";
 				clist_str[2] = "e2xhfwmod.skprx";
 				use_clist = 3;
-			}
-		}
+            }
+        }
 	} else
 		use_clist = 0;
 
@@ -228,11 +226,8 @@ int module_bootstart(SceSize argc, void *args) {
 	// start the custom modules
 	patch_args.this_version = PATCH_ARGS_VERSION; // loader's this struct version
 	patch_args.defarg = args;
-	if (use_clist > 0) {
+	if (use_clist > 0)
 		KblStartModulesFromList(clist_uid, use_clist, 4, &patch_args);
-		if (bootlist_mb_id != -1)
-			patch_args.kbl_free_memblock(bootlist_mb_id);
-	}
 
 	// start default modules part 1
 	KblStartModulesFromList(mlist_uid_a, LIST_A_MODULE_COUNT, 4, args);

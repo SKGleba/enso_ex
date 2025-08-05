@@ -157,7 +157,7 @@ EXIT:
     return ret;
 }
 
-int g_disable_bootarea_update = 1;
+int g_disable_bootarea_update = 0;
 int write_sector_mmc(int *ctx, unsigned int block_offset, const void *target_buf, int block_count) {
     LOG("WRITE to MMC, block_offset: %u, block_count: %d\n", block_offset, block_count);
     if (g_disable_bootarea_update && (ctx == (int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX)) {
@@ -266,8 +266,8 @@ static struct mount_master_ctx l_mount_master[2] = {
     }
 };
 
-int stor_init_master(int mount_master) {
-    int ret = 0;
+enum MOUNT_MASTER_TYPES stor_init_master(enum MOUNT_MASTERS mount_master) {
+    int ret = MOUNT_MASTER_TYPE_NONE;
     // get MBR
     char s0[SECTOR_SIZE];
     switch(mount_master) {
@@ -323,7 +323,7 @@ int stor_init_master(int mount_master) {
         mm->type = MOUNT_MASTER_TYPE_FAT;
 
     LOG("Mount master %d initialized successfully, type: %d\n", mount_master, mm->type);
-    return 0;
+    return mm->type;
 }
 
 static partition_t *find_partition_by_id(master_block_t *master, int part_id, enum STOR_PART_ACTIVES active) {

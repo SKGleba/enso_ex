@@ -262,8 +262,10 @@ static int (*sceKernelFreeMemBlock)(int32_t uid) = (void*)0x51007449;
 
 static int (*is_genuine_dolce)(void) = (void*)0x51017321;
 
+static int (*read_sector_sd)(int *part_ctx, uint32_t sector, void *buffer, int nsectors) = (void *)0x5101E879;
+static int (*read_sector_mmc_direct)(int *ctx, unsigned int block_offset, void *target_buf, int block_count) = (void *)0x5101c515;
 static int (*read_sector_default)(int* ctx, int sector, int nsectors, int buffer) = (void*)0x510010FD; // 0x20 cached
-static int (*read_sector_default_direct)(int* ctx, int sector, int nsectors, int buffer) = (void*)0x510010C5;
+static int (*read_sector_default_direct)(int* pctx, int sector, int nsectors, int buffer) = (void*)0x510010C5;
 static int (*setup_emmc)() = (void*)0x5100124D;
 static int (*init_part)(unsigned int *partition, unsigned int flags, unsigned int *read_func, unsigned int *master_dev) = (void*)0x5101FF21;
 
