@@ -26,9 +26,52 @@ static int (*sceKernelRemapBlock)(int32_t uid, int type) = (void *)0x51007171;
 static int (*sceKernelFreeMemBlock)(int32_t uid) = (void *)0x51007449;
 #define MEMBLOCK_TYPE_RW 0x1020D006
 #define MEMBLOCK_TYPE_RX 0x1020D005  // cached for speed, rember to clean cache(s)
+enum MEMBLOCK_CONSTRUCT {
+    MB_A_RO = 0x4,
+    MB_A_RX = 0x5,
+    MB_A_RW = 0x6,
+    MB_A_F = 0x7,
+    MB_A_URO = 0x40,
+    MB_A_URX = 0x50,
+    MB_A_URW = 0x60,
+    MB_A_UF = 0x70,
+    MB_S_G = 0x200,
+    MB_S_H = 0x800,
+    MB_S_S = 0xD00,
+    MB_C_LD = 0x2000,
+    MB_C_HE = 0x4000,
+    MB_C_N = 0x8000,
+    MB_C_Y = 0xD000,
+    MB_I_IO = 0x100000,
+    MB_I_DEF = 0x200000,
+    MB_I_CDR = 0x400000,
+    MB_I_BU = 0x500000,
+    MB_I_PC = 0x800000,
+    MB_I_SHR = 0x900000,
+    MB_I_CDLG = 0xA00000,
+    MB_I_BK = 0xC00000,
+    MB_I_PMM = 0xF00000,
+    MB_U_CDRN = 0x5000000,
+    MB_U_UNF = 0x6000000,
+    MB_U_CDRD = 0x9000000,
+    MB_U_SHR = 0xA000000,
+    MB_U_IO = 0xB000000,
+    MB_U_DEF = 0xC000000,
+    MB_U_PC = 0xD000000,
+    MB_U_CDLGP = 0xE000000,
+    MB_U_CDLGV = 0xF000000,
+    MB_K_DEF = 0x10000000,
+    MB_K_IO = 0x20000000,
+    MB_K_PC = 0x30000000,
+    MB_K_CDRD = 0x40000000,
+    MB_K_CDRN = 0x50000000,
+    MB_K_UNF = 0x60000000,
+    MB_K_GPU = 0xA0000000,
+};
 
 static char *(*nskbl_strncpy)(char *dst, const char *src, unsigned int len) = (void *)0x51014611;
 static int (*nskbl_snprintf)(char *buf, unsigned int size, const char *fmt, ...) = (void *)0x510145c9;
+static int (*nskbl_strncmp)(const char *s1, const char *s2, int len) = (void *)0x51013CA0;
 
 #define NSKBL_LBOOTM_LPSP2BCFG 0x51001688
 #define NSKBL_LBOOTM_LPSP2BCFG_CACHER 0x51001680

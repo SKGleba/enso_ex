@@ -4,6 +4,7 @@
 #include "paper.h"
 #include "bootstrap.h"
 #include "../../../core/ex_defs.h"
+#include <baremetal/sysroot.h>
 
 enum MENU_RETURNS {
     MENU_RET_CONTINUE = 0, // continue looping
@@ -72,6 +73,11 @@ extern struct paper_s info_paper;
 extern struct eex_param_s g_eex_params;
 extern ex_ports_struct g_eex_ports;
 
+extern unsigned int __bss_start__;
+extern unsigned int __bss_end__;
+
 int main(int stage);
+int init(struct eex_param_s *eex_params);
+int deinit(struct sysroot_buffer *sysroot);
 
 #endif /* __MAIN_H__ */

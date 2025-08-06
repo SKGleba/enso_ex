@@ -31,4 +31,4 @@ $(TARGET_BOOTMGR).elf: $(OBJS)
 .PHONY: clean send
 
 clean:
-	@rm -f $(TARGET).e2xp $(TARGET).elf $(OBJS)
+	@rm -f $(TARGET_BLOB).e2xp $(TARGET_BLOB).elf $(OBJS) $(TARGET_BOOTMGR).e2xp $(TARGET_BOOTMGR).elf

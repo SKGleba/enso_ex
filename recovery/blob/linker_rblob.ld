@@ -7,7 +7,13 @@ SECTIONS
 {
   . = 0x51fc0000;
   .text   : { *(.text.start) *(.text   .text.*   .gnu.linkonce.t.*) *(.sceStub.text.*) }
-  .rodata : { *(.rodata .rodata.* .gnu.linkonce.r.*) }
-  .data   : { *(.data   .data.*   .gnu.linkonce.d.*) }
-  .bss    : { *(.bss    .bss.*    .gnu.linkonce.b.*) *(COMMON) }
+  .rodata : ALIGN(4) { *(.rodata .rodata.* .gnu.linkonce.r.*) }
+  .data   : ALIGN(4) { *(.data.exports) *(.data   .data.*   .gnu.linkonce.d.*) }
+  .bss    : ALIGN(4) 
+  {
+    __bss_start__ = .;
+    *(.bss    .bss.*    .gnu.linkonce.b.*)
+    *(COMMON)
+    __bss_end__ = .;
+  }
 }

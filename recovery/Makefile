@@ -1,5 +1,6 @@
 BLOB_DIR=blob
 BLOB_FILE=$(BLOB_DIR)/rblob.e2xp
+BOOTMGR_FILE=$(BLOB_DIR)/bootmgr.e2xp
 
 BOTSTRAP_DIR=bootstrap
 BOTSTRAP_FILE=$(BOTSTRAP_DIR)/rconfig.e2xr
@@ -8,12 +9,12 @@ SECOND_DIR=second
 SECOND_FILE=$(SECOND_DIR)/second.bin
 
 OUTPUT_DIR=output
-OUTPUT_FILES=$(OUTPUT_DIR)/rconfig.e2xr $(OUTPUT_DIR)/rblob.e2xp $(OUTPUT_DIR)/sd_recovery.img
+OUTPUT_FILES=$(OUTPUT_DIR)/rconfig.e2xr $(OUTPUT_DIR)/rblob.e2xp $(OUTPUT_DIR)/sd_recovery.img $(OUTPUT_DIR)/bootmgr.e2xp
 
 all: $(OUTPUT_FILES)
 	@echo "Build complete. Output files are in $(OUTPUT_DIR)."
 
-$(OUTPUT_DIR)/sd_recovery.img: $(BOTSTRAP_SD_FILE) $(OUTPUT_DIR)/rconfig.e2xr $(OUTPUT_DIR)/rblob.e2xp $(SECOND_FILE)
+$(OUTPUT_DIR)/sd_recovery.img: $(BOTSTRAP_FILE) $(OUTPUT_DIR)/rconfig.e2xr $(OUTPUT_DIR)/rblob.e2xp $(SECOND_FILE)
 	@mkdir -p $(OUTPUT_DIR)
 	mv $(BOTSTRAP_FILE) $@
 	truncate -s 2048 $@
@@ -23,6 +24,7 @@ $(OUTPUT_DIR)/sd_recovery.img: $(BOTSTRAP_SD_FILE) $(OUTPUT_DIR)/rconfig.e2xr $(
 	truncate -s 24576 $@
 	cat $(OUTPUT_DIR)/rblob.e2xp >> $@
 	truncate -s 234496 $@
+	rm -f $(SECOND_FILE)
 
 $(OUTPUT_DIR)/rconfig.e2xr: $(BOTSTRAP_FILE)
 	@mkdir -p $(OUTPUT_DIR)
@@ -30,6 +32,10 @@ $(OUTPUT_DIR)/rconfig.e2xr: $(BOTSTRAP_FILE)
 
 $(BOTSTRAP_FILE):
 	$(MAKE) -C $(BOTSTRAP_DIR)
+
+$(OUTPUT_DIR)/bootmgr.e2xp: $(BLOB_FILE)
+	@mkdir -p $(OUTPUT_DIR)
+	mv $(BOOTMGR_FILE) $@
 
 $(OUTPUT_DIR)/rblob.e2xp: $(BLOB_FILE)
 	@mkdir -p $(OUTPUT_DIR)
@@ -43,3 +49,6 @@ $(SECOND_FILE):
 
 clean:
 	rm -rf $(OUTPUT_DIR)
+	$(MAKE) -C $(BLOB_DIR) clean
+	$(MAKE) -C $(BOTSTRAP_DIR) clean
+	$(MAKE) -C $(SECOND_DIR) clean

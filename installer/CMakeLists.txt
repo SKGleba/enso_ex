@@ -171,7 +171,7 @@ vita_create_vpk(${SHORT_NAME}.vpk ${VITA_TITLEID} ${SHORT_NAME}.self
   FILE ${CMAKE_SOURCE_DIR}/res_int/bg.png sce_sys/livearea/contents/bg.png
   FILE ${CMAKE_SOURCE_DIR}/res_int/startup.png sce_sys/livearea/contents/startup.png
   FILE ${CMAKE_SOURCE_DIR}/res_ext/fat.bin fat.bin
-  FILE ${CMAKE_SOURCE_DIR}/res_ext/rbootstrap.e2xp rconfig.e2xp
+  FILE ${CMAKE_SOURCE_DIR}/res_ext/rconfig.e2xr rconfig.e2xr
   FILE ${CMAKE_SOURCE_DIR}/res_ext/rblob.e2xp rblob.e2xp
   FILE ${CMAKE_SOURCE_DIR}/res_ext/e2xhencfg.skprx e2xhencfg.skprx
   FILE ${CMAKE_SOURCE_DIR}/res_ext/e2xculogo.skprx e2xculogo.skprx

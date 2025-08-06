@@ -21,7 +21,7 @@
 
 #define RBLOB_SOURCE "ux0:eex/recovery/rblob.e2xp"
 #define RMBR_SOURCE "ux0:eex/recovery/rmbr.bin"
-#define RCONFIG_SOURCE "ux0:eex/recovery/rconfig.e2xp"
+#define RCONFIG_SOURCE "ux0:eex/recovery/rconfig.e2xr"
 
 #define VALID_SL_CRC 0xDB02B893  // 3.65 second_loader
 
@@ -59,8 +59,8 @@
 #define EXT_BOOTLIST_PATH KERNEXT_DIR "boot_list.txt"
 #define EXT_BACKUP_PSP2CONFIG_VITA_PATH EEX_ADDONS_PATH "boot_config.txt"
 #define EXT_BACKUP_PSP2CONFIG_DEVKITV_PATH EEX_ADDONS_PATH "boot_config_kitv.txt"
-#define LOCAL_RCONFIG_PATH "rconfig.e2xp"
-#define EXT_RCONFIG_PATH RECVEXT_DIR "rconfig.e2xp"
+#define LOCAL_RCONFIG_PATH "rconfig.e2xr"
+#define EXT_RCONFIG_PATH RECVEXT_DIR "rconfig.e2xr"
 #define LOCAL_RBLOB_PATH "rblob.e2xp"
 #define EXT_RBLOB_PATH RECVEXT_DIR "rblob.e2xp"
 

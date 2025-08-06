@@ -258,26 +258,25 @@ static int init_os0(uint32_t mbr_off, unsigned int* ctx, int is_scembr) {
 */
 // custom get_hwcfg to give ckldr important offsets/data
 static int get_hwcfg_patched(uint32_t* dst) {
-	
-	if (dst[0] == E2X_MAGIC) {
-		patchedHwcfgStruct* expp = (void*)dst;
-		syscon_common_read(&expp->ex_ports.ctrl, SYSCON_CMD_GET_DCTRL);
-		expp->ex_ports.ctrl &= ~CTRL_VOLUP;
-		expp->ex_ports.nskbl_exports_start = (void*)NSKBL_EXPORTS_ADDR;
-		expp->ex_ports.get_file = get_file;
-		expp->ex_ports.memcpy = memcpy;
-		expp->ex_ports.memset = memset;
-		expp->ex_ports.get_obj_for_uid = (void*)get_obj_for_uid;
-		expp->ex_ports.alloc_memblock = (void*)sceKernelAllocMemBlock;
-		expp->ex_ports.get_memblock = sceKernelGetMemBlockBase;
-		expp->ex_ports.free_memblock = sceKernelFreeMemBlock;
-		expp->ex_ports.module_dir = (char*)NSKBL_LMODLOAD_DIR;
-		expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->boot_args;
+    if (dst[0] == E2X_MAGIC) {
+        patchedHwcfgStruct* expp = (void*)dst;
+        syscon_common_read(&expp->ex_ports.ctrl, SYSCON_CMD_GET_DCTRL);
+        expp->ex_ports.nskbl_exports_start = (void*)NSKBL_EXPORTS_ADDR;
+        expp->ex_ports.get_file = get_file;
+        expp->ex_ports.memcpy = memcpy;
+        expp->ex_ports.memset = memset;
+        expp->ex_ports.get_obj_for_uid = (void*)get_obj_for_uid;
+        expp->ex_ports.alloc_memblock = (void*)sceKernelAllocMemBlock;
+        expp->ex_ports.get_memblock = sceKernelGetMemBlockBase;
+        expp->ex_ports.free_memblock = sceKernelFreeMemBlock;
+        expp->ex_ports.module_dir = (char*)NSKBL_LMODLOAD_DIR;
+        expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->boot_args;
         expp->ex_ports.protect_boot = &disable_bootarea_update;
         expp->ex_ports.init_os0 = init_os0;
-		return E2X_MAGIC;
-	} else
-		return get_hwcfg((void *)dst);
+        expp->ex_ports.printf = printf;
+        return E2X_MAGIC;
+    } else
+        return get_hwcfg((void*)dst);
 }
 
 // Run BootMgr and resume psp2bootconfig load with our custom loader
@@ -343,7 +342,8 @@ __attribute__((section(".text.start"))) void start(void* me) {
 	clean_dcache((void*)NSKBL_PSP2BCFG_STRING_PTR_CACHER, 0x20);
 	flush_icache();
 
-	//recovery_ccode((int*)NSKBL_DEVICE_GCSD_CTX, (int*)E2X_RCONF_PADDR);
+	if (recovery_ccode((int*)NSKBL_DEVICE_GCSD_CTX, (int*)E2X_RCONF_PADDR) < 0)
+		printf("xR E: recovery_ccode failed\n");
     init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_EMMC_CTX, 1);
 
     printf("x resuming nskbl\n");

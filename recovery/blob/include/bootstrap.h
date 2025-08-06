@@ -9,10 +9,20 @@ enum BOOTSTRAP_MODES {
     BOOTSTRAP_MODE_BOOTMGR
 };
 
+struct stage2_options {
+    int recovery_mbr;      // Use recovery MBR
+    int stage3_recovery;   // Enter stage 3 recovery
+    int vanilla_boot;      // Boot vanilla OS
+    int protect_bootarea;  // Protect boot area from writes
+    int gcsd_mode;         // 0: disable, 1: sd0, 2: os0, 3: init
+    int reserved;
+};
+
 // MUST be copied in
 struct eex_param_s {
     enum BOOTSTRAP_MODES boot_mode;
     int (*get_hwcfg_patched)(patchedHwcfgStruct* dst);
+    struct stage2_options* stage2_config;
 };
 
 #endif // __BOOTSTRAP_H__

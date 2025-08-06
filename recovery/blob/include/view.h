@@ -25,8 +25,8 @@ extern uint32_t *view_vas[VIEW_COUNT];
 extern struct frame_s view_frame;
 
 int view_init(void);
-void view_switch(int new_view);
-int view_copy(int src_view, int dst_view);
+void view_switch(enum VIEW_ASSIGNS new_view);
+int view_copy(enum VIEW_ASSIGNS src_view, enum VIEW_ASSIGNS dst_view);
 
 #define view_draw_pixel(_idx, _x, _y, _colr) {view_vas[_idx][((_y) * view_frame.width) + (_x)] = _colr;}
 

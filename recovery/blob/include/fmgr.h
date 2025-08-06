@@ -83,11 +83,51 @@ enum FMGR_FILE_OPTS {
     FMGR_FILE_OP_COPY = 0,
     FMGR_FILE_OP_MOVE,
     FMGR_FILE_OP_DELETE,
+    FMGR_FILE_OP_EXECUTE,
     FMGR_FILE_OP_COUNT
 };
 
+enum FMGR_DIR_OPTS {
+    FMGR_DIR_OP_COPY = 0,
+    FMGR_DIR_OP_MOVE,
+    FMGR_DIR_OP_DELETE,
+    FMGR_DIR_OP_COUNT
+};
+
+enum FMGR_AMOUNT_OPTS {
+    FMGR_AMOUNT_OP_REFRESH = 0,
+    FMGR_AMOUNT_OP_UMOUNT,
+    FMGR_AMOUNT_OP_REMOUNT,
+    FMGR_AMOUNT_OP_COUNT
+};
+
+enum FMGR_IMOUNT_OPTS {
+    FMGR_IMOUNT_OP_REFRESH = 0,
+    FMGR_IMOUNT_OP_COUNT
+};
+
+enum FMGR_PART_OPTS {
+    FMGR_PART_OP_DUMP = 0,
+    FMGR_PART_OP_FLASH,
+    FMGR_PART_OP_COUNT
+};
+
+#define FMGR_RAWDUMP_BLOCK_SECCOUNT (0x8000) // 16MB
+#define FMGR_RAWDUMP_SEGMENT_BLKCOUNT (64) // 1GiB segments
+
+int fmgr_move_dir(const char *src_path, const char *dest_path);
+int fmgr_move_file(const char *src_path, const char *dest_path);
+int fmgr_delete(const char *path);
+uint32_t fmgr_copy_file(const char *src_path, const char *dest_path);
+int fmgr_copy_dir(const char *src_path, const char *dest_path);
+void *fmgr_get_file(const char *path, void *buf, int size, int offset);
+int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest_dir);
+int fmgr_scan_masters(char *output_s, int entry_len, uint32_t *output_i, int start, int max);
+int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int max);
+int fmgr_load_exec(const char *path);
+int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string);
 int fmgr_init(void);
-int fmgr_view_handler(int *next_uview);
-int fmgr_set_square_handler(enum FMGR_ENTRY_TYPES exp_entype, void (*handler)(char *path, char *entry));
+int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview);
+void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*handler)(enum FMGR_ENTRY_TYPES entype, char *path, char *entry, enum VIEW_ASSIGNS *next_uview));
 
 #endif

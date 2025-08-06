@@ -43,23 +43,6 @@ extern int g_disable_bootarea_update;
 int write_sector_sd(int *part_ctx, uint32_t sector, const void *buffer, int nsectors);
 int write_sector_mmc(int *ctx, unsigned int block_offset, const void *target_buf, int block_count);
 int sd_init(int tries, int init_sd0_part);
-void reinit_nskbl_storages(int with_sd);
-
-struct mount_master_ctx {
-    int type;
-    int *dev_ctx;
-    int (*read_sector)(int *ctx, uint32_t sector, void *buffer, int nsectors);
-    int (*write_sector)(int *ctx, uint32_t sector, const void *buffer, int nsectors);
-    master_block_t sector0;
-};
-
-struct mount_ctx {
-    int is_initialized;
-    struct mount_master_ctx *master;
-    partition_t *params;
-};
-
-const char *get_partition_name(int part);
 
 enum MOUNT_MASTERS {
     MOUNT_MASTER_EMMC = 0,
@@ -73,12 +56,29 @@ enum MOUNT_MASTER_TYPES {
     MOUNT_MASTER_TYPE_FAT,
 };
 
+struct mount_master_ctx {
+    enum MOUNT_MASTER_TYPES type;
+    int *dev_ctx;
+    int (*read_sector)(int *ctx, uint32_t sector, void *buffer, int nsectors);
+    int (*write_sector)(int *ctx, uint32_t sector, const void *buffer, int nsectors);
+    master_block_t sector0;
+};
+
+struct mount_ctx {
+    int is_initialized;
+    enum MOUNT_MASTERS mount_master;
+    struct mount_master_ctx *master;
+    partition_t *params;
+};
+
+const char *get_partition_name(int part);
+
 #define SCEMBR_U32_MAGIC 'ynoS'
 #define FAT_MBR_MAGIC 0xAA55
 
 #define IS_GCSD_INITIALIZED() (!!(*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX))
 
-#define STOR_MAX_MOUNTS 2
+#define STOR_MAX_MOUNTS 3 // two main, one temp
 
 enum STOR_PARTITIONS {
     STOR_PART_ENTIRE = 0,
@@ -112,5 +112,9 @@ int stor_read_mount(int idx, uint32_t sector, void *buffer, int nsectors);
 int stor_write_mount(int idx, uint32_t sector, const void *buffer, int nsectors);
 enum MOUNT_MASTER_TYPES stor_get_master_info(enum MOUNT_MASTERS mount_master, uint32_t *partitions);
 int stor_umount(int idx);
+partition_t *stor_find_partition_by_id(master_block_t *master, int part_id, enum STOR_PART_ACTIVES active);
+int stor_write_master(enum MOUNT_MASTERS master, uint32_t sector, const void *buffer, int nsectors);
+int stor_read_master(enum MOUNT_MASTERS master, uint32_t sector, void *buffer, int nsectors);
+struct mount_ctx *stor_get_validate_mctx(int idx);
 
 #endif

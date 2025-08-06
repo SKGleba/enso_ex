@@ -3,6 +3,7 @@
 
 #include "paper.h"
 #include "main.h"
+#include "bootstrap.h"
 
 enum STAGE2_GCSD_MODES {
 	STAGE2_GCSD_MODE_DISABLED = 0,

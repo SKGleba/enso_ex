@@ -26,7 +26,7 @@
 struct menu_s stage2_menu_s = {
 	.draw = stage2_menu,
 	.select = stage2_menu,
-	.entry_count = 5,
+	.entry_count = 6,
 	.selection = 0,
 	.exp_buttons = (CTRL_CROSS | CTRL_SQUARE | CTRL_START),
     .prs_buttons = 0,
@@ -34,20 +34,13 @@ struct menu_s stage2_menu_s = {
     .selector_color = MENU_SELECTOR_COLR
 };
 
-struct stage2_options {
-    int recovery_mbr;  // Use recovery MBR
-    int stage3_recovery;  // Enter stage 3 recovery
-    int vanilla_boot;  // Boot vanilla OS
-    int protect_bootarea;  // Protect boot area from writes
-    int gcsd_mode;  // 0: disable, 1: sd0, 2: os0, 3: init
-    int update_emmc_recovery;  // Update EMMC recovery from GC-SD
-} stage2_opts = {
+struct stage2_options stage2_opts = {
     .recovery_mbr = 0,
     .stage3_recovery = 0,
     .vanilla_boot = 0,
     .protect_bootarea = 0,
     .gcsd_mode = STAGE2_GCSD_MODE_DISABLED,
-    .update_emmc_recovery = 0
+    .reserved = 0
 };
 
 static void stage2_status_update(void) {
@@ -78,8 +71,6 @@ static void stage2_status_update(void) {
                 break;
         }
     }
-    if (stage2_opts.update_emmc_recovery)
-        pprintf_align(&status_paper, RIGHT, "update EMMC R <-\n");
 }
 
 static int (*eex_load_psp2bootconfig)(uint32_t myaddr, int* uids, int count, int osloc, int unk) = NULL;
@@ -161,6 +152,8 @@ int stage2_menu(int selection) {
         pprintf(stage2_menu_s.paper, "3. Vanilla boot\n");
         pprintf(stage2_menu_s.paper, "4. Block writes to boot sectors\n");
         pprintf(stage2_menu_s.paper, "5. Change GC-SD mode for nskbl\n");
+        pprintf(stage2_menu_s.paper, "6. Save current config\n");
+        stage2_status_update();
         return 0;
     }
     if (BMX_CTRL_BUTTON_HELD(stage2_menu_s.prs_buttons, CTRL_CROSS) || BMX_CTRL_BUTTON_HELD(stage2_menu_s.prs_buttons, CTRL_SQUARE)) {
@@ -203,6 +196,30 @@ int stage2_menu(int selection) {
                     stage2_opts.gcsd_mode = STAGE2_GCSD_MODE_DISABLED;
                 LOG("GC-SD init flag set to %d\n", stage2_opts.gcsd_mode);
                 stage2_status_update();
+                break;
+            case 5: 
+                {
+                    alllog("Preparing the eMMC\n");
+                    enum MOUNT_MASTER_TYPES mm = stor_init_master(MOUNT_MASTER_EMMC);
+                    if (mm == MOUNT_MASTER_TYPE_SCE) {
+                        uint8_t *buf = my_malloc(E2X_RCONF_SIZE);
+                        if (buf) {
+                            int ret = stor_read_master(MOUNT_MASTER_EMMC, E2X_RCONF_OFFSET, buf, (E2X_RCONF_SIZE / SECTOR_SIZE));
+                            if (ret >= 0) {
+                                memcpy(buf + 0x8, &stage2_opts, sizeof(struct stage2_options));
+                                ret = stor_write_master(MOUNT_MASTER_EMMC, E2X_RCONF_OFFSET, buf, (E2X_RCONF_SIZE / SECTOR_SIZE));
+                                if (ret >= 0)
+                                    alllog("New rconfig has been written to eMMC!\n");
+                                else
+                                    alllog("Could not write rconfig to eMMC! 0x%08X\n", ret);
+                            } else
+                                alllog("Could not read eMMC: 0x%08X\n", ret);
+                            my_free(buf);
+                        } else
+                            alllog("Could not malloc for rconf buf\n");
+                    } else
+                        alllog("Could not initialize eMMC: %d!\n", mm);
+                }
                 break;
             default:
                 LOG("Invalid selection %d\n", selection);

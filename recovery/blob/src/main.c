@@ -20,7 +20,6 @@
 #include "main.h"
 #include "stage2.h"
 #include "stage3.h"
-#include "stageB.h"
 #include "utils.h"
 #include "bootstrap.h"
 #include "view.h"
@@ -50,7 +49,7 @@ static void menu_change_selection(struct menu_s *menu, int new_selection) {
 						 menu->selector_color, menu->paper->padding.inner.y >> 1);
 }
 
-static int deinit(struct sysroot_buffer *sysroot) {
+int deinit(struct sysroot_buffer *sysroot) {
     LOG("Deinitializing baremetal payload...\n");
 
     g_log_targets &= ~LOG_TARGET_LOGPAPER;  // disable paper logging
@@ -63,10 +62,14 @@ static int deinit(struct sysroot_buffer *sysroot) {
     return 0;
 }
 
-static int init(struct eex_param_s *eex_params) {
+int init(struct eex_param_s *eex_params) {
+    unsigned int *bss = &__bss_start__;
+    while (bss < &__bss_end__)
+        *bss++ = 0;
+    rmemblock_init();
+    
     g_log_targets = LOG_TARGET_CONSOLE;
 	LOG("Baremetal payload started!\n");
-
     if (eex_params) {
         memcpy(&g_eex_params, eex_params, sizeof(struct eex_param_s));
         LOG("Using eex_params: boot_mode=%d, get_hwcfg_patched=0x%08X\n", g_eex_params.boot_mode, g_eex_params.get_hwcfg_patched);
@@ -102,11 +105,14 @@ static int init(struct eex_param_s *eex_params) {
         return -1;
     }
 
+    if (eex_params->stage2_config)
+        memcpy(&stage2_opts, eex_params->stage2_config, sizeof(struct stage2_options));
+
     LOG("Init done!\n");
     return 0;
 }
 
-static int log_view_handler(int *next_uview) {
+static int log_view_handler(enum VIEW_ASSIGNS *next_uview) {
     view_switch(VIEW_DEFAULT);  // switch to the log view
 
     int buttons = 0;
@@ -126,7 +132,7 @@ static int log_view_handler(int *next_uview) {
     return 0;
 }
 
-static int menu_view_handler(int *next_uview) {
+static int menu_view_handler(enum VIEW_ASSIGNS *next_uview) {
     view_switch(VIEW_MENU);  // switch to the menu view
 
     int ret = 0;
@@ -153,11 +159,11 @@ static int menu_view_handler(int *next_uview) {
                     break;  // continue the loop
                 case MENU_RET_FINISH:
                     current_menu = NULL;  // exit the menu loop
-                    *next_uview = -1; // exit view_handler looper
+                    *next_uview = VIEW_COUNT;  // exit view_handler looper
                     break;
                 case MENU_RET_FINISH_DEINIT:
                     current_menu = NULL;  // exit the menu loop and deinit
-                    *next_uview = -1;
+                    *next_uview = VIEW_COUNT;
                     deinit((struct sysroot_buffer *)g_eex_ports.kbl_param);
                     break;
                 default:
@@ -221,7 +227,8 @@ int main(int stage) {
     inflog("Welcome to the enso_ex recovery menu!\n");
     inflog("Use arrow keys to navigate, X to select.\n");
     inflog("Pressing L/R will switch active views.\n");
-    inflog("START will apply changes and continue boot.\n");
+    if (stage == 2)
+        inflog("START will apply changes and continue boot.\n");
     // -- options
     paper_clear(&menu_paper, MENU_PAPER_COLR);
     pen_reset(&menu_paper, MENU_PEN_COLR);
@@ -232,24 +239,20 @@ int main(int stage) {
             menu_change_selection(current_menu, 0);  // set initial selection
             break;
 		case 3:
+        case 0xB: // bootmgr is at the same level as stage 3
 			current_menu = &stage3_menu_s;
 			current_menu->draw(-1);
 			menu_change_selection(current_menu, 0);
 			break;
-        case 0xB:
-            current_menu = &stageB_menu_s;
-            current_menu->draw(-1);
-            menu_change_selection(current_menu, 0);
-            break;
         default:
             LOG("ERROR: Unknown stage %d\n", stage);
             break;
     }
 
     LOG("Menu view initialized, switching to it\n");
-    int user_view = VIEW_MENU;
+    enum VIEW_ASSIGNS user_view = VIEW_MENU;
     int ret = 0;
-    while(user_view >= 0) {
+    while (user_view < VIEW_COUNT) {
         switch(user_view) {
             case VIEW_DEFAULT:
                 ret = log_view_handler(&user_view);
@@ -280,7 +283,8 @@ __attribute__((section(".text.start"), optimize("O0"))) int start(struct eex_par
 __attribute__((section(".text.bootstart"), optimize("O0"))) int bootstart(void *get_hwcfg_va) {
     struct eex_param_s tmp_eex_params = {
         .boot_mode = BOOTSTRAP_MODE_BOOTMGR,
-        .get_hwcfg_patched = (int (*)(patchedHwcfgStruct *))get_hwcfg_va
+        .get_hwcfg_patched = (int (*)(patchedHwcfgStruct *))get_hwcfg_va,
+        .stage2_config = NULL
     };
     init(&tmp_eex_params);
     return main(0xB);

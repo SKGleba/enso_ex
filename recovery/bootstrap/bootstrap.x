@@ -6,7 +6,7 @@ ENTRY(start)
 SECTIONS
 {
   . = 0x51ff9000;
-  .text   : { *(.text._my_info) *(.text.start) *(.text   .text.*   .gnu.linkonce.t.*) *(.sceStub.text.*) }
+  .text   : { *(.text._my_info) *(.text._s2cfg) *(.text.start) *(.text   .text.*   .gnu.linkonce.t.*) *(.sceStub.text.*) }
   .rodata : { *(.rodata .rodata.* .gnu.linkonce.r.*) }
   .data   : { *(.data   .data.*   .gnu.linkonce.d.*) }
   .bss    : { *(.bss    .bss.*    .gnu.linkonce.b.*) *(COMMON) }

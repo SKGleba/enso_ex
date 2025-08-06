@@ -45,7 +45,7 @@ int view_init(void) {
 	return 0;
 }
 
-void view_switch(int new_view) {
+void view_switch(enum VIEW_ASSIGNS new_view) {
     view_vas[view_current] = (uint32_t *)(view_frame.addr + ((view_current + 1) * view_frame.pixcount));
     memcpy(view_vas[view_current], view_frame.addr, view_frame.size);
 
@@ -55,8 +55,8 @@ void view_switch(int new_view) {
     view_vas[view_current] = view_frame.addr;
 }
 
-int view_copy(int src_view, int dst_view) {
-	if (src_view < 0 || src_view >= VIEW_COUNT || dst_view < 0 || dst_view >= VIEW_COUNT) {
+int view_copy(enum VIEW_ASSIGNS src_view, enum VIEW_ASSIGNS dst_view) {
+    if (src_view < 0 || src_view >= VIEW_COUNT || dst_view < 0 || dst_view >= VIEW_COUNT) {
 		LOG("Invalid view index: src=%d, dst=%d\n", src_view, dst_view);
 		return -1;
 	}

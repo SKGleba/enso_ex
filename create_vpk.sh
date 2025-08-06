@@ -25,7 +25,7 @@ if [ $? -ne 0 ]; then echo "$0: create PLUGINS failed!"; exit 0; fi
 mkdir installer/res_ext &&
 cp core/fat.bin installer/res_ext/fat.bin &&
 echo "#define FATCHECK 0x$(crc32 core/fat.bin)" > installer/src/fatcheck.h &&
-cp recovery/output/rconfig.e2xr installer/res_ext/rbootstrap.e2xp &&
+cp recovery/output/rconfig.e2xr installer/res_ext/rconfig.e2xr &&
 cp recovery/output/rblob.e2xp installer/res_ext/rblob.e2xp &&
 cp plugins/loader/e2x_ckldr.skprx installer/res_ext/e2x_ckldr.skprx &&
 cp plugins/loader/example_list.txt installer/res_ext/boot_list.txt &&

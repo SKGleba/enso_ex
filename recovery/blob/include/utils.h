@@ -23,8 +23,8 @@
 		BGW_END(); \
 	} while (0)
 
-#define MMCWRITE(_sector, _buffer, _nsectors) write_sector_mmc((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
-#define MMCREAD(_sector, _buffer, _nsectors) read_sector_mmc_direct((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
+#define EMMCWRITE(_sector, _buffer, _nsectors) write_sector_mmc((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
+#define EMMCREAD(_sector, _buffer, _nsectors) read_sector_mmc_direct((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
 #define SDREAD(_sector, _buffer, _nsectors) read_sector_sd((int *)*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX, _sector, _buffer, _nsectors)
 #define SDWRITE(_sector, _buffer, _nsectors) write_sector_sd((int *)*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX, _sector, _buffer, _nsectors)
 
@@ -64,9 +64,7 @@ enum LOG_TARGETS {
 	LOG_TARGET_LOGPAPER = 1 << 1,
 	LOG_TARGET_FRONTPAGE = 1 << 2,
 };
-
 extern int g_log_targets;
-
 void dbg_log(int targets, const char *fmt, ...);
 void dbg_hexdump(void *addr, int size, bool show_addr, char delim);
 
@@ -75,7 +73,33 @@ void dbg_hexdump(void *addr, int size, bool show_addr, char delim);
 #define _hexdump_full(addr, size, show_addr, delim) dbg_hexdump((void *)(addr), (size), show_addr, delim)
 #define hexdump(...) FUN_VAR4(__VA_ARGS__, _hexdump_full, _hexdump_addr, _hexdump)(__VA_ARGS__)
 
+#define RMEMBLOCK_MIN_SIZE 0x1000
+#define RMEMBLOCK_MAX_COUNT 16
+struct rmemblock_s {
+    int id;
+    void *va;
+};
+extern struct rmemblock_s rmemblock_allocs[RMEMBLOCK_MAX_COUNT];
+#define rmemblock_init() \
+	do { \
+		for (int i = 0; i < RMEMBLOCK_MAX_COUNT; i++) { \
+			rmemblock_allocs[i].id = -1; \
+			rmemblock_allocs[i].va = NULL; \
+		} \
+	} while (0)
+void *rmemblock_alloc(int size, uint32_t opt_type, uint32_t opt_paddr);
+int rmemblock_free(void *va);
+int rmemblock_remap(void *va, uint32_t type);
+#define my_malloc(_size) rmemblock_alloc((_size), 0, 0)
+#define my_free(_va) rmemblock_free((_va))
+#define my_rxmap(_va) rmemblock_remap((_va), MEMBLOCK_TYPE_RX)
+
 char *my_strchr(const char *s, int c);
+char *my_strrchr(const char *s, int c);
+int count_chs(const char *s, char c);
+char *find_nth(const char *s, char c, int n);
+char *find_rnth(const char *s, char c, int n);
 #define my_snprintf(_buf, _size, _fmt, ...) nskbl_snprintf((_buf), (_size), (_fmt), ##__VA_ARGS__)
+#define my_strncmp(_s1, _s2, _len) nskbl_strncmp((_s1), (_s2), (_len))
 
 #endif

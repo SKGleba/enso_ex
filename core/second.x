@@ -8,6 +8,8 @@ SECTIONS
   . = 0x51e00000;
   .text   : { *(.text.start) *(.text   .text.*   .gnu.linkonce.t.*) *(.sceStub.text.*) }
   .rodata : { *(.rodata .rodata.* .gnu.linkonce.r.*) }
-  .data   : { *(.data   .data.*   .gnu.linkonce.d.*) }
-  .bss    : { *(.bss    .bss.*    .gnu.linkonce.b.*) *(COMMON) }
+  .data   : { *(.data   .data.*   .gnu.linkonce.d.*) *(.bss    .bss.*    .gnu.linkonce.b.*) *(COMMON) }
+  /* .bss    : { *(.bss    .bss.*    .gnu.linkonce.b.*) *(COMMON) } */
 }
+
+/* ASSERT(SIZEOF(.bss) == 0, ".bss section is used!") */
