@@ -44,6 +44,8 @@ __attribute__((optimize("O0"))) int set_type(uint16_t stype) {
 	
 	*(uint16_t *)(boot_args + 0xA2) = (uint16_t)stype; // update enso's KBL_PARAM.DTYPE for patches compat
 	*(uint16_t *)((*(uint32_t *)(*(uint32_t *)(0x51138a3c) + 0x6c)) + 0xA2) = (uint16_t)stype; // update sysrootNP2->KBL_PARAM.DTYPE to bypass mismatch
-	
-	return ret;
+
+  printf("[BOOTMGR] set_type: %s: 0x%08X (%04x)\n", (ret == 0) ? "success" : "failed", (int)fmnfo->resp, stype);
+
+  return ret;
 }

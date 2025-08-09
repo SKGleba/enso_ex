@@ -12,6 +12,18 @@
 #define alllog(fmt, ...) dbg_log(-1, fmt, ##__VA_ARGS__)
 #define inflog(fmt, ...) dbg_log(LOG_TARGET_FRONTPAGE, fmt, ##__VA_ARGS__)
 #define scrlog(fmt, ...) dbg_log(LOG_TARGET_LOGPAPER, fmt, ##__VA_ARGS__)
+#define screset() \
+	do { \
+		paper_clear(&default_paper, default_paper.color); \
+		pen_reset(&default_paper, default_paper.pen.color); \
+	} while (0)
+#define scrclog(_color, fmt, ...)                       \
+    do {                                                \
+        uint32_t _prev_color = default_paper.pen.color; \
+    	default_paper.pen.color = _color;                   \
+    	scrlog(fmt, ##__VA_ARGS__);                           \
+    	default_paper.pen.color = _prev_color;              \
+	} while (0)
 
 #define BGW_START() gpio_port_set(0, GPIO_PORT_PS_LED) // turn on the PS LED, indicates longer bg job
 #define BGW_END() gpio_port_clear(0, GPIO_PORT_PS_LED)
@@ -101,5 +113,12 @@ char *find_nth(const char *s, char c, int n);
 char *find_rnth(const char *s, char c, int n);
 #define my_snprintf(_buf, _size, _fmt, ...) nskbl_snprintf((_buf), (_size), (_fmt), ##__VA_ARGS__)
 #define my_strncmp(_s1, _s2, _len) nskbl_strncmp((_s1), (_s2), (_len))
+
+int idstorage_init(void);
+int idstorage_stop(void);
+#define idstorage_sync idstorage_init
+int idstorage_rw_leaf(bool write, uint16_t leaf, void *buf);
+
+uint32_t crc32(uint32_t crc, const void *buf, size_t size);
 
 #endif

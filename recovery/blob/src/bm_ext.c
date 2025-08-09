@@ -38,13 +38,13 @@ static inline void pervasive_mask_and_not_my(uint32_t addr, uint32_t val) {
         : "r"(addr), "r"(val));
 }
 
-void bmx_display_deinit(void) { // required for OS to be able to reset the display
+static void bmx_display_deinit(int free) { // required for OS to be able to reset the display
     if (!sysroot_model_is_dolce()) {
         gpio_port_clear(0, GPIO_PORT_OLED_LCD);
         pervasive_mask_or_my(0xE3101000 + 0x80, 7);
         pervasive_mask_and_not_my(0xE3102000 + 0x80, 0xF);
     }
-    if (bmx_fb_uid >= 0) {
+    if (free && bmx_fb_uid >= 0) {
         if (sceKernelFreeMemBlock(bmx_fb_uid) < 0)
             LOG("Failed to free framebuffer memblock\n");
         else
@@ -53,27 +53,50 @@ void bmx_display_deinit(void) { // required for OS to be able to reset the displ
     }
 }
 
-int bmx_display_init(enum display_type type, int view_count) {
+static int bmx_display_init(enum display_type type, int view_count) {
     display_init(type);
+    if (view_count) {
+        struct display_config *ds_config = display_get_current_config();
+        SceKernelAllocMemBlockKernelOpt opt = {.size = 0x58, .attr = 2, .paddr = 0x20000000};
+        bmx_fb_uid = sceKernelAllocMemBlock("e2x_recovr_vram", 0x60208006, (ds_config->pitch * ds_config->height * 4) * (1 + view_count), &opt);
+        if (bmx_fb_uid < 0) {
+            LOG("Failed to alloc framebuffer memblock: 0x%08X\n", bmx_fb_uid);
+            return -1;
+        }
 
-    struct display_config *ds_config = display_get_current_config();
-    SceKernelAllocMemBlockKernelOpt opt = {.size = 0x58, .attr = 2, .paddr = 0x20000000};
-    bmx_fb_uid = sceKernelAllocMemBlock("e2x_recovr_vram", 0x60208006, (ds_config->pitch * ds_config->height * 4) * (1 + view_count), &opt);
-    if (bmx_fb_uid < 0) {
-        LOG("Failed to alloc framebuffer memblock: 0x%08X\n", bmx_fb_uid);
-        return -1;
+        void *fb_base = NULL;
+        if (sceKernelGetMemBlockBase(bmx_fb_uid, &fb_base) < 0) {
+            LOG("Failed to get framebuffer memblock base\n");
+            sceKernelFreeMemBlock(bmx_fb_uid);
+            return -1;
+        }
+
+        ds_config->addr = (uint32_t)fb_base;
+        LOG("Framebuffer allocated at %08X\n", (uint32_t)fb_base);
     }
-
-    void *fb_base = NULL;
-    if (sceKernelGetMemBlockBase(bmx_fb_uid, &fb_base) < 0) {
-        LOG("Failed to get framebuffer memblock base\n");
-        sceKernelFreeMemBlock(bmx_fb_uid);
-        return -1;
-    }
-
-    ds_config->addr = (uint32_t)fb_base;
-    LOG("Framebuffer allocated at %08X\n", (uint32_t)fb_base);
     return 0;
+}
+
+static int bmx_display_state = 0;
+int bmx_displaymgr(enum DISPLAYMGR_NSTATE enable, enum DISPLAYMGR_OPT opt) {
+    int ret = 0;
+    if (bmx_display_state == enable) {
+        LOG("Display already in the requested state (%d)!\n", enable);
+        return 0;
+    } else if (enable == DISPLAYMGR_NSTATE_TOGGLE)
+        enable = !bmx_display_state;  // toggle the state
+    if (enable) {
+        if (sysroot_model_is_dolce())
+            ret = bmx_display_init(DISPLAY_TYPE_HDMI, opt ? 0 : VIEW_COUNT);
+        else if (sysroot_model_is_vita2k())
+            ret = bmx_display_init(DISPLAY_TYPE_LCD, opt ? 0 : VIEW_COUNT);
+        else
+            ret = bmx_display_init(DISPLAY_TYPE_OLED, opt ? 0 : VIEW_COUNT);
+    } else
+        bmx_display_deinit(!opt);
+    bmx_display_state = enable;
+    LOG("Display init state changed to %d, ret=%d, opt=%d\n", bmx_display_state, ret, opt);
+    return ret;
 }
 
 void bmx_ctrl_read(uint32_t *buttons) {

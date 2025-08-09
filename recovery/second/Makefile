@@ -3,13 +3,8 @@ CFLAGS=-Os -fno-builtin-printf -fPIC -fno-builtin-memset -Wall -Wextra -Wno-unus
 OBJCOPY=arm-vita-eabi-objcopy
 LDFLAGS=-nodefaultlibs -nostdlib
 
-all: fat.bin
+all: second.bin
 	rm -f *.o second
-
-fat.bin: second.bin
-	touch fat.bin
-	truncate -s 2560 fat.bin
-	cat second.bin >> fat.bin
 
 second.bin: second
 	$(OBJCOPY) -O binary $^ $@

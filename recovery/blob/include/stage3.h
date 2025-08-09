@@ -5,10 +5,10 @@
 #include "paper.h"
 #include "../../../core/ex_defs.h"
 
-#define STAGE3_UPR_BUFSIZE E2X_RBLOB_SIZE // nothing bigger than this
-#define STAGE3_UPR_CONFIG_FNAME "rconfig.e2xr"
-#define STAGE3_UPR_BLOB_FNAME "rblob.e2xp"
-#define STAGE3_UPR_MBR_FNAME "rmbr.bin"
+#define S3_UDI_OUTFNAME "udi.bin"
+#define S3_LEAF_CID 0x44
+#define S3_LEAF_OPSID_0 0x46
+#define S3_LEAF_OPSID_1 0x47
 
 extern struct menu_s stage3_menu_s;
 int stage3_menu(int selection);

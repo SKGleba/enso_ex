@@ -52,9 +52,8 @@ static void menu_change_selection(struct menu_s *menu, int new_selection) {
 int deinit(struct sysroot_buffer *sysroot) {
     LOG("Deinitializing baremetal payload...\n");
 
-    g_log_targets &= ~LOG_TARGET_LOGPAPER;  // disable paper logging
-
-    bmx_display_deinit();
+    g_log_targets &= ~LOG_TARGET_LOGPAPER;
+    bmx_displaymgr(DISPLAYMGR_NSTATE_OFF, DISPLAYMGR_OPT_INCLUDE_FB);  // turn off & free fb
     delay(4000);
 
     LOG("Deinitialized baremetal payload!\n");
@@ -88,18 +87,10 @@ int init(struct eex_param_s *eex_params) {
 	syscon_init();
 
     LOG("initializing display & views...\n");
-    int ret = 0;
-	if (sysroot_model_is_dolce())
-        ret = bmx_display_init(DISPLAY_TYPE_HDMI, VIEW_COUNT);
-    else if (sysroot_model_is_vita2k())
-        ret = bmx_display_init(DISPLAY_TYPE_LCD, VIEW_COUNT);
-    else
-        ret = bmx_display_init(DISPLAY_TYPE_OLED, VIEW_COUNT);
-    if (ret < 0) {
+    if (bmx_displaymgr(DISPLAYMGR_NSTATE_ON, DISPLAYMGR_OPT_INCLUDE_FB) < 0) {
         LOG("Failed to initialize display!\n");
-        return ret;
+        return -1;
     }
-
     if (view_init() < 0) {
         LOG("Failed to initialize views!\n");
         return -1;
@@ -118,7 +109,7 @@ static int log_view_handler(enum VIEW_ASSIGNS *next_uview) {
     int buttons = 0;
     while (1) {
         // Wait for user input
-        buttons = bmx_ctrl_wait(CTRL_R | CTRL_L, 4000, 1);
+        buttons = bmx_ctrl_wait(CTRL_R | CTRL_L | CTRL_PSBUTTON, 4000, 1);
         if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_R)) {
             LOG("Switching to menu view...\n");
             *next_uview = VIEW_MENU;
@@ -127,6 +118,9 @@ static int log_view_handler(enum VIEW_ASSIGNS *next_uview) {
             LOG("Switching to the file manager view...\n");
             *next_uview = VIEW_FMGR;
             return 0;
+        } else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_PSBUTTON)) {
+            LOG("PS button pressed - temp display state toggle\n");
+            bmx_displaymgr(DISPLAYMGR_NSTATE_TOGGLE, DISPLAYMGR_OPT_DISP_ONLY);
         }
     }
     return 0;
@@ -138,7 +132,7 @@ static int menu_view_handler(enum VIEW_ASSIGNS *next_uview) {
     int ret = 0;
     current_menu->prs_buttons = 0;
     while (current_menu) {
-        current_menu->prs_buttons = bmx_ctrl_wait(CTRL_UP | CTRL_DOWN | CTRL_L | CTRL_R | current_menu->exp_buttons, 4000, 1);
+        current_menu->prs_buttons = bmx_ctrl_wait(CTRL_UP | CTRL_DOWN | CTRL_L | CTRL_R | current_menu->exp_buttons | CTRL_PSBUTTON, 4000, 1);
 
         if (BMX_CTRL_BUTTON_HELD(current_menu->prs_buttons, CTRL_DOWN) && (current_menu->selection < current_menu->entry_count - 1))
             menu_change_selection(current_menu, current_menu->selection + 1);
@@ -170,6 +164,9 @@ static int menu_view_handler(enum VIEW_ASSIGNS *next_uview) {
                     LOG("ERROR: Unknown menu return value %d\n", ret);
                     break;
             }
+        } else if (BMX_CTRL_BUTTON_HELD(current_menu->prs_buttons, CTRL_PSBUTTON)) {
+            LOG("PS button pressed - temp display state toggle\n");
+            bmx_displaymgr(DISPLAYMGR_NSTATE_TOGGLE, DISPLAYMGR_OPT_DISP_ONLY);
         }
     }
     return ret;
@@ -218,9 +215,11 @@ int main(int stage) {
     // MENU
     LOG("Initializing the menu view..\n");
     // -- status
-    paper_clear(&status_paper, MENU_PAPER_COLR);
-    pen_reset(&status_paper, STATUS_PEN_COLR);
-    pprintf_align(&status_paper, LEFT, "S%X\n", stage);
+    if (stage != 3) { // keep from s2
+        paper_clear(&status_paper, MENU_PAPER_COLR);
+        pen_reset(&status_paper, STATUS_PEN_COLR);
+        pprintf_align(&status_paper, LEFT, "S%X:\n", stage);
+    }
     // -- info
     paper_clear(&info_paper, INFO_PAPER_COLR);
     pen_reset(&info_paper, INFO_PEN_COLR);
@@ -276,7 +275,16 @@ int main(int stage) {
 }
 
 __attribute__((section(".text.start"), optimize("O0"))) int start(struct eex_param_s *eex_params) {
-    init(eex_params);
+    if ((uint32_t)eex_params == E2X_MAGIC) { // special stage3 mode
+        struct eex_param_s tmp_eex_params = {
+            .boot_mode = BOOTSTRAP_MODE_BOOTMGR,
+            .get_hwcfg_patched = (int (*)(patchedHwcfgStruct *))(*(uint32_t*)NSKBL_EXPORTS(NSKBL_EXPORTS_GET_HWCFG_N)),
+            .stage2_config = NULL
+        };
+        init(&tmp_eex_params);
+        return main(0xB);
+    } else
+        init(eex_params);
     return main(2);
 }
 

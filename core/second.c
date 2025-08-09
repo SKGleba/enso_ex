@@ -289,7 +289,9 @@ static int load_psp2bootconfig_patched(uint32_t myaddr, int* uids, int count, in
 	*(uint32_t*)NSKBL_EXPORTS(NSKBL_EXPORTS_GET_HWCFG_N) = (uint32_t)get_hwcfg_patched;
 	if (!get_file("os0:" E2X_BOOTMGR_NAME, (void*)E2X_BOOTMGR_PADDR, 0, 0)) {
         printf("x bootmgr\n");
-        int (*tcode)(uint32_t get_info_va) = (void*)(E2X_BOOTMGR_PADDR | 1);
+        void (*tcode)(uint32_t get_info_va) = (void*)(E2X_BOOTMGR_PADDR | 1);
+		clean_dcache((void*)E2X_BOOTMGR_PADDR, E2X_BOOTMGR_SIZE);
+		flush_icache();
 		tcode((uint32_t)get_hwcfg_patched);
     }
 
@@ -318,6 +320,9 @@ static int recovery_ccode(int *ctx, uint8_t *buf) {
     if (rbr->magic != E2X_MAGIC)
 		return -1;
 
+	clean_dcache(buf, 0x200);
+	flush_icache();
+
 	return ((int (*)(int *, uint32_t))(buf + rbr->offset))(ctx, (uint32_t)get_hwcfg_patched);
 }
 
@@ -337,14 +342,17 @@ static void recovery(int type, int dolce) {
 		error = 2;
         if (read_sector_default_direct((int*)NSKBL_DEVICE_GCSD_CTX, 0, 1, (int)rbuf) >= 0) {
             if (*(uint32_t*)rbuf == 'ynoS') {  // "Sony" - EMMC dump/SCE formatted GCSD, use its os0 as main os0
+                gpio_port_set(0, 7);
                 printf("xR MBR\n");
 				error = recovery_ccode((int*)NSKBL_DEVICE_GCSD_CTX, rbuf);
 				if (error < 0)
                 	error = init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_GCSD_CTX, 1);
             } else if (*(uint32_t*)rbuf == E2X_MAGIC) {  // enso_ex raw recovery code blob
+                gpio_port_set(0, 7);
                 printf("xR RAW\n");
                 error = recovery_ccode((int*)NSKBL_DEVICE_GCSD_CTX, rbuf);
             } else if (*(uint32_t*)(rbuf + 0x38) == ' 61T') {  // mbr+0x36 = 'FA[T16 ]  ' - fat16 partition, use as os0
+                gpio_port_set(0, 7);
                 printf("xR PBR\n");
                 error = init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_GCSD_CTX, 0);
             } else {  // unk magic
@@ -377,12 +385,16 @@ static void recovery(int type, int dolce) {
             }
         }
     }
+
+    gpio_port_clear(0, 7);
 }
 // --------------------
 
 // main
 __attribute__((section(".text.start"))) void start(void* me) {
-	printf("x @stage2 - patching nskbl\n");
+    gpio_port_clear(0, 7);
+	
+    printf("x @stage2 - patching nskbl\n");
 
 	// ignore module_load error (uids can be unclean now)
 	*(uint16_t*)NSKBL_LMODLOAD_CHKRET = 0xbf00;

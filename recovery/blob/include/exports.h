@@ -50,25 +50,28 @@ struct recovery_export_s {
 	struct {
         void (*bmx_ctrl_read)(uint32_t *buttons);
         uint32_t (*bmx_ctrl_wait)(uint32_t exp_buttons, uint32_t poll_rate, uint32_t depress);
-        void (*bmx_display_deinit)(void);
-        int (*bmx_display_init)(enum display_type type, int view_count);
         uint32_t (*bmx_get_time)(int *since_reset);
+        int (*bmx_displaymgr)(enum DISPLAYMGR_NSTATE enable, enum DISPLAYMGR_OPT opt);
     } bmx;
 	struct {
+        uint32_t (*fmgr_get_file_size)(const char *path);
         int (*fmgr_move_dir)(const char *src_path, const char *dest_path);
         int (*fmgr_move_file)(const char *src_path, const char *dest_path);
         int (*fmgr_delete)(const char *path);
         uint32_t (*fmgr_copy_file)(const char *src_path, const char *dest_path);
         int (*fmgr_copy_dir)(const char *src_path, const char *dest_path);
-        void *(*fmgr_get_file)(const char *path, void *buf, int size, int offset);
+        void *(*fmgr_get_file)(const char *path, void *buf, int size, int offset, uint32_t *ret_br);
+        int (*fmgr_set_file)(const char *path, const void *buf, int size, uint32_t *ret_bw);
         int (*fmgr_raw_dump)(uint32_t sector_start, uint32_t sector_count, const char *dest_dir);
         int (*fmgr_scan_masters)(char *output_s, int entry_len, uint32_t *output_i, int start, int max);
         int (*fmgr_list_dir)(const char *path, char *output, int entry_len, int start, int max);
+        int (*fmgr_load_exec)(const char *path, enum FMGR_EXEC_TYPES exec_type);
+        int (*fmgr_fd_partition)(int is_flash, uint32_t part_info, char *dest_string);
+        int (*fmgr_format)(uint32_t part_info, int type);
         int (*fmgr_init)(void);
         int (*fmgr_view_handler)(enum VIEW_ASSIGNS *next_uview);
         void *(*fmgr_square_handler)(int set, enum FMGR_ENTRY_TYPES exp_entypes,
                                   void (*handler)(enum FMGR_ENTRY_TYPES entype, char *path, char *entry, enum VIEW_ASSIGNS *next_uview));
-        int (*fmgr_load_exec)(const char *path);
     } fmgr;
 	struct {
         int (*main)(int stage);
@@ -107,7 +110,10 @@ struct recovery_export_s {
         enum MOUNT_MASTER_TYPES (*stor_get_master_info)(enum MOUNT_MASTERS mount_master, uint32_t *partitions);
         int (*stor_umount)(int idx);
         partition_t *(*stor_find_partition_by_id)(master_block_t *master, int part_id, enum STOR_PART_ACTIVES active);
-	} stor;
+        int (*stor_write_master)(enum MOUNT_MASTERS master, uint32_t sector, const void *buffer, int nsectors);
+        int (*stor_read_master)(enum MOUNT_MASTERS master, uint32_t sector, void *buffer, int nsectors);
+        struct mount_ctx *(*stor_get_validate_mctx)(int idx);
+    } stor;
 	struct {
 		int *g_log_targets;
         void (*dbg_log)(int targets, const char *fmt, ...);
@@ -121,6 +127,10 @@ struct recovery_export_s {
         int (*count_chs)(const char *s, char c);
         char *(*find_nth)(const char *s, char c, int n);
         char *(*find_rnth)(const char *s, char c, int n);
+        int (*idstorage_init)(void);
+        int (*idstorage_stop)(void);
+        int (*idstorage_rw_leaf)(bool write, uint16_t leaf, void *buf);
+        uint32_t (*crc32)(uint32_t crc, const void *buf, size_t size);
     } utils;
 	struct {
         int *view_current;

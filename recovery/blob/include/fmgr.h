@@ -84,6 +84,7 @@ enum FMGR_FILE_OPTS {
     FMGR_FILE_OP_MOVE,
     FMGR_FILE_OP_DELETE,
     FMGR_FILE_OP_EXECUTE,
+    FMGR_FILE_OP_LV0_XI,
     FMGR_FILE_OP_COUNT
 };
 
@@ -91,6 +92,8 @@ enum FMGR_DIR_OPTS {
     FMGR_DIR_OP_COPY = 0,
     FMGR_DIR_OP_MOVE,
     FMGR_DIR_OP_DELETE,
+    FMGR_DIR_OP_UPDATEX,
+    FMGR_DIR_OP_DUMPEMMC,
     FMGR_DIR_OP_COUNT
 };
 
@@ -109,23 +112,40 @@ enum FMGR_IMOUNT_OPTS {
 enum FMGR_PART_OPTS {
     FMGR_PART_OP_DUMP = 0,
     FMGR_PART_OP_FLASH,
+    FMGR_PART_OP_FORMAT16,
+    FMGR_PART_OP_FORMAT32,
+    FMGR_PART_OP_FORMATEX,
     FMGR_PART_OP_COUNT
+};
+
+enum FMGR_EXEC_TYPES {
+    FMGR_EXEC_TYPE_ARM = 0,
+    FMGR_EXEC_TYPE_LV0
 };
 
 #define FMGR_RAWDUMP_BLOCK_SECCOUNT (0x8000) // 16MB
 #define FMGR_RAWDUMP_SEGMENT_BLKCOUNT (64) // 1GiB segments
 
+#define FMGR_UPR_BUFSIZE E2X_RBLOB_SIZE  // nothing bigger than this
+#define FMGR_UPR_CONFIG_FNAME "rconfig.e2xr"
+#define FMGR_UPR_BLOB_FNAME "rblob.e2xp"
+#define FMGR_UPR_MBR_FNAME "rmbr.bin"
+#define FMGR_UPR_SECOND_FNAME "second.e2xp"
+
+uint32_t fmgr_get_file_size(const char *path);
 int fmgr_move_dir(const char *src_path, const char *dest_path);
 int fmgr_move_file(const char *src_path, const char *dest_path);
 int fmgr_delete(const char *path);
 uint32_t fmgr_copy_file(const char *src_path, const char *dest_path);
 int fmgr_copy_dir(const char *src_path, const char *dest_path);
-void *fmgr_get_file(const char *path, void *buf, int size, int offset);
+void *fmgr_get_file(const char *path, void *buf, int size, int offset, uint32_t *ret_br);
+int fmgr_set_file(const char *path, const void *buf, int size, uint32_t *ret_bw);
 int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest_dir);
 int fmgr_scan_masters(char *output_s, int entry_len, uint32_t *output_i, int start, int max);
 int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int max);
-int fmgr_load_exec(const char *path);
+int fmgr_load_exec(const char *path, enum FMGR_EXEC_TYPES exec_type);
 int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string);
+int fmgr_format(uint32_t part_info, int type);
 int fmgr_init(void);
 int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview);
 void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*handler)(enum FMGR_ENTRY_TYPES entype, char *path, char *entry, enum VIEW_ASSIGNS *next_uview));

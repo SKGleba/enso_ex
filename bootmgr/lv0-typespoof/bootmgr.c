@@ -290,19 +290,19 @@ static void cmep_run() {
 // #include your lv0 patchers
 #include "typespoof.c"
 __attribute__((optimize("O0"))) void gp_main(void) {
-	// ---------- SPL_START
-	if (load_sm((int*)0x5113f0e8, "os0:spl_ussm.self", 42456) == 0) { // load update_sm
-		cmep_run(); // add spl patches
-		smtool_stop(); // stop the sm to allow kprxauth load
-	// ---------- SPL_END - can run lv0 payloads via spl
+    // ---------- SPL_START
+    if (load_sm((int*)0x5113f0e8, "os0:spl_ussm.self", 42456) == 0) {  // load update_sm
+        cmep_run();                                                    // add spl patches
+        smtool_stop();                                                 // stop the sm to allow kprxauth load
+                                                                       // ---------- SPL_END - can run lv0 payloads via spl
 
-	// Call your lv0 patchers here
-		set_type(TEST);
-	}
+        // Call your lv0 patchers here
+        set_type(CEX);
+    }
 	return;
 }
 
-__attribute__((section(".text.start"))) void start(void) {
+__attribute__((section(".text.start"))) int start(void) {
 	gp_main();
-	return;
+	return 0;
 }

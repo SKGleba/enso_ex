@@ -1,10 +1,10 @@
 CC=arm-vita-eabi-gcc
-CFLAGS=-O1 -fno-builtin-printf -fPIC -fno-builtin-memset -Wall -Wextra -Wno-unused-variable -Wno-multichar
+CFLAGS=-Os -fno-builtin-printf -fPIC -fno-builtin-memset -Wall -Wextra -Wno-unused-variable -Wno-multichar
 OBJCOPY=arm-vita-eabi-objcopy
 LDFLAGS=-nodefaultlibs -nostdlib
 
 all: fat.bin
-	rm second.o && rm first.o && rm second && rm first && rm first.bin && rm second.bin
+	rm second.o && rm first.o && rm second && rm first
 
 fat.bin: first.bin second.bin
 	./gen.py fat.tpl first.bin second.bin fat.bin

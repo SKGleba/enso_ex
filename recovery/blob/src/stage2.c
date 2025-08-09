@@ -46,7 +46,7 @@ struct stage2_options stage2_opts = {
 static void stage2_status_update(void) {
     paper_clear(&status_paper, MENU_PAPER_COLR);
     pen_reset(&status_paper, STATUS_PEN_COLR);
-    pprintf_align(&status_paper, LEFT, "S2\n");
+    pprintf_align(&status_paper, LEFT, "S2:\n");
     if (stage2_opts.recovery_mbr)
         pprintf_align(&status_paper, RIGHT, "use R MBR <-\n");
     if (stage2_opts.stage3_recovery)

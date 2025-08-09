@@ -33,6 +33,8 @@ __attribute__((section(".text.start"))) int start(int *sctx, uint32_t get_info_v
         printf("[E2X@R] rblob read failed: 0x%08X\n", ret);
         return ret;
     }
+    clean_dcache((void *)BLOB_MEMLOC, BLOB_SIZE * SDIF_SECTOR_SIZE);
+    flush_icache();
 
     // prep args
     struct eex_param_s params = {

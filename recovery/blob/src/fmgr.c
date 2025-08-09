@@ -5,6 +5,10 @@
 #include "ff.h"
 #include "bm_ext.h"
 #include "main.h"
+#include "lv0.h"
+
+#include "../../../core/enso.h"
+#include "../../../core/ex_defs.h"
 
 #include "fmgr.h"
 
@@ -113,8 +117,8 @@ int fmgr_scan_masters(char *output_s, int entry_len, uint32_t *output_i, int sta
     return count - start;
 }
 
-void *fmgr_get_file(const char *path, void *buf, int size, int offset) {
-	LOG("fmgr_get_file(path=%s, buf=%08X, size=%d, offset=%d)\n", path, buf, size, offset);
+void *fmgr_get_file(const char *path, void *buf, int size, int offset, uint32_t *ret_br) {
+	LOG("fmgr_get_file(path=%s, buf=%08X, size=%d, offset=%d, ret_br=%08X)\n", path, buf, size, offset, ret_br);
 	FIL file;
 	FRESULT res = f_open(&file, path, FA_READ);
 	if (res != FR_OK) {
@@ -145,7 +149,31 @@ void *fmgr_get_file(const char *path, void *buf, int size, int offset) {
 		LOG("Failed to read file %s: %d\n", path, res);
 	f_close(&file);
 	LOG("Read %d bytes from file %s\n", bytes_read, path);
+	if (ret_br)
+		*ret_br = bytes_read;
 	return buf;
+}
+
+int fmgr_set_file(const char *path, const void *buf, int size, uint32_t *ret_bw) {
+	LOG("fmgr_set_file(path=%s, buf=%08X, size=%d, ret_bw=%08X)\n", path, buf, size, ret_bw);
+	FIL file;
+	FRESULT res = f_open(&file, path, FA_WRITE | FA_CREATE_ALWAYS);
+	if (res != FR_OK) {
+		LOG("Failed to open file %s: %d\n", path, res);
+		return -1;
+	}
+	UINT bytes_written = 0;
+	res = f_write(&file, buf, size, &bytes_written);
+	if (res != FR_OK || bytes_written < size) {
+		LOG("Failed to write file %s: %d\n", path, res);
+		f_close(&file);
+		return -1;
+	}
+	f_close(&file);
+	LOG("Wrote %d bytes to file %s\n", bytes_written, path);
+	if (ret_bw)
+		*ret_bw = bytes_written;
+	return 0;
 }
 
 uint32_t fmgr_copy_file(const char *src_path, const char *dest_path) {
@@ -282,6 +310,19 @@ int fmgr_move_dir(const char *src_path, const char *dest_path) {
 	return 0;
 }
 
+uint32_t fmgr_get_file_size(const char *path) {
+	LOG("fmgr_get_file_size(path=%s)\n", path);
+	FIL file;
+	FRESULT res = f_open(&file, path, FA_READ);
+	if (res != FR_OK) {
+		LOG("Failed to open file %s: %d\n", path, res);
+		return 0;
+	}
+	uint32_t file_size = f_size(&file);
+	f_close(&file);
+	return file_size;
+}
+
 int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest_dir) {
 	LOG("fmgr_raw_dump(sector_start=%d, sector_count=%d, dest_dir=%s)\n", sector_start, sector_count, dest_dir);
 	if (!dest_dir || sector_count <= 0 || !HAS_ENDSLASH(dest_dir)) {
@@ -362,49 +403,71 @@ int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest
 	return 0;
 }
 
-int fmgr_load_exec(const char *path) {
-    LOG("fmgr_load_exec(path=%s)\n", path);
-    void *buf = fmgr_get_file(path, NULL, 0, 0);
-    if (!buf) {
+int fmgr_load_exec(const char *path, enum FMGR_EXEC_TYPES exec_type) {
+    LOG("fmgr_load_exec(path=%s, exec_type=%d)\n", path, exec_type);
+	uint32_t fsz = 0;
+    void *buf = fmgr_get_file(path, NULL, 0, 0, &fsz);
+    if (!buf || !fsz) {
         LOG("Failed to get file %s\n", path);
         return -1;
     }
-    if (my_rxmap(buf) < 0) {
-        LOG("Failed to remap file %s to RX\n", path);
-        my_free(buf);
-        return -1;
-    }
-    LOG("Executing file %s at %08X\n", path, buf);
-    int (*entry)(void *) = (int (*)(void *))((uint32_t)buf | 1);
-    int ret = entry(buf);
-    LOG("Execution of file %s returned: %d\n", path, ret);
-    if (ret & E2X_EXE_RET_NORESIDENT)
-        my_free(buf);
+	int ret = 0;
+    if (exec_type == FMGR_EXEC_TYPE_ARM) {
+        if (my_rxmap(buf) < 0) {
+            LOG("Failed to remap file %s to RX\n", path);
+            my_free(buf);
+            return -1;
+        }
+        LOG("Executing file %s at %08X\n", path, buf);
+        int (*entry)(void *) = (int (*)(void *))((uint32_t)buf | 1);
+        ret = entry(buf);
+        LOG("Execution of file %s returned: %d\n", path, ret);
+        if (ret & E2X_EXE_RET_NORESIDENT)
+            my_free(buf);
+    } else if (exec_type == FMGR_EXEC_TYPE_LV0)
+        ret = lv0_spl_exec(buf, 0, fsz, 0);
+    else {
+		LOG("Unknown execution type: %d\n", exec_type);
+		my_free(buf);
+		ret = -2;
+	}
     return ret;
 }
 
 int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
     LOG("fmgr_fd_partition(is_flash=%d, part_info=%08X, dest_string=%s)\n", is_flash, part_info, dest_string);
-    if (is_flash && HAS_ENDSLASH(dest_string)) {
-		LOG("Destination path for flashing should not end with a slash: %s\n", dest_string);
-		return -1;
-	}
-
-    void *buf = rmemblock_alloc(FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE, MEMBLOCK_TYPE_RW, 0);
-    if (!buf) {
-        LOG("Failed to allocate buffer for partition dump/flash\n");
-        return -1;
-    }
-
 	int ret = 0;
     enum MOUNT_MASTERS p_m = FMGR_MASTER_SCAN_UNPACK(MASTER, part_info);
     enum STOR_PARTITIONS p_id = FMGR_MASTER_SCAN_UNPACK(PARTITION, part_info);
     enum STOR_PART_ACTIVES p_act = FMGR_MASTER_SCAN_UNPACK(ACTIVE, part_info);
-	if (p_id == STOR_PART_ENTIRE) {
-		LOG("Unsupported partition: entire/invalid\n");
-		ret = -2;
-		goto free_exit;
-	}
+    if (p_id == STOR_PART_ENTIRE) {
+        LOG("Unsupported partition: entire/invalid\n");
+        return -1;
+    }
+    if (is_flash) {
+        if (HAS_ENDSLASH(dest_string)) {
+            LOG("Destination path for flashing should not end with a slash: %s\n", dest_string);
+            return -2;
+        }
+		if (p_id == STOR_PART_IDSTOR || (p_id == STOR_PART_SLOADER && p_act == STOR_PART_ACTIVE_YES)) {
+            screset();
+            scrclog(RED, "WARNING: ");
+            scrlog("Writing invalid data WILL brick the device!\n");
+            scrlog("Are you sure that you want to continue?\n");
+            scrclog(GREEN, "Press CIRCLE to continue, CROSS to cancel.\n");
+            ret = bmx_ctrl_wait(CTRL_CIRCLE | CTRL_CROSS, 4000, 1);
+            if (!BMX_CTRL_BUTTON_HELD(ret, CTRL_CIRCLE)) {
+				LOG("User cancelled flashing process\n");
+				return -3;
+			}
+        }
+    }
+
+    void *buf = rmemblock_alloc(FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE, MEMBLOCK_TYPE_RW, 0);
+    if (!buf) {
+        LOG("Failed to allocate buffer for partition dump/flash\n");
+        return -4;
+    }
     ret = stor_init_mount(2, p_m, p_id, p_act);
 	if (ret < 0) {
 		LOG("Failed to initialize mount for partition %s (%d) on master %s (%d): %d\n",
@@ -415,7 +478,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 	if (!ctx) {
 		LOG("Failed to get mount context for partition %s (%d) on master %s (%d)\n",
 			get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
-		ret = -4;
+		ret = -5;
 		goto free_exit;
 	}
 
@@ -424,7 +487,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 		LOG("Partition %s (%d) on master %s (%d) has zero size\n",
 			get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 		stor_umount(2);
-		ret = -5;
+		ret = -6;
 		goto free_exit;
 	}
 
@@ -444,7 +507,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 		res = f_open(&file, dest_string, FA_WRITE | FA_CREATE_ALWAYS);
 	if (res != FR_OK) {
 		LOG("Failed to open file %s: %d\n", dest_string, res);
-		ret = -6;
+		ret = -7;
 		goto free_exit;
 	}
 
@@ -455,7 +518,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 			if (res != FR_OK || brobw < FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE) {
 				LOG("Failed to read from file %s: %d\n", dest_string, res);
 				f_close(&file);
-				ret = -7;
+				ret = -8;
 				goto free_exit;
 			}
 			ret = stor_write_mount(2, copied, buf, FMGR_RAWDUMP_BLOCK_SECCOUNT);
@@ -480,7 +543,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 			if (res != FR_OK || brobw < FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE) {
 				LOG("Failed to write to file %s: %d\n", dest_string, res);
 				f_close(&file);
-				ret = -8;
+				ret = -9;
 				goto free_exit;
 			}
 			LOG("Wrote %d bytes to file %s for partition %s (%d) on master %s (%d)\n",
@@ -496,7 +559,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 			if (res != FR_OK || brobw < (p_sz - copied) * SECTOR_SIZE) {
 				LOG("Failed to read remaining sectors from file %s: %d\n", dest_string, res);
 				f_close(&file);
-				ret = -9;
+				ret = -10;
 				goto free_exit;
 			}
 			ret = stor_write_mount(2, copied, buf, p_sz - copied);
@@ -520,7 +583,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 			if (res != FR_OK || brobw < (p_sz - copied) * SECTOR_SIZE) {
 				LOG("Failed to write remaining sectors to file %s: %d\n", dest_string, res);
 				f_close(&file);
-				ret = -10;
+				ret = -11;
 				goto free_exit;
 			}
 			LOG("Wrote remaining %d bytes to file %s for partition %s (%d) on master %s (%d)\n",
@@ -539,39 +602,187 @@ free_exit:
     return ret;
 }
 
+static void fmgr_emmcdump(char *path) {
+    LOG("Dumping eMMC to file %s...\n", path);
+    master_block_t mbr;
+    memset(&mbr, 0, sizeof(mbr));
+    int ret = EMMCREAD(0, &mbr, sizeof(mbr) / SECTOR_SIZE);
+    if (ret >= 0) {
+        if (mbr.sig == 0xAA55) {
+            ret = fmgr_raw_dump(0, mbr.device_size, path);
+            if (ret < 0)
+                LOG("Failed to dump eMMC: 0x%08X\n", ret);
+            else
+                LOG("Successfully dumped eMMC to %s\n", path);
+        } else
+            LOG("Invalid MBR signature: 0x%04X\n", mbr.sig);
+    } else
+        LOG("Failed to read MBR: 0x%08X\n", ret);
+}
+
+static void fmgr_upeex(char *path) {
+    int ret = 0;
+    void *buf = NULL;
+    char fpath[2 * FMGR_MAX_PATH_LEN];
+    view_switch(VIEW_DEFAULT);  // switch to the log view
+    LOG("Updating the enso_ex recovery from %s (DIR)...\n", path);
+
+    my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_MBR_FNAME);
+    buf = fmgr_get_file(fpath, NULL, SECTOR_SIZE, 0, NULL);
+    if (buf) {
+        LOG("Flashing recovery MBR from %s\n", fpath);
+        ret = EMMCWRITE(E2X_RECOVERY_MBR_OFFSET, buf, 1);
+        if (ret < 0)
+            LOG("Failed to write recovery MBR to EMMC: 0x%08X\n", ret);
+        else
+            LOG("Successfully wrote recovery MBR to EMMC\n");
+        my_free(buf);
+    } else
+        LOG("No recovery MBR found at %s or error\n", fpath);
+
+    my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_CONFIG_FNAME);
+    buf = fmgr_get_file(fpath, NULL, E2X_RCONF_SIZE, 0, NULL);
+    if (buf) {
+        LOG("Flashing recovery config from %s\n", fpath);
+        ret = EMMCWRITE(E2X_RCONF_OFFSET, buf, E2X_RCONF_SIZE / SECTOR_SIZE);
+        if (ret < 0)
+            LOG("Failed to write recovery config to EMMC: 0x%08X\n", ret);
+        else
+            LOG("Successfully wrote recovery config to EMMC\n");
+        my_free(buf);
+    } else
+        LOG("No recovery config found at %s or error\n", fpath);
+
+    my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_BLOB_FNAME);
+    buf = fmgr_get_file(fpath, NULL, FMGR_UPR_BUFSIZE, 0, NULL);
+    if (buf) {
+        LOG("Flashing recovery blob from %s\n", fpath);
+        ret = EMMCWRITE(E2X_RBLOB_OFFSET, buf, E2X_RBLOB_SIZE / SECTOR_SIZE);
+        if (ret < 0)
+            LOG("Failed to write recovery blob to EMMC: 0x%08X\n", ret);
+        else
+            LOG("Successfully wrote recovery blob to EMMC\n");
+        my_free(buf);
+    } else
+        LOG("No recovery blob found at %s or error\n", fpath);
+
+    if (((struct sysroot_buffer *)(g_eex_ports.kbl_param))->boot_type_indicator_1 & 0x80004) {
+        my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_SECOND_FNAME);
+        buf = fmgr_get_file(fpath, NULL, SECOND_PAYLOAD_SIZE, 0, NULL);
+        if (buf) {
+            LOG("Flashing stage 2 payload from %s\n", fpath);
+            ret = EMMCWRITE(SECOND_PAYLOAD_OFFSET, buf, SECOND_PAYLOAD_SIZE / SECTOR_SIZE);
+            if (ret < 0)
+                LOG("Failed to write stage 2 payload to EMMC: 0x%08X\n", ret);
+            else
+                LOG("Successfully wrote stage 2 payload to EMMC\n");
+            my_free(buf);
+        } else
+            LOG("No stage 2 payload found at %s or error\n", fpath);
+    } else
+        LOG("Skipping stage 2 payload flash - only available in manufacturing mode\n");
+
+    LOG("enso_ex update procedure complete\n");
+}
+
+int fmgr_format(uint32_t part_info, int type) {
+    LOG("fmgr_format: part_info=0x%08X, type=%d\n", part_info, type);
+    enum MOUNT_MASTERS p_m = FMGR_MASTER_SCAN_UNPACK(MASTER, part_info);
+    enum STOR_PARTITIONS p_id = FMGR_MASTER_SCAN_UNPACK(PARTITION, part_info);
+    enum STOR_PART_ACTIVES p_act = FMGR_MASTER_SCAN_UNPACK(ACTIVE, part_info);
+    if (p_id == STOR_PART_ENTIRE) {
+        LOG("Unsupported partition: entire/invalid\n");
+        return -3;
+    }
+    if (p_m == MOUNT_MASTER_EMMC && (p_id == STOR_PART_IDSTOR || (p_id == STOR_PART_SLOADER && p_act == STOR_PART_ACTIVE_YES))) {
+        screset();
+        scrclog(RED, "WARNING: ");
+        scrlog("Formatting this partition WILL brick the device!\n");
+        scrlog("Are you sure that you want to continue?\n");
+        scrclog(GREEN, "Press CIRCLE to continue, CROSS to cancel.\n");
+        if (!BMX_CTRL_BUTTON_HELD(bmx_ctrl_wait(CTRL_CIRCLE | CTRL_CROSS, 4000, 1), CTRL_CIRCLE)) {
+            LOG("User cancelled flashing process\n");
+            return -3;
+        }
+    }
+    LOG("Stopping other mounts because i dont trust fatfs\n");
+    LOG("Stopping all FF mounts...\n");
+    f_unmount("mnt0:");
+    f_unmount("mnt1:");
+    LOG("Stopping all STOR mounts...\n");
+    for (int i = 0; i < STOR_MAX_MOUNTS; i++) {
+        if (stor_ff_init_mount(i) < 0)
+            continue;  // skip uninitialized mounts
+        stor_umount(i);
+    }
+    LOG("Mounting partition %s (%d) on master %s (%d) to temp\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
+    int ret = stor_init_mount(2, p_m, p_id, p_act);
+    if (ret < 0) {
+        LOG("Failed to initialize mount for partition %s (%d) on master %s (%d): 0x%08X\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
+        return -1;
+    }
+
+	void *work = my_malloc(SECTOR_SIZE * SECTOR_SIZE);
+	if (!work) {
+		LOG("Failed to allocate memory for work buffer\n");
+        stor_umount(2);
+        return -5;
+	}
+
+	MKFS_PARM opt;
+	memset(&opt, 0, sizeof(opt));
+	opt.fmt = type;
+    FRESULT res = f_mkfs("mnt2:", &opt, work, SECTOR_SIZE * SECTOR_SIZE);
+	my_free(work);
+    stor_umount(2);
+    if (res != FR_OK) {
+        LOG("Failed to format partition %s (%d) on master %s (%d): %d\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, res);
+        return -4;
+    } else
+		LOG("Successfully formatted partition %s (%d) on master %s (%d)\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
+
+    return 0;
+}
+
 // -- END BASE FUNCTIONS --
 
 
 // -- UI FUNCTIONS --
-static const char *fmgr_file_options[FMGR_FILE_OP_COUNT] = {
+static char *fmgr_file_options[FMGR_FILE_OP_COUNT] = {
 	"Copy to the other side",
 	"Move to the other side",
 	"Delete file",
-	"Run ARM payload"
+	"Run ARM payload",
+	"Use for lv0 SPL init",
 };
 
-static const char *fmgr_dir_options[FMGR_DIR_OP_COUNT] = {
+static char *fmgr_dir_options[FMGR_DIR_OP_COUNT] = {
 	"Copy to the other side",
 	"Move to the other side",
-	"Delete directory"
+	"Delete directory",
+	"Update enso_ex recovery",
+	"Dump eMMC here"
 };
 
-static const char *fmgr_amount_options[FMGR_AMOUNT_OP_COUNT] = {
+static char *fmgr_amount_options[FMGR_AMOUNT_OP_COUNT] = {
 	"Refresh view",
 	"Unmount partition",
 	"Remount partition"
 };
 
-static const char *fmgr_imount_options[FMGR_IMOUNT_OP_COUNT] = {
+static char *fmgr_imount_options[FMGR_IMOUNT_OP_COUNT] = {
 	"Refresh view",
 };
 
-static const char *fmgr_part_options[FMGR_PART_OP_COUNT] = {
+static char *fmgr_part_options[FMGR_PART_OP_COUNT] = {
 	"Dump to the other side",
-	"Flash the other selection"
+	"Flash the other selection",
+	"Format to FAT16",
+	"Format to FAT32",
+	"Format to exFAT"
 };
 
-static const char **fmgr_options_per_type[FMGR_ENTRY_TYPE_COUNT] = {
+static char **fmgr_options_per_type[FMGR_ENTRY_TYPE_COUNT] = {
 	[FMGR_ENTRY_TYPE_FILE] = fmgr_file_options,
 	[FMGR_ENTRY_TYPE_DIR] = fmgr_dir_options,
 	[FMGR_ENTRY_TYPE_MOUNT_ACTIVE] = fmgr_amount_options,
@@ -996,8 +1207,17 @@ actually_dir:
 									fmgr_delete(cctx->loc.cwd);
 									break;
                                 case FMGR_FILE_OP_EXECUTE:
-									fmgr_load_exec(cctx->loc.cwd);
+									fmgr_load_exec(cctx->loc.cwd, FMGR_EXEC_TYPE_ARM);
 									break;
+								case FMGR_FILE_OP_LV0_XI:
+									if (!lv0_initialized) {
+										LOG("Initializing lv0 with file %s\n", cctx->loc.cwd);
+										lv0_init(cctx->loc.cwd);
+										if (lv0_initialized)
+                                            fmgr_file_options[FMGR_FILE_OP_LV0_XI] = "Run f00d payload";
+                                    } else
+                                        fmgr_load_exec(cctx->loc.cwd, FMGR_EXEC_TYPE_LV0);
+                                    break;
 								default:
 									LOG("Unknown file option selected: %d\n", cctx->loc.selection);
 									break;
@@ -1018,6 +1238,12 @@ actually_dir:
                                     break;
 								case FMGR_DIR_OP_DELETE:
 									fmgr_delete(cctx->loc.cwd);
+									break;
+                                case FMGR_DIR_OP_UPDATEX:
+                                    fmgr_upeex(cctx->loc.cwd);
+									break;
+                                case FMGR_DIR_OP_DUMPEMMC:
+                                    fmgr_emmcdump(cctx->loc.cwd);
 									break;
 								default:
 									LOG("Unknown directory option selected: %d\n", cctx->loc.selection);
@@ -1085,9 +1311,20 @@ actually_dir:
 								case FMGR_PART_OP_FLASH:
                                     fmgr_fd_partition(1, partition_info, octx->loc.cwd);
                                     break;
+								case FMGR_PART_OP_FORMAT16:
+									fmgr_format(partition_info, FM_FAT);
+                                    fmgr_print_loc(octx);
+                                    break;
+								case FMGR_PART_OP_FORMAT32:
+									fmgr_format(partition_info, FM_FAT32);
+									fmgr_print_loc(octx);
+									break;
+								case FMGR_PART_OP_FORMATEX:
+									fmgr_format(partition_info, FM_EXFAT);
+									fmgr_print_loc(octx);
+									break;
 								default:
 									LOG("Unknown partition option selected: %d\n", cctx->loc.selection);
-									break;
 							}
 						}
 						break;
@@ -1286,7 +1523,7 @@ int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview) {
     int buttons = 0;
     while (1) {
         // Wait for user input
-        buttons = bmx_ctrl_wait(CTRL_R | CTRL_L | FMGR_ACTION_BUTTONS | FMGR_NAV_BUTTONS, 4000, 1);
+        buttons = bmx_ctrl_wait(CTRL_R | CTRL_L | CTRL_PSBUTTON | FMGR_ACTION_BUTTONS | FMGR_NAV_BUTTONS, 4000, 1);
         if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_R)) {
             LOG("Switching to log view...\n");
             *next_uview = VIEW_DEFAULT;
@@ -1295,8 +1532,11 @@ int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview) {
             LOG("Switching to menu view...\n");
             *next_uview = VIEW_MENU;
             return 0;
-		} else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_DOWN)) // "wish there was a better way to do this" :P
-			fmgr_handle_nav(CTRL_DOWN);
+		} else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_PSBUTTON)) {
+            LOG("PS button pressed - temp display state toggle\n");
+            bmx_displaymgr(DISPLAYMGR_NSTATE_TOGGLE, DISPLAYMGR_OPT_DISP_ONLY);
+        } else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_DOWN))  // "wish there was a better way to do this" :P
+            fmgr_handle_nav(CTRL_DOWN);
 		else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_UP))
 			fmgr_handle_nav(CTRL_UP);
 		else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_RIGHT))

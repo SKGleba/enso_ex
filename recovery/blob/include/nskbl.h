@@ -26,48 +26,7 @@ static int (*sceKernelRemapBlock)(int32_t uid, int type) = (void *)0x51007171;
 static int (*sceKernelFreeMemBlock)(int32_t uid) = (void *)0x51007449;
 #define MEMBLOCK_TYPE_RW 0x1020D006
 #define MEMBLOCK_TYPE_RX 0x1020D005  // cached for speed, rember to clean cache(s)
-enum MEMBLOCK_CONSTRUCT {
-    MB_A_RO = 0x4,
-    MB_A_RX = 0x5,
-    MB_A_RW = 0x6,
-    MB_A_F = 0x7,
-    MB_A_URO = 0x40,
-    MB_A_URX = 0x50,
-    MB_A_URW = 0x60,
-    MB_A_UF = 0x70,
-    MB_S_G = 0x200,
-    MB_S_H = 0x800,
-    MB_S_S = 0xD00,
-    MB_C_LD = 0x2000,
-    MB_C_HE = 0x4000,
-    MB_C_N = 0x8000,
-    MB_C_Y = 0xD000,
-    MB_I_IO = 0x100000,
-    MB_I_DEF = 0x200000,
-    MB_I_CDR = 0x400000,
-    MB_I_BU = 0x500000,
-    MB_I_PC = 0x800000,
-    MB_I_SHR = 0x900000,
-    MB_I_CDLG = 0xA00000,
-    MB_I_BK = 0xC00000,
-    MB_I_PMM = 0xF00000,
-    MB_U_CDRN = 0x5000000,
-    MB_U_UNF = 0x6000000,
-    MB_U_CDRD = 0x9000000,
-    MB_U_SHR = 0xA000000,
-    MB_U_IO = 0xB000000,
-    MB_U_DEF = 0xC000000,
-    MB_U_PC = 0xD000000,
-    MB_U_CDLGP = 0xE000000,
-    MB_U_CDLGV = 0xF000000,
-    MB_K_DEF = 0x10000000,
-    MB_K_IO = 0x20000000,
-    MB_K_PC = 0x30000000,
-    MB_K_CDRD = 0x40000000,
-    MB_K_CDRN = 0x50000000,
-    MB_K_UNF = 0x60000000,
-    MB_K_GPU = 0xA0000000,
-};
+#define MEMBLOCK_TYPE_UCRW 0x10208006
 
 static char *(*nskbl_strncpy)(char *dst, const char *src, unsigned int len) = (void *)0x51014611;
 static int (*nskbl_snprintf)(char *buf, unsigned int size, const char *fmt, ...) = (void *)0x510145c9;
@@ -104,5 +63,22 @@ static int (*nskbl_switch_read_dev)(int *ctx, int sector, int nSectors, int buff
 #define NSKBL_SETUP_EMMC_INIT_OS0_CALL 0x510012f6
 #define NSKBL_SETUP_EMMC_INIT_OS0_CALL_CACHER 0x510012f0
 static int (*nskbl_setup_emmc)() = (void *)0x5100124D;
+
+#define NSKBL_SMTOOL_CTX 0x5113f0e8
+static int (*nskbl_smtool_invoke)(uint32_t param_1, uint32_t self_paddr_list_paddr, uint32_t self_paddr_list_count, uint32_t *param_4,
+                            void *ctx130, int *id) = (void *)0x51015f21;
+static int (*nskbl_smtool_call_big_ka)(void *argv, uint32_t args, uint32_t cmdid) = (void *)0x51016bc9;
+static int (*nskbl_smtool_stop)(void) = (void *)0x51017065;
+static int (*nskbl_smtool_load_ka)(void) = (void *)0x51016c59;
+static int (*nskbl_get_paddr_single)(void *va, void *pa) = (void *)0x5100632d;
+static int (*nskbl_get_paddr_list)(void *vrange, void *palist) = (void *)0x51006345;
+static int (*nskbl_smc_custom)() = (void *)0x51016a10;
+
+#define NSKBL_EXPORTS_ADDR 0x5102778c
+#define NSKBL_EXPORTS(num) (NSKBL_EXPORTS_ADDR + (num * 4))
+enum NSKBL_EXPORTS_FS {
+    NSKBL_EXPORTS_GET_HWCFG_N = 26,
+    NSKBL_EXPORTS_LMODLOAD_N = 7
+};
 
 #endif

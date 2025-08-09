@@ -17,6 +17,7 @@
 /* Example: Mapping of physical drive number for each drive */
 #define DEV_MNT0 0
 #define DEV_MNT1 1
+#define DEV_MNT2 2
 
 
 /*-----------------------------------------------------------------------*/
@@ -116,13 +117,37 @@ DRESULT disk_ioctl (
 	DRESULT res;
 	int result;
 
-	switch (pdrv) {
-	case DEV_MNT0:
-	case DEV_MNT1:
+	switch (cmd) {
+	case CTRL_SYNC: // no cache here
+	case CTRL_TRIM: // trim disabled
 		return RES_OK;
-	}
+	case GET_SECTOR_SIZE:
+		if (buff) {
+			*(WORD *)buff = SECTOR_SIZE; // return sector size
+			return RES_OK;
+		}
+		return RES_PARERR;
+	case GET_SECTOR_COUNT:
+		{
+        	struct mount_ctx *ctx = stor_get_validate_mctx(pdrv);
+        	if (ctx) {
+                if (buff) {
+                    *(DWORD *)buff = ctx->params->sz;
+                    return RES_OK;
+                }
+                return RES_PARERR;
+            }
+            return RES_NOTRDY;
+        }
+	case GET_BLOCK_SIZE:
+        if (buff) {
+            *(DWORD *)buff = 1;
+            return RES_OK;
+        }
+		return RES_PARERR;
+    }
 
-	return RES_PARERR;
+    return RES_PARERR;
 }
 
 char *ff_strchr(const char *s, int c) {

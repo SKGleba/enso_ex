@@ -31,10 +31,6 @@ do {                                   \
     );                                 \
 } while (0)
 
-/*
-	misc peripherals-related funcs
-*/
-#include "../../core/misc_bm.c"
 // --------------------
 
 /*
@@ -260,7 +256,7 @@ static int init_os0(uint32_t mbr_off, unsigned int* ctx, int is_scembr) {
 static int get_hwcfg_patched(uint32_t* dst) {
     if (dst[0] == E2X_MAGIC) {
         patchedHwcfgStruct* expp = (void*)dst;
-        syscon_common_read(&expp->ex_ports.ctrl, SYSCON_CMD_GET_DCTRL);
+        expp->ex_ports.ctrl = (*sysroot_ctx_ptr)->boot_args->field_CC;
         expp->ex_ports.nskbl_exports_start = (void*)NSKBL_EXPORTS_ADDR;
         expp->ex_ports.get_file = get_file;
         expp->ex_ports.memcpy = memcpy;
@@ -323,12 +319,23 @@ static int recovery_ccode(int *ctx, uint8_t *buf) {
 
 // main
 __attribute__((section(".text.start"))) void start(void* me) {
-	gpio_port_clear(0, 7);
 
 	printf("x @stage2 RECOVERY - patching nskbl\n");
 
-	// ignore module_load error (uids can be unclean now)
-	*(uint16_t*)NSKBL_LMODLOAD_CHKRET = 0xbf00;
+    if (*(uint16_t*)NSKBL_LMODLOAD_CHKRET == 0xbf00) {
+        if (!get_file("os0:rblob.e2xp", (void*)E2X_RBLOB_PADDR, 0, 0)) {
+            printf("x guirecovery\n");
+            void (*tcode)(uint32_t magic) = (void*)(E2X_RBLOB_PADDR | 1);
+            clean_dcache((void*)E2X_RBLOB_PADDR, E2X_RBLOB_SIZE);
+            flush_icache();
+            tcode(E2X_MAGIC);
+        } else
+			printf("x W: no guirecovery\n");
+		return;
+    }
+
+    // ignore module_load error (uids can be unclean now)
+    *(uint16_t*)NSKBL_LMODLOAD_CHKRET = 0xbf00;
 	*(uint16_t*)(NSKBL_LMODLOAD_CHKRET + 2) = 0xbf00;
 	clean_dcache((void*)NSKBL_LMODLOAD_CHKRET_CACHER, 0x20);
 	flush_icache();

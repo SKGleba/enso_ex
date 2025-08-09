@@ -1,5 +1,5 @@
 CC=arm-vita-eabi-gcc
-CFLAGS=-Os -fno-builtin-printf -fPIC -fno-builtin-memset -Wall -Wextra -Wno-unused-variable
+CFLAGS=-O1 -fno-builtin-printf -fno-builtin-memset -Wall -Wextra -Wno-unused-variable
 OBJCOPY=arm-vita-eabi-objcopy
 LDFLAGS=-nodefaultlibs -nostdlib
 
