@@ -289,10 +289,10 @@ static int load_psp2bootconfig_patched(uint32_t myaddr, int* uids, int count, in
 	*(uint32_t*)NSKBL_EXPORTS(NSKBL_EXPORTS_GET_HWCFG_N) = (uint32_t)get_hwcfg_patched;
 	if (!get_file("os0:" E2X_BOOTMGR_NAME, (void*)E2X_BOOTMGR_PADDR, 0, 0)) {
         printf("x bootmgr\n");
-        void (*tcode)(uint32_t get_info_va) = (void*)(E2X_BOOTMGR_PADDR | 1);
+        void (*tcode)(uint32_t magic) = (void*)(E2X_BOOTMGR_PADDR | 1);
 		clean_dcache((void*)E2X_BOOTMGR_PADDR, E2X_BOOTMGR_SIZE);
 		flush_icache();
-		tcode((uint32_t)get_hwcfg_patched);
+		tcode((uint32_t)E2X_MAGIC);
     }
 
 	if (get_file("os0:" E2X_CKLDR_NAME, NULL, 0, 0) > 0)

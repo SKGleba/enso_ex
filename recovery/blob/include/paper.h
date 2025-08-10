@@ -70,14 +70,6 @@ enum PAPER_BLANK_MODE {
 #define DFL_PAPER_OPAD_Y DFL_PEN_WIDTH_Y
 #define DFL_PAPER_BLANK_MODE PAPER_BLANK_MODE_NONE
 
-extern struct paper_s default_paper;
-
-#define paper_clear(_paper, _colr)                                                                                               \
-    do {                                                                                                                         \
-        (_paper)->color = _colr;                                                                                                   \
-        paper_draw_rectangle((_paper), 0, 0, (_paper)->max.x - (_paper)->min.x, (_paper)->max.y - (_paper)->min.y, _colr, 0); \
-    } while (0)
-
 #define paper_area(_paper, min_x, min_y, max_x, max_y) \
     do {                                       \
         (_paper)->min.x = min_x;                   \
@@ -100,29 +92,55 @@ extern struct paper_s default_paper;
         (_paper)->pen.pos.y = _y; \
     } while (0)
 
+#define pprintf_align(_paper, _align, fmt, ...) \
+    do {                                        \
+        int _prev_align = (_paper)->align;      \
+        (_paper)->align = PAPER_ALIGN_##_align; \
+        pprintf(_paper, fmt, ##__VA_ARGS__);    \
+        (_paper)->align = _prev_align;          \
+    } while (0)
+
+#define pprintf_color(_paper, _color, fmt, ...)     \
+    do {                                            \
+        uint32_t _prev_color = (_paper)->pen.color; \
+        (_paper)->pen.color = _color;               \
+        pprintf(_paper, fmt, ##__VA_ARGS__);        \
+        (_paper)->pen.color = _prev_color;          \
+    } while (0)
+
+// -- GLOBALS --
+#ifndef RXP_PIE
+extern struct paper_s default_paper;
 void paper_write(struct paper_s *paper, const char *text, int count);
 void paper_print(struct paper_s *paper, const char *text, int align, int count);
 void paper_printf(struct paper_s *paper, const char *fmt, ...);
-
-#define pprintf(_paper, fmt, ...) \
-    paper_printf((_paper), fmt, ##__VA_ARGS__);
-
-#define pprintf_align(_paper, _align, fmt, ...) \
-    do { \
-        int _prev_align = (_paper)->align; \
-        (_paper)->align = PAPER_ALIGN_##_align; \
-        paper_printf(_paper, fmt, ##__VA_ARGS__); \
-        (_paper)->align = _prev_align; \
-    } while (0)
-
-#define pprintf_color(_paper, _color, fmt, ...) \
-    do { \
-        uint32_t _prev_color = (_paper)->pen.color; \
-        (_paper)->pen.color = _color; \
-        paper_printf(_paper, fmt, ##__VA_ARGS__); \
-        (_paper)->pen.color = _prev_color; \
-    } while (0)
-
 void paper_draw_rectangle(struct paper_s *paper, int x, int y, int width, int height, uint32_t color, int fill_pixels);
+#define pprintf paper_printf
+#define paper_clear(_paper, _colr)                                                                                            \
+    do {                                                                                                                      \
+        (_paper)->color = _colr;                                                                                              \
+        paper_draw_rectangle((_paper), 0, 0, (_paper)->max.x - (_paper)->min.x, (_paper)->max.y - (_paper)->min.y, _colr, 0); \
+    } while (0)
+#else
+#define r_default_paper (_r->paper->default_paper)
+#define r_paper_write(...) _r->paper->paper_write(__VA_ARGS__)
+#define r_paper_print(...) _r->paper->paper_print(__VA_ARGS__)
+#define r_paper_printf(...) _r->paper->paper_printf(__VA_ARGS__)
+#define r_paper_draw_rectangle(...) _r->paper->paper_draw_rectangle(__VA_ARGS__)
+#define pprintf r_paper_printf
+#define paper_clear(_paper, _colr)                                                                                            \
+    do {                                                                                                                      \
+        (_paper)->color = _colr;                                                                                              \
+        r_paper_draw_rectangle((_paper), 0, 0, (_paper)->max.x - (_paper)->min.x, (_paper)->max.y - (_paper)->min.y, _colr, 0); \
+    } while (0)
+#endif
+
+struct exports_paper_s {
+    struct paper_s *default_paper;
+    void (*paper_write)(struct paper_s *paper, const char *text, int count);
+    void (*paper_print)(struct paper_s *paper, const char *text, int align, int count);
+    void (*paper_printf)(struct paper_s *paper, const char *fmt, ...);
+    void (*paper_draw_rectangle)(struct paper_s *paper, int x, int y, int width, int height, uint32_t color, int fill_pixels);
+};
 
 #endif /* __PAPER_H__ */

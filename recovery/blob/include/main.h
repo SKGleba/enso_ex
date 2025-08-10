@@ -66,6 +66,7 @@ struct menu_s {
     uint32_t selector_color;
 };
 
+#ifndef RXP_PIE
 extern struct paper_s menu_paper;
 extern struct paper_s status_paper;
 extern struct paper_s info_paper;
@@ -79,5 +80,26 @@ extern unsigned int __bss_end__;
 int main(int stage);
 int init(struct eex_param_s *eex_params);
 int deinit(struct sysroot_buffer *sysroot);
+
+extern uint8_t session_id[SESSION_UID_KBLP_SIZE];
+#else
+#define r_menu_paper (_r->main->menu_paper)
+#define r_status_paper (_r->main->status_paper)
+#define r_info_paper (_r->main->info_paper)
+#define r_eex_params (_r->eex_param)
+#define r_eex_ports (_r->eex_ports)
+#define r_main(...) _r->main->main(__VA_ARGS__)
+#define r_init(...) _r->main->init(__VA_ARGS__)
+#define r_deinit(...) _r->main->deinit(__VA_ARGS__)
+#endif
+
+struct exports_main_s {
+    int (*main)(int stage);
+    struct paper_s *info_paper;
+    struct paper_s *status_paper;
+    struct paper_s *menu_paper;
+    int (*init)(struct eex_param_s *eex_params);
+    int (*deinit)(struct sysroot_buffer *sysroot);
+};
 
 #endif /* __MAIN_H__ */

@@ -38,12 +38,6 @@ struct _master_block_t {
 } __attribute__((packed));
 typedef struct _master_block_t master_block_t;
 
-extern int g_disable_bootarea_update;
-
-int write_sector_sd(int *part_ctx, uint32_t sector, const void *buffer, int nsectors);
-int write_sector_mmc(int *ctx, unsigned int block_offset, const void *target_buf, int block_count);
-int sd_init(int tries, int init_sd0_part);
-
 enum MOUNT_MASTERS {
     MOUNT_MASTER_EMMC = 0,
     MOUNT_MASTER_GCSD,
@@ -70,8 +64,6 @@ struct mount_ctx {
     struct mount_master_ctx *master;
     partition_t *params;
 };
-
-const char *get_partition_name(int part);
 
 #define SCEMBR_U32_MAGIC 'ynoS'
 #define FAT_MBR_MAGIC 0xAA55
@@ -105,6 +97,13 @@ enum STOR_PART_ACTIVES {
     STOR_PART_ACTIVE_BOTH
 };
 
+// -- GLOBALS --
+#ifndef RXP_PIE
+extern int g_disable_bootarea_update;
+int write_sector_sd(int *part_ctx, uint32_t sector, const void *buffer, int nsectors);
+int write_sector_mmc(int *ctx, unsigned int block_offset, const void *target_buf, int block_count);
+int sd_init(int tries, int init_sd0_part);
+const char *get_partition_name(int part);
 enum MOUNT_MASTER_TYPES stor_init_master(enum MOUNT_MASTERS mount_master);
 int stor_init_mount(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIONS partition_id, enum STOR_PART_ACTIVES active);
 int stor_ff_init_mount(int idx);
@@ -116,5 +115,42 @@ partition_t *stor_find_partition_by_id(master_block_t *master, int part_id, enum
 int stor_write_master(enum MOUNT_MASTERS master, uint32_t sector, const void *buffer, int nsectors);
 int stor_read_master(enum MOUNT_MASTERS master, uint32_t sector, void *buffer, int nsectors);
 struct mount_ctx *stor_get_validate_mctx(int idx);
+#else
+#define r_g_disable_bootarea_update *(_r->g_disable_bootarea_update)
+#define r_write_sector_sd(...) _r->write_sector_sd(__VA_ARGS__)
+#define r_write_sector_mmc(...) _r->write_sector_mmc(__VA_ARGS__)
+#define r_sd_init(...) _r->sd_init(__VA_ARGS__)
+#define r_get_partition_name(...) _r->get_partition_name(__VA_ARGS__)
+#define r_stor_init_master(...) _r->stor_init_master(__VA_ARGS__)
+#define r_stor_init_mount(...) _r->stor_init_mount(__VA_ARGS__)
+#define r_stor_ff_init_mount(...) _r->stor_ff_init_mount(__VA_ARGS__)
+#define r_stor_read_mount(...) _r->stor_read_mount(__VA_ARGS__)
+#define r_stor_write_mount(...) _r->stor_write_mount(__VA_ARGS__)
+#define r_stor_get_master_info(...) _r->stor_get_master_info(__VA_ARGS__)
+#define r_stor_umount(...) _r->stor_umount(__VA_ARGS__)
+#define r_stor_find_partition_by_id(...) _r->stor_find_partition_by_id(__VA_ARGS__)
+#define r_stor_write_master(...) _r->stor_write_master(__VA_ARGS__)
+#define r_stor_read_master(...) _r->stor_read_master(__VA_ARGS__)
+#define r_stor_get_validate_mctx(...) _r->stor_get_validate_mctx(__VA_ARGS__)
+#endif
+
+struct exports_stor_s {
+    int *g_disable_bootarea_update;
+    int (*write_sector_sd)(int *part_ctx, uint32_t sector, const void *buffer, int nsectors);
+    int (*write_sector_mmc)(int *ctx, unsigned int block_offset, const void *target_buf, int block_count);
+    int (*sd_init)(int tries, int init_sd0_part);
+    const char *(*get_partition_name)(int part);
+    enum MOUNT_MASTER_TYPES (*stor_init_master)(enum MOUNT_MASTERS mount_master);
+    int (*stor_init_mount)(int idx, enum MOUNT_MASTERS mount_master, enum STOR_PARTITIONS partition_id, enum STOR_PART_ACTIVES active);
+    int (*stor_ff_init_mount)(int idx);
+    int (*stor_read_mount)(int idx, uint32_t sector, void *buffer, int nsectors);
+    int (*stor_write_mount)(int idx, uint32_t sector, const void *buffer, int nsectors);
+    enum MOUNT_MASTER_TYPES (*stor_get_master_info)(enum MOUNT_MASTERS mount_master, uint32_t *partitions);
+    int (*stor_umount)(int idx);
+    partition_t *(*stor_find_partition_by_id)(master_block_t *master, int part_id, enum STOR_PART_ACTIVES active);
+    int (*stor_write_master)(enum MOUNT_MASTERS master, uint32_t sector, const void *buffer, int nsectors);
+    int (*stor_read_master)(enum MOUNT_MASTERS master, uint32_t sector, void *buffer, int nsectors);
+    struct mount_ctx *(*stor_get_validate_mctx)(int idx);
+};
 
 #endif

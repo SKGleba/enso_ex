@@ -82,12 +82,29 @@ struct lv0_jump_args_cmd_s {
     uint32_t req[16];
 };
 
+#ifndef RXP_PIE
 extern int lv0_initialized;
-
 int lv0_load_sm(const char* path);
 int lv0_stop_sm(void);
 int lv0_call_sm(int svc, void* argv, uint32_t size);
 int lv0_init(const char* ussm);
 int lv0_spl_exec(void* payload, uint32_t paddr, int size, uint32_t arg);
+#else
+#define r_lv0_initialized *(_r->lv0->lv0_initialized)
+#define r_lv0_load_sm(...) _r->lv0->lv0_load_sm(__VA_ARGS__)
+#define r_lv0_stop_sm(...) _r->lv0->lv0_stop_sm(__VA_ARGS__)
+#define r_lv0_call_sm(...) _r->lv0->lv0_call_sm(__VA_ARGS__)
+#define r_lv0_init(...) _r->lv0->lv0_init(__VA_ARGS__)
+#define r_lv0_spl_exec(...) _r->lv0->lv0_spl_exec(__VA_ARGS__)
+#endif
+
+struct exports_lv0_s {
+    int *lv0_initialized;
+    int (*lv0_load_sm)(const char* path);
+    int (*lv0_stop_sm)(void);
+    int (*lv0_call_sm)(int svc, void* argv, uint32_t size);
+    int (*lv0_init)(const char* ussm);
+    int (*lv0_spl_exec)(void* payload, uint32_t paddr, int size, uint32_t arg);
+};
 
 #endif

@@ -419,13 +419,13 @@ int fmgr_load_exec(const char *path, enum FMGR_EXEC_TYPES exec_type) {
             return -1;
         }
         LOG("Executing file %s at %08X\n", path, buf);
-        int (*entry)(void *) = (int (*)(void *))((uint32_t)buf | 1);
-        ret = entry(buf);
+        int (*entry)(uint32_t magic) = (int (*)(uint32_t))((uint32_t)buf | 1);
+        ret = entry(E2X_MAGIC);
         LOG("Execution of file %s returned: %d\n", path, ret);
         if (ret & E2X_EXE_RET_NORESIDENT)
             my_free(buf);
     } else if (exec_type == FMGR_EXEC_TYPE_LV0)
-        ret = lv0_spl_exec(buf, 0, fsz, 0);
+        ret = lv0_spl_exec(buf, 0, fsz, E2X_MAGIC);
     else {
 		LOG("Unknown execution type: %d\n", exec_type);
 		my_free(buf);

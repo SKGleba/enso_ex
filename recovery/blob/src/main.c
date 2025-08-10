@@ -36,6 +36,8 @@ ex_ports_struct g_eex_ports = {
 
 static struct menu_s *current_menu = NULL;
 
+uint8_t session_id[SESSION_UID_KBLP_SIZE];
+
 static void menu_change_selection(struct menu_s *menu, int new_selection) {
     // clear the previous selection
     paper_draw_rectangle(menu->paper, 0,
@@ -81,20 +83,26 @@ int init(struct eex_param_s *eex_params) {
         g_eex_ports.kbl_param = ns_kbl_param;
     }
     sysroot_init((struct sysroot_buffer *)g_eex_ports.kbl_param);
+    LOG("Setting Session ID:\n");
+    memcpy(session_id, g_eex_ports.kbl_param + SESSION_UID_KBLP_OFF, SESSION_UID_KBLP_SIZE);
+    hexdump(session_id, SESSION_UID_KBLP_SIZE);
 
     LOG("initializing cdram & syscon...\n");
     cdram_enable();
 	syscon_init();
 
-    LOG("initializing display & views...\n");
-    if (bmx_displaymgr(DISPLAYMGR_NSTATE_ON, DISPLAYMGR_OPT_INCLUDE_FB) < 0) {
-        LOG("Failed to initialize display!\n");
-        return -1;
-    }
-    if (view_init() < 0) {
-        LOG("Failed to initialize views!\n");
-        return -1;
-    }
+    if (g_eex_params.boot_mode != BOOTSTRAP_MODE_LIB) {
+        LOG("initializing display & views...\n");
+        if (bmx_displaymgr(DISPLAYMGR_NSTATE_ON, DISPLAYMGR_OPT_INCLUDE_FB) < 0) {
+            LOG("Failed to initialize display!\n");
+            return -1;
+        }
+        if (view_init() < 0) {
+            LOG("Failed to initialize views!\n");
+            return -1;
+        }
+    } else
+        LOG("Skipping display & views initialization [BOOTSTRAP_MODE_LIB]\n");
 
     if (eex_params->stage2_config)
         memcpy(&stage2_opts, eex_params->stage2_config, sizeof(struct stage2_options));
@@ -274,7 +282,7 @@ int main(int stage) {
     return ret;
 }
 
-__attribute__((section(".text.start"), optimize("O0"))) int start(struct eex_param_s *eex_params) {
+__attribute__((section(".text.start"))) int start(struct eex_param_s *eex_params) {
     if ((uint32_t)eex_params == E2X_MAGIC) { // special stage3 mode
         struct eex_param_s tmp_eex_params = {
             .boot_mode = BOOTSTRAP_MODE_BOOTMGR,
@@ -286,16 +294,6 @@ __attribute__((section(".text.start"), optimize("O0"))) int start(struct eex_par
     } else
         init(eex_params);
     return main(2);
-}
-
-__attribute__((section(".text.bootstart"), optimize("O0"))) int bootstart(void *get_hwcfg_va) {
-    struct eex_param_s tmp_eex_params = {
-        .boot_mode = BOOTSTRAP_MODE_BOOTMGR,
-        .get_hwcfg_patched = (int (*)(patchedHwcfgStruct *))get_hwcfg_va,
-        .stage2_config = NULL
-    };
-    init(&tmp_eex_params);
-    return main(0xB);
 }
 
 // ---- PAPERS ----

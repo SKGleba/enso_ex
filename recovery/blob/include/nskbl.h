@@ -7,6 +7,8 @@
 static int (*nskbl_printf)() = (void *)0x51013919;
 
 static void *ns_kbl_param = (void *)0x51167528;
+#define SESSION_UID_KBLP_OFF 0xA8
+#define SESSION_UID_KBLP_SIZE 0x20
 
 typedef struct SceKernelAllocMemBlockKernelOpt {
     uint32_t size;
