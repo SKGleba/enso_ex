@@ -1,4 +1,9 @@
-// 0syscall6 for non-secure bootloader
+/*
+Position-independent payload example for enso_ex gui recovery
+ This is a simple example demonstrating the structure of a position-independent payload,
+  running in a RX memblock, utilizing the (active or inactive) recovery's exports.
+ It will print "Hello World!" on the screen and wait for the user to press the SQUARE button.
+*/
 
 #include <inttypes.h>
 #include <stddef.h>
