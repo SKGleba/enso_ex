@@ -32,6 +32,9 @@
 #define XBITN(v, n) (((v) >> (n)) & 1)
 #define XBITNVALM(v, n, mask) (((v) >> (n)) & (mask))
 
+#define BSWAP16(x) ((((uint32_t)x << 8) & 0xff00) | (((uint32_t)x >> 8) & 0x00ff))
+#define BSWAP32(x) ((((uint32_t)x << 24) & 0xff000000) | (((uint32_t)x << 8) & 0x00ff0000) | (((uint32_t)x >> 8) & 0x0000ff00) | (((uint32_t)x >> 24) & 0x000000ff))
+
 // function selector based on argc
 #define FUN_VAR4(_1, _2, _3, _4, _fun, ...) _fun
 
@@ -52,17 +55,80 @@ enum LOG_TARGETS {
 };
 
 #define RMEMBLOCK_MIN_SIZE 0x1000
-#define RMEMBLOCK_MAX_COUNT 16
-struct rmemblock_s {
+#define RMEMBLOCK_BB_COUNT 4
+#define RMEMBLOCK_SMB_SIZE 256
+#define RMEMBLOCK_PA_COUNT 16  // first RMEMBLOCK_BB_COUNT reserved
+
+struct rmemblock_info_s {
     int id;
     void *va;
+};
+
+struct rmemblock_master_s {
+    struct rmemblock_info_s pallocs[RMEMBLOCK_PA_COUNT];
+    uint16_t smbe[RMEMBLOCK_BB_COUNT];
+};
+
+struct txtcfg_arg_s {
+    int min_ascii_arg_len;
+    int max_ascii_arg_len;  // we assume no args larger than signed int +range...
+    char *ascii_arg;
+    int (*cmd_handler)(int cmd_idx, char *arg);
+    bool exec; // execute handler immediately upon finding the occurrence
+};
+
+struct txtcfg_s {
+    struct {
+        void *va;
+        uint32_t size;
+    } buf;
+    struct {
+        int count;
+        const char **names; // names[0] is the file path
+        struct txtcfg_arg_s *parsed;
+    } args;
+};
+
+#define ARMP_ARG_MAGIC 'ARMP'
+struct armp_d_s {
+    void *src;
+    void *dst;
+    uint32_t sz;
+    union {
+        int ret;
+        bool src_fa;
+    };
+    struct armp_d_s *next;
+};
+struct armp_x_s {
+    union {
+        int (*func)(uint32_t arg);
+        void *src;
+    };
+    uint32_t arg;
+    union {
+        uint32_t c_sz;
+        int ret;
+    };
+    struct armp_x_s *next;
+};
+struct armp_arg_s {
+    uint32_t magic;
+    struct armp_d_s *d;
+    struct armp_x_s *x;
+};
+
+enum CHAIN_FREE_TYPES {
+    CHAIN_FREE_NONE = 0,
+    CHAIN_FREE_NESTED = (1 << 0),
+    CHAIN_FREE_ENTRIES = (1 << 1)
 };
 
 // --- GLOBALS ---
 #ifndef RXP_PIE
 extern int g_log_targets;
 void dbg_log(int targets, const char *fmt, ...);
-void dbg_hexdump(void *addr, int size, bool show_addr, char delim);
+void dbg_hexdump(void *addr, int size, uint32_t show_addr, char delim);
 #define LOG(fmt, ...) dbg_log(g_log_targets, fmt, ##__VA_ARGS__)
 #define conlog(fmt, ...) dbg_log(LOG_TARGET_CONSOLE, fmt, ##__VA_ARGS__)
 #define alllog(fmt, ...) dbg_log(-1, fmt, ##__VA_ARGS__)
@@ -89,34 +155,39 @@ void dbg_hexdump(void *addr, int size, bool show_addr, char delim);
 #define EMMCWRITE(_sector, _buffer, _nsectors) write_sector_mmc((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
 #define SDWRITE(_sector, _buffer, _nsectors) write_sector_sd((int *)*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX, _sector, _buffer, _nsectors)
 
-#define _hexdump(addr, size) dbg_hexdump((void *)(addr), (size), false, ' ')
+#define _hexdump(addr, size) dbg_hexdump((void *)(addr), (size), 0xFFFFFFFF, ' ')
 #define _hexdump_addr(addr, size, show_addr) dbg_hexdump((void *)(addr), (size), show_addr, ' ')
 #define _hexdump_full(addr, size, show_addr, delim) dbg_hexdump((void *)(addr), (size), show_addr, delim)
 #define hexdump(...) FUN_VAR4(__VA_ARGS__, _hexdump_full, _hexdump_addr, _hexdump)(__VA_ARGS__)
 
-extern struct rmemblock_s rmemblock_allocs[RMEMBLOCK_MAX_COUNT];
 void *rmemblock_alloc(int size, uint32_t opt_type, uint32_t opt_paddr);
-int rmemblock_free(void *va);
 int rmemblock_remap(void *va, uint32_t type);
-#define rmemblock_init()                                \
-    do {                                                \
-        for (int i = 0; i < RMEMBLOCK_MAX_COUNT; i++) { \
-            rmemblock_allocs[i].id = -1;                \
-            rmemblock_allocs[i].va = NULL;              \
-        }                                               \
-    } while (0)
+#define rmemblock_free(_va) rmemblock_remap((_va), 0)
+extern struct rmemblock_master_s rmemblock_master;
+#define rmemblock_start() memset(&rmemblock_master, -1, sizeof(rmemblock_master));
+void rmemblock_stop(void);
 
 char *my_strchr(const char *s, int c);
 char *my_strrchr(const char *s, int c);
 int count_chs(const char *s, char c);
 char *find_nth(const char *s, char c, int n);
 char *find_rnth(const char *s, char c, int n);
+int antoh(char *input, uint8_t *output, int output_len);
+int hntoa(uint8_t *input, char *output, int output_len);
+char *find_endline(char *start, char *end);
+char *find_nextline(char *current_line_end, char *end);
 
 int idstorage_init(void);
 int idstorage_stop(void);
 int idstorage_rw_leaf(bool write, uint16_t leaf, void *buf);
 
 uint32_t crc32(uint32_t crc, const void *buf, size_t size);
+
+void txtcfg_parse(struct txtcfg_s *cfg);
+void txtcfg_cleanup(struct txtcfg_s *cfg);
+int txtcfg_loadExec(struct txtcfg_s *cfg, bool cleanup);
+
+int armp_run(struct armp_arg_s *armp, enum CHAIN_FREE_TYPES free);
 
 #define my_malloc(_size) rmemblock_alloc((_size), 0, 0)
 #define my_free(_va) rmemblock_free((_va))
@@ -154,26 +225,25 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size);
 #define r_SDREAD(_sector, _buffer, _nsectors) read_sector_sd((int *)*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX, _sector, _buffer, _nsectors)
 #define r_EMMCWRITE(_sector, _buffer, _nsectors) r_write_sector_mmc((int *)*(uint32_t *)NSKBL_DEVICE_EMMC_TGT_CTX, _sector, _buffer, _nsectors)
 #define r_SDWRITE(_sector, _buffer, _nsectors) r_write_sector_sd((int *)*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX, _sector, _buffer, _nsectors)
-#define _hexdump(addr, size) r_dbg_hexdump((void *)(addr), (size), false, ' ')
+#define _hexdump(addr, size) r_dbg_hexdump((void *)(addr), (size), 0xFFFFFFFF, ' ')
 #define _hexdump_addr(addr, size, show_addr) r_dbg_hexdump((void *)(addr), (size), show_addr, ' ')
 #define _hexdump_full(addr, size, show_addr, delim) r_dbg_hexdump((void *)(addr), (size), show_addr, delim)
 #define r_hexdump(...) FUN_VAR4(__VA_ARGS__, _hexdump_full, _hexdump_addr, _hexdump)(__VA_ARGS__)
-#define r_rmemblock_allocs (_r->utils->rmemblock_allocs)
+#define r_memblock_master _r->utils->memblock_master
 #define r_rmemblock_alloc(...) _r->utils->rmemblock_alloc(__VA_ARGS__)
-#define r_memblock_free(...) _r->utils->rmemblock_free(__VA_ARGS__)
+#define r_memblock_free(_va) _r->utils->rmemblock_remap((_va), 0)
 #define r_memblock_remap(...) _r->utils->rmemblock_remap(__VA_ARGS__)
-#define r_rmemblock_init()                                \
-    do {                                                \
-        for (int i = 0; i < RMEMBLOCK_MAX_COUNT; i++) { \
-            r_rmemblock_allocs[i].id = -1;                \
-            r_rmemblock_allocs[i].va = NULL;              \
-        }                                               \
-    } while (0)
+#define r_memblock_stop() _r->utils->rmemblock_stop()
+#define r_memblock_start() _r->lbm->memset(_r->utils->memblock_master, -1, sizeof(struct rmemblock_master_s))
 #define r_strchr(...) _r->utils->my_strchr(__VA_ARGS__)
 #define r_strrchr(...) _r->utils->my_strrchr(__VA_ARGS__)
 #define r_count_chs(...) _r->utils->count_chs(__VA_ARGS__)
 #define r_find_nth(...) _r->utils->find_nth(__VA_ARGS__)
 #define r_find_rnth(...) _r->utils->find_rnth(__VA_ARGS__)
+#define r_antoh(...) _r->lbm->antoh(__VA_ARGS__)
+#define r_hntoa(...) _r->lbm->hntoa(__VA_ARGS__)
+#define r_find_endline(...) _r->utils->find_endline(__VA_ARGS__)
+#define r_find_nextline(...) _r->utils->find_nextline(__VA_ARGS__)
 #define r_idstorage_init(...) _r->utils->idstorage_init(__VA_ARGS__)
 #define r_idstorage_stop(...) _r->utils->idstorage_stop(__VA_ARGS__)
 #define r_idstorage_rw_leaf(...) _r->utils->idstorage_rw_leaf(__VA_ARGS__)
@@ -184,25 +254,38 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size);
 #define r_snprintf(_buf, _size, _fmt, ...) nskbl_snprintf((_buf), (_size), (_fmt), ##__VA_ARGS__)
 #define r_strncmp(_s1, _s2, _len) nskbl_strncmp((_s1), (_s2), (_len))
 #define r_idstorage_sync r_idstorage_init
+#define r_txtcfg_parse(...) _r->utils->txtcfg_parse(__VA_ARGS__)
+#define r_txtcfg_cleanup(...) _r->utils->txtcfg_cleanup(__VA_ARGS__)
+#define r_txtcfg_loadExec(...) _r->utils->txtcfg_loadExec(__VA_ARGS__)
+#define r_armp_run(...) _r->utils->armp_run(__VA_ARGS__)
+
 #endif
 
 struct exports_util_s {
     int *g_log_targets;
     void (*dbg_log)(int targets, const char *fmt, ...);
-    void (*dbg_hexdump)(void *addr, int size, bool show_addr, char delim);
-    struct rmemblock_s *rmemblock_allocs;
+    void (*dbg_hexdump)(void *addr, int size, uint32_t show_addr, char delim);
+    struct rmemblock_master_s *memblock_master;
     void *(*rmemblock_alloc)(int size, uint32_t opt_type, uint32_t opt_paddr);
-    int (*rmemblock_free)(void *va);
     int (*rmemblock_remap)(void *va, uint32_t type);
+    void (*rmemblock_stop)(void);
     char *(*my_strchr)(const char *s, int c);
     char *(*my_strrchr)(const char *s, int c);
     int (*count_chs)(const char *s, char c);
     char *(*find_nth)(const char *s, char c, int n);
     char *(*find_rnth)(const char *s, char c, int n);
+    int (*antoh)(char *input, uint8_t *output, int output_len);
+    int (*hntoa)(uint8_t *input, char *output, int output_len);
+    char *(*find_endline)(char *start, char *end);
+    char *(*find_nextline)(char *current_line_end, char *end);
     int (*idstorage_init)(void);
     int (*idstorage_stop)(void);
     int (*idstorage_rw_leaf)(bool write, uint16_t leaf, void *buf);
     uint32_t (*crc32)(uint32_t crc, const void *buf, size_t size);
+    void (*txtcfg_parse)(struct txtcfg_s *cfg);
+    void (*txtcfg_cleanup)(struct txtcfg_s *cfg);
+    int (*txtcfg_loadExec)(struct txtcfg_s *cfg, bool cleanup);
+    int (*armp_run)(struct armp_arg_s *armp, enum CHAIN_FREE_TYPES free);
 };
 
 #endif

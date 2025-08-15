@@ -12,7 +12,40 @@
 
 #include "fmgr.h"
 
+static const char *fmgr_mount_names[STOR_MAX_MOUNTS] = {
+    "mnt0:",
+    "mnt1:",
+    "mnt2:",
+};
+
+static FATFS fmgr_mountp[3] = {
+    {0},  // mnt0
+    {0},  // mnt1
+    {0},  // mnt2
+};
+
 // -- BASE FUNCTIONS --
+int fmgr_mount(bool mount, int idx) {
+    if (idx < 0 || idx >= STOR_MAX_MOUNTS) {
+        LOG("Invalid mount index: %d\n", idx);
+        return -1;
+    }
+    if (mount) {
+        LOG("Mounting %s...\n", fmgr_mount_names[idx]);
+        if (f_mount(&fmgr_mountp[idx], fmgr_mount_names[idx], 1) != FR_OK) {
+            LOG("Failed to mount %s\n", fmgr_mount_names[idx]);
+            return -1;
+        }
+    } else {
+        LOG("Unmounting %s...\n", fmgr_mount_names[idx]);
+        if (f_mount(NULL, fmgr_mount_names[idx], 1) != FR_OK) {
+            LOG("Failed to unmount %s\n", fmgr_mount_names[idx]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int max) {
     FRESULT res;
     DIR dir;
@@ -744,6 +777,20 @@ int fmgr_format(uint32_t part_info, int type) {
     return 0;
 }
 
+uint32_t fmgr_get_nskbl_os0(void) {
+	uint32_t *part_ctx = (uint32_t *)NSKBL_PARTITION_OS0;
+	if (!part_ctx[4])
+		return -1;
+	enum MOUNT_MASTERS p_m = MOUNT_MASTER_EMMC;
+	enum STOR_PARTITIONS p_id = STOR_PART_OS;
+	enum STOR_PART_ACTIVES p_act = STOR_PART_ACTIVE_YES;
+    if (part_ctx[0x16] == NSKBL_DEVICE_GCSD_CTX)
+		p_m = MOUNT_MASTER_GCSD;
+    if (!(part_ctx[0] & 0x10000))
+		p_id = STOR_PART_ENTIRE;
+	return FMGR_MASTER_SCAN_PACK(p_m, p_id, p_act);
+}
+
 // -- END BASE FUNCTIONS --
 
 
@@ -798,18 +845,6 @@ static int fmgr_options_count[FMGR_ENTRY_TYPE_COUNT] = {
 	[FMGR_ENTRY_TYPE_MOUNT_INACTIVE] = FMGR_IMOUNT_OP_COUNT,
 	[FMGR_ENTRY_TYPE_PARTITION] = FMGR_PART_OP_COUNT,
 	[FMGR_ENTRY_TYPE_OPTION] = 0
-};
-
-static const char *fmgr_mount_names[STOR_MAX_MOUNTS] = {
-	"mnt0:",
-	"mnt1:",
-	"mnt2:",
-};
-
-static FATFS fmgr_mountp[3] = {
-	{0},  // mnt0
-	{0},  // mnt1
-	{0},  // mnt2
 };
 
 static struct paper_s fmgr_paper[FMGR_PAPERS_END];

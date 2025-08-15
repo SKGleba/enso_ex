@@ -2,6 +2,7 @@
 #include "nskbl.h"
 #include "main.h"
 #include "stor.h"
+#include "fmgr.h"
 
 char *my_strchr(const char *s, int c) {
     while (*s) {
@@ -49,6 +50,57 @@ char *find_rnth(const char *s, char c, int n) {
 	return find_nth(s, c, count - n + 1);  // find the nth occurrence from the end
 }
 
+int antoh(char *input, uint8_t *output, int output_len) {
+    for (int i = 0; i < (output_len * 2); i++) {
+        if (input[i] < '0' || (input[i] > '9' && input[i] < 'A') || input[i] > 'F')
+            return -1;
+    }
+
+    for (int i = 0; i < output_len; i++) {
+        if (input[i * 2] < 'A')
+            output[i] = 0x10 * (input[i * 2] - '0');
+        else
+            output[i] = 0x10 * (input[i * 2] - '7');
+
+        if (input[(i * 2) + 1] < 0x40)
+            output[i] += (input[(i * 2) + 1] - '0');
+        else
+            output[i] += (input[(i * 2) + 1] - '7');
+    }
+
+    return 0;
+}
+
+static const char hexbase[] = "0123456789ABCDEF";
+int hntoa(uint8_t *input, char *output, int output_len) {
+    if (output_len & 1)
+        return -1;
+
+    output_len = output_len / 2;
+
+    for (int i = 0; i < output_len; i -= -1) {
+        output[i * 2] = hexbase[(input[i] & 0xF0) >> 4];
+        output[(i * 2) + 1] = hexbase[input[i] & 0x0F];
+    }
+
+    return 0;
+}
+
+char *find_endline(char *start, char *end) {
+    for (char *ret = start; ret < end; ret++) {
+        if (*(uint16_t *)ret == 0x0A0D || *(uint8_t *)ret == 0x0A)
+            return ret;
+    }
+    return end;
+}
+
+char *find_nextline(char *current_line_end, char *end) {
+    for (char *next_line = current_line_end; next_line < end; next_line++) {
+        if (*(uint8_t *)next_line != 0x0D && *(uint8_t *)next_line != 0x0A && *(uint8_t *)next_line != 0x00)
+            return next_line;
+    }
+    return NULL;
+}
 
 int g_log_targets = LOG_TARGET_NONE;
 void dbg_log(int targets, const char *fmt, ...) {
@@ -65,13 +117,13 @@ void dbg_log(int targets, const char *fmt, ...) {
 		paper_write(&info_paper, buffer, sizeof(buffer));
 }
 
-void dbg_hexdump(void *addr, int size, bool show_addr, char delim) {
+void dbg_hexdump(void *addr, int size, uint32_t show_addr, char delim) {
 	unsigned char *ptr = (unsigned char *)addr;
 	int i, j;
 	char line[80];
 	for (i = 0; i < size; i += 16) {
-		if (show_addr)
-			my_snprintf(line, sizeof(line), "%08X: ", i);
+		if (show_addr != 0xFFFFFFFF)
+			my_snprintf(line, sizeof(line), "%08X: ", i + show_addr);
 		else
 			line[0] = '\0';
 
@@ -83,24 +135,27 @@ void dbg_hexdump(void *addr, int size, bool show_addr, char delim) {
 	}
 }
 
-
-struct rmemblock_s rmemblock_allocs[RMEMBLOCK_MAX_COUNT];
-void *rmemblock_alloc(int size, uint32_t opt_type, uint32_t opt_paddr) {
-	LOG("Allocating rmemblock: size=%d, type=0x%08X, paddr=0x%08X\n", size, opt_type, opt_paddr);
+struct rmemblock_master_s rmemblock_master;
+static void *rmemblock_palloc(int size, uint32_t opt_type, uint32_t opt_paddr) {
+	LOG("PAllocating rmemblock: size=%d, type=0x%08X, paddr=0x%08X\n", size, opt_type, opt_paddr);
     char name[8];
-    struct rmemblock_s *rblock = NULL;
-	for (int i = 0; i < RMEMBLOCK_MAX_COUNT; i++) {
-		if (rmemblock_allocs[i].id < 0) {
-			rblock = &rmemblock_allocs[i];
-			LOG("Found free rmemblock slot at index %d\n", i);
+    struct rmemblock_info_s *rblock = NULL;
+    int start = (!size) ? 0 : RMEMBLOCK_BB_COUNT; // for BB blocks
+	int end = (!size) ? RMEMBLOCK_BB_COUNT : RMEMBLOCK_PA_COUNT; // ^
+    for (int i = start; i < end; i++) {
+        if (rmemblock_master.pallocs[i].id < 0) {
+            rblock = &rmemblock_master.pallocs[i];
+			//LOG("Found free rmemblock slot at index %d\n", i);
 			my_snprintf(name, sizeof(name), "rblk%d", i);
 			break;
-		}
-	}
-	if (!rblock) {
+        }
+    }
+    if (!rblock) {
 		LOG("ERROR: No free rmemblock slots available\n");
 		return NULL;
 	}
+	if (!size)
+		size = RMEMBLOCK_MIN_SIZE;
 	size = (size + (RMEMBLOCK_MIN_SIZE - 1)) & ~(RMEMBLOCK_MIN_SIZE - 1);  // align to 4KB
 	if (opt_paddr) {
         SceKernelAllocMemBlockKernelOpt opt;
@@ -122,54 +177,121 @@ void *rmemblock_alloc(int size, uint32_t opt_type, uint32_t opt_paddr) {
 		rblock->id = -1;
 		return NULL;
 	}
-    LOG("INFO: Memory block %s (id=%d) allocated successfully @ 0x%08X\n", name, rblock->id, (unsigned int)rblock->va);
+    //LOG("INFO: Memory block %s (id=%d) allocated successfully @ 0x%08X\n", name, rblock->id, (unsigned int)rblock->va);
     return rblock->va;
 }
 
-int rmemblock_free(void *va) {
-	LOG("Freeing rmemblock at VA: 0x%08X\n", (unsigned int)va);
-	for (int i = 0; i < RMEMBLOCK_MAX_COUNT; i++) {
-		if (rmemblock_allocs[i].va == va) {
-			int id = rmemblock_allocs[i].id;
-			if (id < 0) {
-				LOG("ERROR: Attempted to free an unallocated memory block at 0x%08X\n", (unsigned int)va);
-				return -1;
+void *rmemblock_alloc(int size, uint32_t opt_type, uint32_t opt_paddr) {
+	if (opt_paddr)
+        return rmemblock_palloc(size, opt_type, (opt_paddr & 0xFFFFF000) ? opt_paddr : 0);
+    if (!opt_type && (size <= RMEMBLOCK_SMB_SIZE)) {
+		for (int x = 0; x < RMEMBLOCK_BB_COUNT; x++) {
+			if (rmemblock_master.pallocs[x].id < 0) {
+				LOG("Allocating big block %d\n", x);
+                if (!rmemblock_palloc(0, MEMBLOCK_TYPE_RW, 0))
+                    goto def_alloc;
+            }
+			for (int i = 0; i < 16; i++) {
+				if (rmemblock_master.smbe[x] & BITN(i)) {
+					LOG("Using free small block %d in big block %d\n", i, x);
+					rmemblock_master.smbe[x] &= ~BITN(i);
+					return rmemblock_master.pallocs[x].va + (i * RMEMBLOCK_SMB_SIZE);
+				}
 			}
-			rmemblock_allocs[i].id = -1;
-			rmemblock_allocs[i].va = NULL;
-			int ret = sceKernelFreeMemBlock(id);
-			if (ret < 0) {
-				LOG("ERROR: Failed to free memory block %d: %08X\n", id, ret);
-				return ret;
-			}
-			LOG("INFO: Memory block %d freed successfully\n", id);
-			return 0;
 		}
+		LOG("Ran out of small blocks, allocating normally\n");
 	}
-	LOG("ERROR: Memory block not found for VA: %p\n", va);
-	return -1;
+def_alloc:
+    size = ((size + sizeof(struct rmemblock_info_s)) + (RMEMBLOCK_MIN_SIZE - 1)) & ~(RMEMBLOCK_MIN_SIZE - 1);  // align to 4KB
+    LOG("Allocating rmemblock: size=%d, type=0x%08X\n", size, opt_type);
+    int block_id = sceKernelAllocMemBlock("e2xr_malloc", opt_type ?: MEMBLOCK_TYPE_RW, size, NULL);
+	if (block_id < 0) {
+		LOG("ERROR: Failed to allocate memory block (size=%d, type=0x%08X): %08X\n", size, opt_type, block_id);
+		return NULL;
+	}
+	void *block_va = NULL;
+	sceKernelGetMemBlockBase(block_id, &block_va);
+	if ((sceKernelGetMemBlockBase(block_id, &block_va) < 0) || !block_va) {
+		LOG("ERROR: Failed to get memory block base for 0x%08X\n", block_id);
+		sceKernelFreeMemBlock(block_id);
+		return NULL;
+	}
+	//LOG("INFO: Memory block 0x%08X allocated successfully @ 0x%08X [user=0x%08X]\n", block_id, (unsigned int)block_va, (unsigned int)block_va + sizeof(struct rmemblock_info_s));
+    ((struct rmemblock_info_s *)block_va)->id = block_id;
+    ((struct rmemblock_info_s *)block_va)->va = block_va;
+    return block_va + sizeof(struct rmemblock_info_s);
 }
 
 int rmemblock_remap(void *va, uint32_t type) {
-	LOG("Remapping rmemblock at VA: 0x%08X to type: %d\n", (unsigned int)va, type);
-	for (int i = 0; i < RMEMBLOCK_MAX_COUNT; i++) {
-		if (rmemblock_allocs[i].va == va) {
-			int id = rmemblock_allocs[i].id;
-            if (id < 0) {
-                LOG("ERROR: Attempted to remap an unallocated memory block at 0x%08X\n", (unsigned int)va);
+    int ret = 0;
+    const char *op = type ? "remap" : "free";
+    LOG("Try %s rmemblock at VA: 0x%08X\n", op, (unsigned int)va);
+    for (int i = 0; i < RMEMBLOCK_PA_COUNT; i++) {
+        if (i >= RMEMBLOCK_BB_COUNT && (rmemblock_master.pallocs[i].va == va)) {
+            int id = rmemblock_master.pallocs[i].id;
+			if (id < 0) {
+				LOG("ERROR: Attempted to %s an unallocated memory block at 0x%08X\n", op, (unsigned int)va);
 				return -1;
-            }
-            int ret = sceKernelRemapBlock(id, type);
+			}
+			if (!type) {
+				rmemblock_master.pallocs[i].id = -1;
+				rmemblock_master.pallocs[i].va = NULL;
+				ret = sceKernelFreeMemBlock(id);
+			} else
+				ret = sceKernelRemapBlock(id, type);
 			if (ret < 0) {
-				LOG("ERROR: Failed to remap memory block %d: %08X\n", id, ret);
+				LOG("ERROR: Failed to %s memory block %d: %08X\n", op, id, ret);
 				return ret;
 			}
-			LOG("INFO: Memory block %d remapped successfully\n", id);
+			//LOG("INFO: Memory block %d %sd successfully\n", id, op);
 			return 0;
-		}
+        } else if (i < RMEMBLOCK_BB_COUNT && (va >= rmemblock_master.pallocs[i].va) && (va < (rmemblock_master.pallocs[i].va + RMEMBLOCK_MIN_SIZE))) {
+			if (type) {
+				LOG("ERROR: Cannot remap small blocks, only free them\n");
+				return -1;
+			}
+            int j = (va - rmemblock_master.pallocs[i].va) / RMEMBLOCK_SMB_SIZE;
+			if (j < 16 && !(rmemblock_master.smbe[i] & BITN(j))) {
+				rmemblock_master.smbe[i] |= BITN(j);
+				//LOG("Freed small block %d in big block %d\n", j, i);
+				return 0;
+			} else {
+				LOG("ERROR: Invalid small block index %d for VA: 0x%08X\n", j, (unsigned int)va);
+				return -1;
+			}
+        }
+    }
+    //LOG("INFO: treating VA: 0x%08X as mallocd memblock, trying -%d for info\n", (unsigned int)va, sizeof(struct rmemblock_info_s));
+	struct rmemblock_info_s * actualva = (struct rmemblock_info_s *)(va - sizeof(struct rmemblock_info_s));
+	if (actualva->va != (void*)actualva) {
+		LOG("ERROR: Attempted to %s an invalid rmemblock at 0x%08X\n", op, (unsigned int)va);
+		return -1;
 	}
-	LOG("ERROR: Memory block not found for VA: 0x%08X\n", (unsigned int)va);
-	return -1;
+	if (type)
+        ret = sceKernelRemapBlock(actualva->id, type);
+    else
+        ret = sceKernelFreeMemBlock(actualva->id);
+    if (ret < 0) {
+        LOG("ERROR: Failed to %s memory block 0x%08X: %08X\n", op, actualva->id, ret);
+        return ret;
+	}
+	//LOG("INFO: Memory block 0x%08X %sd successfully\n", id, op);
+	return 0;
+}
+
+void rmemblock_stop(void) {
+    for (int i = 0; i < RMEMBLOCK_BB_COUNT; i++) {
+        if (rmemblock_master.pallocs[i].id >= 0) {
+			LOG("Freeing big block %d\n", i);
+            sceKernelFreeMemBlock(rmemblock_master.pallocs[i].id);
+            rmemblock_master.pallocs[i].id = -1;
+            rmemblock_master.pallocs[i].va = NULL;
+        }
+    }
+	for (int i = RMEMBLOCK_BB_COUNT; i < RMEMBLOCK_PA_COUNT; i++) {
+		if (rmemblock_master.pallocs[i].id >= 0)
+			LOG("WARNING: Leftover PAllocation %d: 0x%08X @ 0x%08X\n", i, (unsigned int)rmemblock_master.pallocs[i].id, (unsigned int)rmemblock_master.pallocs[i].va);
+	}
 }
 
 static struct idstorage_s {
@@ -307,4 +429,162 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size) {
         crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
 
     return crc ^ ~0U;
+}
+
+
+static int txtcfg_getCmdIDX(struct txtcfg_s* cfg, char *line, char *end) {
+    int cmd_len = 0;
+    int max_cmd_len = end - line;
+    for (int i = 1; i < cfg->args.count; i++) {
+        cmd_len = strlen(cfg->args.names[i]);
+        if (cmd_len < max_cmd_len) {
+            if (!memcmp(line, cfg->args.names[i], cmd_len))
+                return i;
+        }
+    }
+    return 0;
+}
+
+static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *command_line, char *end) {
+    char *arg = command_line + strlen(cfg->args.names[idx]);
+    if (*(uint8_t *)arg != 0x3D)
+        return;
+    arg++;
+
+    int arglen = end - arg;
+
+    // cut invalid and comments (" " and "#")
+    for (int i = 0; i < arglen; i++) {
+        if (*(uint8_t *)(arg + i) == 0x20 || *(uint8_t *)(arg + i) == 0x23) {
+            arglen = i;
+            break;
+        }
+    }
+
+    if (!arglen || arglen < cfg->args.parsed[idx].min_ascii_arg_len || arglen > cfg->args.parsed[idx].max_ascii_arg_len) {
+        return;
+	}
+	
+	if (cfg->args.parsed[idx].ascii_arg)
+		return;
+
+    cfg->args.parsed[idx].ascii_arg = my_malloc(arglen + 1);
+    if (cfg->args.parsed[idx].ascii_arg) {
+        cfg->args.parsed[idx].ascii_arg[arglen] = 0;
+        memcpy(cfg->args.parsed[idx].ascii_arg, arg, arglen);
+        if (!memcmp(cfg->args.parsed[idx].ascii_arg, arg, arglen)) {
+			if (cfg->args.parsed[idx].exec && cfg->args.parsed[idx].cmd_handler) {
+                cfg->args.parsed[idx].cmd_handler(idx, cfg->args.parsed[idx].ascii_arg);
+                my_free(cfg->args.parsed[idx].ascii_arg);
+				cfg->args.parsed[idx].ascii_arg = NULL;
+			}
+		}
+    }
+}
+
+void txtcfg_parse(struct txtcfg_s *cfg) {
+    char *startconfig = cfg->buf.va;
+    char *endconfig = startconfig + cfg->buf.size;
+
+    char *current_line = startconfig;
+    char *end_line = startconfig;
+    int command_idx = 0;
+    while (current_line < endconfig) {
+        end_line = find_endline(current_line, endconfig);
+        command_idx = txtcfg_getCmdIDX(cfg, current_line, end_line);
+        if (command_idx)
+            txtcfg_prepCmdByIDX(cfg, command_idx, current_line, end_line);
+        current_line = find_nextline(end_line, endconfig);
+        if (!current_line)
+            break;
+    }
+}
+
+void txtcfg_cleanup(struct txtcfg_s *cfg) {
+    for (int i = 0; i < cfg->args.count; i++) {
+        if (cfg->args.parsed[i].ascii_arg) {
+            my_free(cfg->args.parsed[i].ascii_arg);
+            cfg->args.parsed[i].ascii_arg = NULL;
+        }
+    }
+}
+
+int txtcfg_loadExec(struct txtcfg_s *cfg, bool cleanup) {
+	LOG("Loading config file: %s\n", cfg->args.names[0]);
+	cfg->buf.va = fmgr_get_file(cfg->args.names[0], NULL, 0, 0, &cfg->buf.size);
+	if (!cfg->buf.va)
+		return -1;
+	txtcfg_parse(cfg);
+	LOG("Executing config file: %s\n", cfg->args.names[0]);
+	for (int i = 0; i < cfg->args.count; i++) {
+		if (cfg->args.parsed[i].ascii_arg && cfg->args.parsed[i].cmd_handler)
+			cfg->args.parsed[i].cmd_handler(i, cfg->args.parsed[i].ascii_arg);
+	}
+	if (cleanup) {
+        LOG("Freeing config file: %s\n", cfg->args.names[0]);
+        txtcfg_cleanup(cfg);
+		my_free(cfg->buf.va);
+		cfg->buf.va = NULL;
+		cfg->buf.size = 0;
+	}
+	return 0;
+}
+
+int armp_run(struct armp_arg_s *armp, enum CHAIN_FREE_TYPES free) {
+    if (armp->magic != ARMP_ARG_MAGIC)
+		return -1;
+    int i = 0;
+	struct armp_d_s *pd = NULL;
+    struct armp_d_s *d = (struct armp_d_s *)armp->d;
+	while (d) {
+        LOG("Processing ARMP D argument %d: %d @ 0x%08X -> 0x%08X\n", i++, d->sz, d->src, d->dst);
+		bool fable = d->src_fa;
+        DACR_OFF(d->ret = (int)memcpy(d->dst, d->src, d->sz););
+        if (fable && d->src && (free & CHAIN_FREE_NESTED))
+            my_free(d->src);
+		pd = d;
+		d = d->next;
+		if (free & CHAIN_FREE_ENTRIES)
+			my_free(pd);
+	}
+	i = 0;
+	int ret = 0;
+	struct armp_x_s *px = NULL;
+	struct armp_x_s *x = (struct armp_x_s *)armp->x;
+	while (x) {
+		LOG("Processing ARMP X argument %d: [0x%08X]0x%08X(0x%08X)\n", i++, x->c_sz, x->src, x->arg);
+		if (x->c_sz) {
+            void *fbuf = my_malloc(x->c_sz);
+            if (fbuf) {
+                memcpy(fbuf, (void*)((uint32_t)x->src & ~1), x->c_sz);
+				if (my_rxmap(fbuf) >= 0) {
+					int (*func)(uint32_t arg) = (int (*)(uint32_t arg))fbuf;
+                    if ((uint32_t)x->src & 1)
+                        func = (int (*)(uint32_t arg))((uint32_t)fbuf | 1);
+					x->ret = func(x->arg);
+					LOG("Function returned: 0x%08X\n", x->ret);
+				} else {
+					LOG("Failed to rxmap function\n");
+					x->ret = -1;
+					ret = -1;
+				}
+				if (x->ret & E2X_EXE_RET_NORESIDENT)
+					my_free(fbuf);
+            } else {
+				LOG("Failed to allocate memory for function\n");
+                x->ret = -1;
+				ret = -1;
+            }
+			if (x->src && (free & CHAIN_FREE_NESTED))
+				my_free(x->src);
+        } else {
+			x->ret = x->func(x->arg);
+			LOG("Function returned: 0x%08X\n", x->ret);
+		}
+		px = x;
+		x = x->next;
+		if (free & CHAIN_FREE_ENTRIES)
+			my_free(px);
+	}
+	return ret;
 }

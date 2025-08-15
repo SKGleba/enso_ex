@@ -79,7 +79,7 @@ extern unsigned int __bss_end__;
 
 int main(int stage);
 int init(struct eex_param_s *eex_params);
-int deinit(struct sysroot_buffer *sysroot);
+int deinit(void);
 
 extern uint8_t session_id[SESSION_UID_KBLP_SIZE];
 #else
@@ -99,7 +99,7 @@ struct exports_main_s {
     struct paper_s *status_paper;
     struct paper_s *menu_paper;
     int (*init)(struct eex_param_s *eex_params);
-    int (*deinit)(struct sysroot_buffer *sysroot);
+    int (*deinit)(void);
 };
 
 #endif /* __MAIN_H__ */

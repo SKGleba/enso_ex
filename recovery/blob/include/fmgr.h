@@ -133,6 +133,7 @@ enum FMGR_EXEC_TYPES {
 #define FMGR_UPR_SECOND_FNAME "second.e2xp"
 
 #ifndef RXP_PIE
+int fmgr_mount(bool mount, int idx);
 uint32_t fmgr_get_file_size(const char *path);
 int fmgr_move_dir(const char *src_path, const char *dest_path);
 int fmgr_move_file(const char *src_path, const char *dest_path);
@@ -147,10 +148,12 @@ int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int 
 int fmgr_load_exec(const char *path, enum FMGR_EXEC_TYPES exec_type);
 int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string);
 int fmgr_format(uint32_t part_info, int type);
+uint32_t fmgr_get_nskbl_os0(void);
 int fmgr_init(void);
 int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview);
 void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*handler)(enum FMGR_ENTRY_TYPES entype, char *path, char *entry, enum VIEW_ASSIGNS *next_uview));
 #else
+#define r_fmgr_mount(...) _r->fmgr->fmgr_mount(__VA_ARGS__)
 #define r_fmgr_get_file_size(...) _r->fmgr->fmgr_get_file_size(__VA_ARGS__)
 #define r_fmgr_move_dir(...) _r->fmgr->fmgr_move_dir(__VA_ARGS__)
 #define r_fmgr_move_file(...) _r->fmgr->fmgr_move_file(__VA_ARGS__)
@@ -165,12 +168,14 @@ void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*han
 #define r_fmgr_load_exec(...) _r->fmgr->fmgr_load_exec(__VA_ARGS__)
 #define r_fmgr_fd_partition(...) _r->fmgr->fmgr_fd_partition(__VA_ARGS__)
 #define r_fmgr_format(...) _r->fmgr->fmgr_format(__VA_ARGS__)
+#define r_fmgr_get_nskbl_os0(...) _r->fmgr->fmgr_get_nskbl_os0(__VA_ARGS__)
 #define r_fmgr_init(...) _r->fmgr->fmgr_init(__VA_ARGS__)
 #define r_fmgr_view_handler(...) _r->fmgr->fmgr_view_handler(__VA_ARGS__)
 #define r_fmgr_square_handler(...) _r->fmgr->fmgr_square_handler(__VA_ARGS__)
 #endif
 
 struct exports_fmgr_s {
+    int (*fmgr_mount)(bool mount, int idx);
     uint32_t (*fmgr_get_file_size)(const char *path);
     int (*fmgr_move_dir)(const char *src_path, const char *dest_path);
     int (*fmgr_move_file)(const char *src_path, const char *dest_path);
@@ -185,6 +190,7 @@ struct exports_fmgr_s {
     int (*fmgr_load_exec)(const char *path, enum FMGR_EXEC_TYPES exec_type);
     int (*fmgr_fd_partition)(int is_flash, uint32_t part_info, char *dest_string);
     int (*fmgr_format)(uint32_t part_info, int type);
+    uint32_t (*fmgr_get_nskbl_os0)(void);
     int (*fmgr_init)(void);
     int (*fmgr_view_handler)(enum VIEW_ASSIGNS *next_uview);
     void *(*fmgr_square_handler)(int set, enum FMGR_ENTRY_TYPES exp_entypes,

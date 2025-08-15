@@ -4,7 +4,7 @@ TARGET_BOOTMGR = bootmgr
 BOOTMGR_BASE = 0x51f00000
 TARGET_LIB = libe2xr
 SRCDIRS := src FatFs
-INCDIRS := include FatFs
+INCDIRS := include FatFs lv0p
 SRCFILES := $(foreach dir,$(SRCDIRS),$(wildcard $(dir)/*.c))
 OBJS := $(SRCFILES:.c=.o)
 

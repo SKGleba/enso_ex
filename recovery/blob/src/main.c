@@ -51,15 +51,15 @@ static void menu_change_selection(struct menu_s *menu, int new_selection) {
 						 menu->selector_color, menu->paper->padding.inner.y >> 1);
 }
 
-int deinit(struct sysroot_buffer *sysroot) {
+int deinit(void) {
     LOG("Deinitializing baremetal payload...\n");
-
-    g_log_targets &= ~LOG_TARGET_LOGPAPER;
-    bmx_displaymgr(DISPLAYMGR_NSTATE_OFF, DISPLAYMGR_OPT_INCLUDE_FB);  // turn off & free fb
-    delay(4000);
-
+    rmemblock_stop();
+    if (g_eex_params.boot_mode != BOOTSTRAP_MODE_LIB) {
+        g_log_targets &= ~LOG_TARGET_LOGPAPER;
+        bmx_displaymgr(DISPLAYMGR_NSTATE_OFF, DISPLAYMGR_OPT_INCLUDE_FB);  // turn off & free fb
+        delay(4000);
+    }
     LOG("Deinitialized baremetal payload!\n");
-
     return 0;
 }
 
@@ -67,7 +67,7 @@ int init(struct eex_param_s *eex_params) {
     unsigned int *bss = &__bss_start__;
     while (bss < &__bss_end__)
         *bss++ = 0;
-    rmemblock_init();
+    rmemblock_start();
     
     g_log_targets = LOG_TARGET_CONSOLE;
 	LOG("Baremetal payload started!\n");
@@ -166,7 +166,7 @@ static int menu_view_handler(enum VIEW_ASSIGNS *next_uview) {
                 case MENU_RET_FINISH_DEINIT:
                     current_menu = NULL;  // exit the menu loop and deinit
                     *next_uview = VIEW_COUNT;
-                    deinit((struct sysroot_buffer *)g_eex_ports.kbl_param);
+                    deinit();
                     break;
                 default:
                     LOG("ERROR: Unknown menu return value %d\n", ret);

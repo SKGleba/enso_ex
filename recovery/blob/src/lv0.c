@@ -3,6 +3,8 @@
 #include "fmgr.h"
 #include "utils.h"
 
+#include "lv0p_data.h" // lv0 patcher payload
+
 // dfl sm_auth_info
 static const unsigned char lv0_ctx_130_data[0x90] =
 {
@@ -32,18 +34,6 @@ static const unsigned char NMPstage2_payload[] =
 	0x21, 0xc0, 0x00, 0x00,	// movh r0, 0x0
 	0x26, 0xd3, 0xbd, 0x80,	// movu r3, 0x80bd26	(0x80bd8c on .71)
 	0x3e, 0x10				// jmp r3
-};
-
-// from psp2spl
-static const unsigned char inject_framework_nmp[] = {
-  0xa0, 0x6f, 0x16, 0x4d, 0x12, 0x4e, 0x1a, 0x7b, 0x0e, 0x4b, 0x00, 0x53,
-  0x06, 0x43, 0x16, 0xd3, 0x10, 0x80, 0xfa, 0x03, 0xfe, 0x00, 0x01, 0xc3,
-  0x00, 0x01, 0x21, 0xc2, 0x85, 0x1f, 0x24, 0xc2, 0x00, 0x02, 0x00, 0xd1,
-  0x9e, 0x80, 0x0f, 0x10, 0x06, 0x40, 0x72, 0xd3, 0x03, 0x80, 0x01, 0xc2,
-  0x79, 0xdc, 0x39, 0x02, 0x74, 0xd3, 0x03, 0x80, 0x01, 0xc2, 0x9a, 0x00,
-  0x39, 0x02, 0xfe, 0xd3, 0x0a, 0x80, 0x01, 0xc2, 0x10, 0x06, 0x39, 0x02,
-  0x07, 0x43, 0x30, 0x00, 0x13, 0x4e, 0x17, 0x4d, 0x0f, 0x4b, 0x60, 0x6f,
-  0xbe, 0x10, 0x00, 0x00, 0xf0, 0xff, 0x1f, 0x00
 };
 
 // from psp2spl
@@ -179,7 +169,7 @@ static int lv0_ussm_install_spl(void) {
 		LOG("Failed to allocate jump command buffer\n");
 		return -1;
 	}
-    void *payload_buf = rmemblock_alloc(LV0_DEFAULT_PAYLOAD_SIZE, 0x10208006, LV0_DEFAULT_PAYLOAD_PA);
+    void *payload_buf = rmemblock_alloc(LV0_SPL_BLOCK_SIZE, 0x10208006, LV0_SPL_BLOCK_PA);
     if (!payload_buf) {
 		LOG("Failed to allocate payload buffer\n");
 		my_free(cmd_args);
@@ -190,17 +180,52 @@ static int lv0_ussm_install_spl(void) {
     }
     uint8_t spr_backup[0x80];
     memcpy(spr_backup, payload_buf, sizeof(spr_backup));
-    memset(payload_buf, 0, 0x300);
-    memcpy(payload_buf, NMPstage2_payload, sizeof(NMPstage2_payload));
-	memcpy(payload_buf + 0x100, inject_framework_nmp, sizeof(inject_framework_nmp));
-	memcpy(payload_buf + 0x200, framework_nmp, sizeof(framework_nmp));
+    memset(payload_buf, 0, 0x600);
+	struct lv0p_arg_s *arg = (struct lv0p_arg_s *)payload_buf;
+	arg->magic = LV0P_ARG_MAGIC;
+    arg->patcher = LV0_SPL_BLOCK_PA + LV0_SPL_INIT_PATCHER_OFF;
+    arg->w_pa = LV0_SPL_BLOCK_PA + LV0_SPL_INIT_WORKBUF_OFF;
+    memcpy(payload_buf + LV0_SPL_FMNFO_SZ, NMPstage2_payload, sizeof(NMPstage2_payload));
+    memcpy(payload_buf + LV0_SPL_INIT_PATCHER_OFF, lv0p_nmp, lv0p_nmp_len);
+    int *lv0rets[3];
+	{
+        uint32_t d_off = LV0_SPL_INIT_XENTRY_OFF;
+        arg->d_pa = LV0_SPL_BLOCK_PA + d_off;
+        struct lv0p_d_s *pd = (struct lv0p_d_s *)(payload_buf + d_off);
+		d_off += sizeof(struct lv0p_d_s);
+        memcpy(payload_buf + d_off, framework_nmp, sizeof(framework_nmp));
+        pd->src = LV0_SPL_BLOCK_PA + d_off;
+		pd->dst = LV0_SPL_INIT_FCMD_HANDLER_PA;
+		pd->sz = LV0_SPL_INIT_FCMD_HANDLER_SZ;
+        lv0rets[0] = &pd->ret;
+        d_off += pd->sz;
+        pd->next_pa = LV0_SPL_BLOCK_PA + d_off;
+        pd = (struct lv0p_d_s *)(payload_buf + d_off);
+		d_off += sizeof(struct lv0p_d_s);
+		*(uint32_t *)(payload_buf + d_off) = LV0_SPL_INIT_U32_PATCH_DATA;
+		pd->src = LV0_SPL_BLOCK_PA + d_off;
+		pd->dst = LV0_SPL_INIT_U32_PATCH_ADDR;
+		pd->sz = sizeof(uint32_t);
+        lv0rets[1] = &pd->ret;
+		d_off += pd->sz;
+        pd->next_pa = LV0_SPL_BLOCK_PA + d_off;
+		pd = (struct lv0p_d_s *)(payload_buf + d_off);
+		d_off += sizeof(struct lv0p_d_s);
+		*(uint16_t *)(payload_buf + d_off) = LV0_SPL_INIT_U16_PATCH_DATA;
+		pd->src = LV0_SPL_BLOCK_PA + d_off;
+		pd->dst = LV0_SPL_INIT_U16_PATCH_ADDR;
+		pd->sz = sizeof(uint16_t);
+        lv0rets[2] = &pd->ret;
+		d_off += pd->sz;
+    }
 	struct lv0_jump_args_cmd_s *jumd = cmd_args;
 	memset(jumd, 0, sizeof(struct lv0_jump_args_cmd_s));
 	jumd->size = sizeof(struct lv0_jump_args_cmd_s) + 0x40;
 	jumd->service_id = 0xd0002;
-	jumd->req[0] = LV0_DEFAULT_PAYLOAD_PA;  // paddr of stage2
+	jumd->req[0] = LV0_SPL_PAYLOAD_PA;  // paddr of stage2
+    LOG("calling modded 0xd0002, pargv:\n");
     int ret = lv0_call_sm(0xd0002, cmd_args, sizeof(struct lv0_jump_args_cmd_s));  // call_kprxauthsm_func
-    LOG("lv0_call_sm ret=0x%08X\n", ret);
+    LOG("lv0_call_sm ret=0x%08X,lv0rets=%08X %08X %08X\n", ret, *lv0rets[0], *lv0rets[1], *lv0rets[2]);
     memcpy(payload_buf, spr_backup, sizeof(spr_backup));
     my_free(payload_buf);
 	my_free(cmd_args);
@@ -232,44 +257,199 @@ int lv0_init(const char *ussm) {
 
 int lv0_spl_exec(void *payload, uint32_t paddr, int size, uint32_t arg) {
 	void *paddr_buf = NULL;
-    void *payload_buf = rmemblock_alloc(LV0_DEFAULT_PAYLOAD_SIZE, 0x10208006, LV0_DEFAULT_PAYLOAD_PA);
-    if (!payload_buf) {
-        LOG("Failed to allocate payload buffer\n");
-        return -1;
-    }
-	if (!paddr)
-        paddr = LV0_SPL_PAYLOAD_PA;  // use default paddr if not provided
-	if (payload) {
-		if ((paddr >= LV0_DEFAULT_PAYLOAD_PA) && (paddr < (LV0_DEFAULT_PAYLOAD_PA + LV0_DEFAULT_PAYLOAD_SIZE))) {
-			if (paddr < LV0_SPL_PAYLOAD_PA) {
-				LOG("Invalid paddr for SPL payload: 0x%08X\n", paddr);
-				my_free(payload_buf);
-				return -1;
-			} else
-                memcpy(payload_buf, payload, size);
-        } else {
-            paddr_buf = rmemblock_alloc(size, 0x10208006, paddr);
-            if (!paddr_buf) {
-				LOG("Failed to allocate payload buffer at paddr 0x%08X\n", paddr);
-				my_free(payload_buf);
-				return -1;
-			}
-			memcpy(paddr_buf, payload, size);
-		}
-	}
+    void *payload_buf = NULL;
+    if (size) { // alloc & memcpy
+        payload_buf = rmemblock_alloc(LV0_SPL_BLOCK_SIZE, MEMBLOCK_TYPE_UCRW, LV0_SPL_BLOCK_PA);
+        if (!payload_buf) {
+            LOG("Failed to allocate payload buffer\n");
+            return -1;
+        }
+        if (!paddr)
+            paddr = LV0_SPL_PAYLOAD_PA;  // use default paddr if not provided
+        if (payload) {
+            if ((paddr >= LV0_SPL_BLOCK_PA) && (paddr < (LV0_SPL_BLOCK_PA + LV0_SPL_BLOCK_SIZE))) {
+                if (paddr < LV0_SPL_PAYLOAD_PA) {
+                    LOG("Invalid paddr for SPL payload: 0x%08X\n", paddr);
+                    my_free(payload_buf);
+                    return -1;
+                } else
+                    memcpy(payload_buf + LV0_SPL_FMNFO_SZ, payload, size);
+            } else {
+                paddr_buf = rmemblock_alloc(size, 0x10208006, paddr);
+                if (!paddr_buf) {
+                    LOG("Failed to allocate payload buffer at paddr 0x%08X\n", paddr);
+                    my_free(payload_buf);
+                    return -1;
+                }
+                memcpy(paddr_buf, payload, size);
+            }
+        }
+    } else // alReady
+		payload_buf = payload;
     lv0_spl_fm_nfo *spl_nfo = (lv0_spl_fm_nfo *)payload_buf;
 	memset(payload_buf, 0, sizeof(lv0_spl_fm_nfo));
-	spl_nfo->magic = 0x14ff;
-	spl_nfo->status = 0x34;
     spl_nfo->codepaddr = paddr;
 	spl_nfo->arg = arg;
 	spl_nfo->resp = 0;  // response will be filled by the SPL
-	LOG("Executing SPL payload at paddr=0x%08X, size=%d, arg=0x%08X\n", paddr, size, arg);
-	nskbl_smc_custom(0, 0, 0, 0, 0x13c);
+    spl_nfo->status = 0x34;
+    spl_nfo->magic = 0x14ff;
+    LOG("Executing SPL payload at paddr=0x%08X, size=%d, arg=0x%08X\n", paddr, size, arg);
+    nskbl_clean_dcache(payload_buf, LV0_SPL_FMNFO_SZ);
+    nskbl_smc_custom(0, 0, 0, 0, 0x13c);
+    nskbl_clean_dcache(payload_buf, LV0_SPL_FMNFO_SZ);
     LOG("SPL execution completed with status: 0x%08X, response: 0x%08X\n", spl_nfo->status, spl_nfo->resp);
     int ret = (spl_nfo->status == 0x69) ? (int)spl_nfo->resp : -1;
-	my_free(payload_buf);
-	if (paddr_buf)
-		my_free(paddr_buf);
+    memset(payload_buf, 0, sizeof(lv0_spl_fm_nfo));
+    if (size) {
+		my_free(payload_buf);
+		if (paddr_buf)
+			my_free(paddr_buf);
+	}
 	return ret;
+}
+
+int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_FREE_TYPES free) {
+    if (!argv || argv->magic != LV0P_ARG_MAGIC) {
+        LOG("Invalid lv0p arg struct\n");
+        return -1;
+    }
+    LOG("lv0p_run(0x%08X->0x%08X, 0x%08X, 0x%08X)\n", argv, argv->patcher, argp, args);
+    if (!argp) {
+        argp = LV0_SPL_BLOCK_PA;
+        args = LV0_SPL_BLOCK_SIZE;
+        LOG("Using default lv0p args: 0x%08X, 0x%08X\n", argp, args);
+    }
+    void *zbuf = rmemblock_alloc(args, MEMBLOCK_TYPE_UCRW, argp);
+    if (!zbuf) {
+        LOG("Failed to allocate lv0p buf\n");
+        return -1;
+    }
+    memset(zbuf, 0, args);
+    uint32_t e_off = 0;
+    if (argp == LV0_SPL_BLOCK_PA) {
+        e_off = LV0_SPL_FMNFO_SZ;
+        memcpy(zbuf + e_off, lv0p_nmp, lv0p_nmp_len);
+        e_off += lv0p_nmp_len;
+    }
+	// Copy args
+	uint32_t arg_argloc = argp + e_off;
+    struct lv0p_arg_s *pargv = (struct lv0p_arg_s *)((uint8_t *)zbuf + e_off);
+    pargv->magic = LV0P_ARG_MAGIC;
+    pargv->patcher = LV0_SPL_PAYLOAD_PA;
+    e_off += sizeof(struct lv0p_arg_s);
+    if (!argv->w_pa) {
+        pargv->w_pa = argp + e_off;
+        e_off += LV0P_WORKBUF_MIN_SIZE;
+    } else
+        pargv->w_pa = argv->w_pa;
+    uint32_t tmpa = 0;
+    struct lv0p_k_s *ok = argv->k;
+    struct lv0p_k_s *ck = NULL;
+    struct lv0p_k_s **pk = &pargv->k;
+	LOG("Copying lv0p_k_s structures\n");
+    while (ok) {
+        ck = (struct lv0p_k_s *)((uint8_t *)zbuf + e_off);
+        *pk = (struct lv0p_k_s *)((uint32_t)argp + e_off);
+        e_off += sizeof(struct lv0p_k_s);
+        ck->id = ok->id;
+        ck->off = ok->off;
+        ck->sz = ok->sz;
+        memcpy(ck->data, ok->data, ck->sz);
+        ok = ok->next;
+        pk = &ck->next;
+    }
+    struct lv0p_d_s *od = argv->d;
+    struct lv0p_d_s *cd = NULL;
+    struct lv0p_d_s **pd = &pargv->d;
+	LOG("Copying lv0p_d_s structures\n");
+    while (od) {
+        cd = (struct lv0p_d_s *)((uint8_t *)zbuf + e_off);
+        *pd = (struct lv0p_d_s *)((uint32_t)argp + e_off);
+        e_off += sizeof(struct lv0p_d_s);
+        cd->dst = od->dst;
+        cd->sz = od->sz;
+        if (od->ncopyin)
+            cd->src = od->src;
+        else {
+            cd->src = argp + e_off;
+            memcpy(zbuf + e_off, od->src_va, od->sz);
+            e_off += od->sz;
+        }
+        od = od->next;
+        pd = &cd->next;
+    }
+    struct lv0p_x_s *ox = argv->x;
+    struct lv0p_x_s *cx = NULL;
+    struct lv0p_x_s **px = &pargv->x;
+	LOG("Copying lv0p_x_s structures\n");
+    while (ox) {
+        cx = (struct lv0p_x_s *)((uint8_t *)zbuf + e_off);
+        *px = (struct lv0p_x_s *)((uint32_t)argp + e_off);
+        e_off += sizeof(struct lv0p_x_s);
+        cx->arg = ox->arg;
+        if (ox->c_sz) {
+            cx->addr = argp + e_off;
+            memcpy(zbuf + e_off, ox->src_va, ox->c_sz);
+            e_off += ox->c_sz;
+        } else
+            cx->addr = ox->addr;
+        ox = ox->next;
+        px = &cx->next;
+    }
+    //hexdump(zbuf, 0x800, 0);
+    nskbl_clean_dcache(zbuf, args);
+    int ret = lv0_spl_exec((argp == LV0_SPL_BLOCK_PA) ? zbuf : lv0p_nmp, pargv->patcher, (argp == LV0_SPL_BLOCK_PA) ? 0 : lv0p_nmp_len, arg_argloc);
+    nskbl_clean_dcache(zbuf, args);
+    //hexdump(zbuf, 0x800, 0);
+    // Copy return values
+    e_off = (arg_argloc - argp);
+    pargv = (struct lv0p_arg_s *)((uint8_t *)zbuf + e_off);
+    e_off += sizeof(struct lv0p_arg_s);
+    if (!argv->w_pa)
+        e_off += LV0P_WORKBUF_MIN_SIZE;
+    ok = argv->k;
+    ck = NULL;
+	LOG("Copying lv0p_k_s rets\n");
+    while (ok) {
+        ck = (struct lv0p_k_s *)((uint8_t *)zbuf + e_off);
+        e_off += sizeof(struct lv0p_k_s);
+        ok->ret = ck->ret;
+        ck = ok;
+        ok = ok->next;
+        if (free & CHAIN_FREE_ENTRIES)
+            my_free(ck);
+    }
+    od = argv->d;
+    cd = NULL;
+	LOG("Copying lv0p_d_s rets\n");
+    while (od) {
+        cd = (struct lv0p_d_s *)((uint8_t *)zbuf + e_off);
+        e_off += sizeof(struct lv0p_d_s);
+        if (!od->ncopyin && od->src_va && (free & CHAIN_FREE_NESTED))
+            my_free(od->src_va);
+        od->ret = cd->ret;
+        e_off += od->sz;
+        cd = od;
+        od = od->next;
+        if (free & CHAIN_FREE_ENTRIES)
+            my_free(cd);
+    }
+    ox = argv->x;
+    cx = NULL;
+	LOG("Copying lv0p_x_s rets\n");
+    while (ox) {
+        cx = (struct lv0p_x_s *)((uint8_t *)zbuf + e_off);
+        e_off += sizeof(struct lv0p_x_s);
+        if (ox->c_sz && ox->src_va && (free & CHAIN_FREE_NESTED))
+            my_free(ox->src_va);
+        ox->ret = cx->ret;
+        if (ox->c_sz)
+            e_off += ox->c_sz;
+        cx = ox;
+        ox = ox->next;
+        if (free & CHAIN_FREE_ENTRIES)
+            my_free(cx);
+    }
+    my_free(zbuf);
+    return ret;
 }
