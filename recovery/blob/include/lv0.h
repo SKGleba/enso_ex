@@ -21,6 +21,7 @@
 #define LV0_SPL_INIT_U16_PATCH_DATA 0x0610
 #define LV0_SPL_LV0P_BIG_ADDR 0x1c000000
 #define LV0_SPL_LV0P_BIG_SIZE 0x00200000
+#define LV0_SPL_LV0P_BIG_MAXESIZE 0x00100000
 
 typedef struct lv0_spl_fm_nfo_s {
     uint16_t magic;

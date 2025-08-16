@@ -33,6 +33,7 @@
 #define XBITNVALM(v, n, mask) (((v) >> (n)) & (mask))
 
 #define BSWAP16(x) ((((uint32_t)x << 8) & 0xff00) | (((uint32_t)x >> 8) & 0x00ff))
+#define BSWAP24(x) ((((uint32_t)x << 16) & 0xff0000) | (((uint32_t)x >> 8) & 0x00ff00) | (((uint32_t)x >> 24) & 0x0000ff))
 #define BSWAP32(x) ((((uint32_t)x << 24) & 0xff000000) | (((uint32_t)x << 8) & 0x00ff0000) | (((uint32_t)x >> 8) & 0x0000ff00) | (((uint32_t)x >> 24) & 0x000000ff))
 
 // function selector based on argc
@@ -55,6 +56,7 @@ enum LOG_TARGETS {
 };
 
 #define RMEMBLOCK_MIN_SIZE 0x1000
+#define RMEMBLOCK_MAX_SIZE 0x1000000
 #define RMEMBLOCK_BB_COUNT 4
 #define RMEMBLOCK_SMB_SIZE 256
 #define RMEMBLOCK_PA_COUNT 16  // first RMEMBLOCK_BB_COUNT reserved
@@ -69,12 +71,37 @@ struct rmemblock_master_s {
     uint16_t smbe[RMEMBLOCK_BB_COUNT];
 };
 
+enum TXTCFG_ARG_TYPES {
+    TXTCFG_ARG_TYPE_ASCII = 0,
+    TXTCFG_ARG_TYPE_UINT,
+    TXTCFG_ARG_TYPE_RDATA,
+    TXTCFG_ARG_TYPE_FDATA,
+};
+
+#define TXTCFG_GET_BITPOS(_idx, _type) (((_idx) * 4) + (TXTCFG_ARG_TYPE##_type))
+#define _TXTCFG_TYPES_ALLOW1(_idx, _type1) (BITN(TXTCFG_GET_BITPOS(_idx, _type1)))
+#define _TXTCFG_TYPES_ALLOW2(_idx, _type1, _type2) (_TXTCFG_TYPES_ALLOW1(_idx, _type1) | BITN(TXTCFG_GET_BITPOS(_idx, _type2)))
+#define _TXTCFG_TYPES_ALLOW3(_idx, _type1, _type2, _type3) (_TXTCFG_TYPES_ALLOW2(_idx, _type1, _type2) | BITN(TXTCFG_GET_BITPOS(_idx, _type3)))
+#define TXTCFG_TYPES_ALLOW(...) FUN_VAR4(__VA_ARGS__, _TXTCFG_TYPES_ALLOW3, _TXTCFG_TYPES_ALLOW2, _TXTCFG_TYPES_ALLOW1)(__VA_ARGS__)
+#define TXTCFG_TYPES_ALLOW_ALL(_idx) (TXTCFG_TYPES_ALLOW((_idx), _UINT, _RDATA, _FDATA) | BITN(TXTCFG_GET_BITPOS((_idx), _ASCII)))
+#define TXTCFG_TYPES_PARSE(...) BITNVAL(16, TXTCFG_TYPES_ALLOW(__VA_ARGS__))
+#define TXTCFG_TYPES_PARSE_ALL(_idx) BITNVAL(16, TXTCFG_TYPES_ALLOW_ALL(_idx))
+
 struct txtcfg_arg_s {
-    int min_ascii_arg_len;
-    int max_ascii_arg_len;  // we assume no args larger than signed int +range...
-    char *ascii_arg;
-    int (*cmd_handler)(int cmd_idx, char *arg);
+    struct {
+        int min_len;
+        int max_len;  // we assume no args larger than signed int +range...
+        int act_len;
+        union {
+            uint32_t uintgr;
+            void *data;
+            char *ascii;
+        };
+    } arg[4];
+    uint32_t types;
+    int (*handler)(int cmd_idx, struct txtcfg_arg_s *arg);
     bool exec; // execute handler immediately upon finding the occurrence
+    bool parsed;
 };
 
 struct txtcfg_s {
@@ -167,8 +194,8 @@ extern struct rmemblock_master_s rmemblock_master;
 #define rmemblock_start() memset(&rmemblock_master, -1, sizeof(rmemblock_master));
 void rmemblock_stop(void);
 
-char *my_strchr(const char *s, int c);
-char *my_strrchr(const char *s, int c);
+char *my_strchr(const char *s, char c);
+char *my_strrchr(const char *s, char c);
 int count_chs(const char *s, char c);
 char *find_nth(const char *s, char c, int n);
 char *find_rnth(const char *s, char c, int n);

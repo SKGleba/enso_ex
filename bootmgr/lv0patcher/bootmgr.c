@@ -5,15 +5,67 @@
 #include "bootmgr.h"
 
 static struct txtcfg_arg_s cmd_args[CMD_COUNT] = {
-    [CMD_INVALID] = {0, 0, NULL, NULL, false},
-    [CMD_LIVEQUE] = {4, 5, NULL, NULL, true},
-    [CMD_ERRBREAK] = {4, 5, NULL, NULL, true},
-    [CMD_LV0_KSP] = {14, 44, NULL, NULL, false}, // 0x0123,0x12,ABCDEF...
-    [CMD_LV0_DAT] = {13, 8191, NULL, NULL, false}, // 0x01234567,ABCDEF...
-    [CMD_LV0_EXE] = {13, 8191, NULL, NULL, false}, // 0x01234567,ABCDEF...
-    [CMD_ARM_DAT] = {13, 8191, NULL, NULL, false}, // 0x01234567,ABCDEF...
-    [CMD_ARM_EXE] = {13, 8191, NULL, NULL, false}, // 0x01234567,ABCDEF...
-    [CMD_KBLPARM] = {7, 511, NULL, NULL, false}, // 0x01,ABCDEF...
+    [CMD_LIVEQUE] = {
+        .arg = {
+            [0] = {.min_len = 4, .max_len = 5},
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _ASCII),
+        .exec = true
+    },
+    [CMD_ERRBREAK] = {
+        .arg = {
+            [0] = {.min_len = 4, .max_len = 5},
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _ASCII),
+        .exec = true
+    },
+    [CMD_LV0_KSP] = {
+        .arg = {
+            [0] = {.min_len = 1, .max_len = 4}, // keyslot idx
+            [1] = {.min_len = 1, .max_len = 0x20}, // patch offset or patch data
+            [2] = {.min_len = 1, .max_len = 0x20}, // patch size or patch data
+            [3] = {.min_len = 1, .max_len = 0x20}, // patch data
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(2, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(3, _UINT, _RDATA, _FDATA)
+    },
+    [CMD_LV0_DAT] = {
+        .arg = {
+            [0] = {.min_len = 3, .max_len = 4}, // dst
+            [1] = {.min_len = 1, .max_len = LV0_SPL_LV0P_BIG_MAXESIZE}, // sz or data
+            [2] = {.min_len = 1, .max_len = LV0_SPL_LV0P_BIG_MAXESIZE}, // src or data
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(2, _UINT, _RDATA, _FDATA)
+    },
+    [CMD_LV0_EXE] = {
+        .arg = {
+            [0] = {.min_len = 1, .max_len = LV0_SPL_LV0P_BIG_MAXESIZE}, // arg or data
+            [1] = {.min_len = 1, .max_len = LV0_SPL_LV0P_BIG_MAXESIZE}, // addr or data
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA)
+    },
+    [CMD_ARM_DAT] = {
+        .arg = {
+            [0] = {.min_len = 1, .max_len = 4}, // dst
+            [1] = {.min_len = 1, .max_len = RMEMBLOCK_MAX_SIZE}, // sz or data
+            [2] = {.min_len = 1, .max_len = RMEMBLOCK_MAX_SIZE}, // src or data
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(2, _UINT, _RDATA, _FDATA)
+    },
+    [CMD_ARM_EXE] = {
+        .arg = {
+            [0] = {.min_len = 1, .max_len = RMEMBLOCK_MAX_SIZE}, // arg or data
+            [1] = {.min_len = 1, .max_len = RMEMBLOCK_MAX_SIZE}, // addr or data
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA)
+    },
+    [CMD_KBLPARM] = {
+        .arg = {
+            [0] = {.min_len = 1, .max_len = 4}, // offset
+            [1] = {.min_len = 1, .max_len = 0x200}, // size or data
+            [2] = {.min_len = 1, .max_len = 0x200}, // src or data
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(2, _UINT, _RDATA, _FDATA)
+    }
 };
 
 struct txtcfg_s txtcfg = {
@@ -44,15 +96,18 @@ struct armp_arg_s armp_args = {
 
 void *cmdh_dispatch_table(int idx);
 
-int cmdh_allow_livexe(int idx, char *arg) {
-    if (!arg || !*arg) {
-        LOG("Invalid argument for LIVEQUE command\n");
+int cmdh_allow_livexe(int idx, struct txtcfg_arg_s *arg) {
+    if (!arg || !arg->handler) {
+        LOG("ERROR: Invalid arguments for LIVEQUE command\n");
         return -1;
     }
-    LOG("LIVEQUE command parsed with arg: %s\n", arg);
-    bool livexe = my_strncmp(arg, "true", 4) ? false : true;
+    if (!(arg->types & TXTCFG_TYPES_PARSE(0, _ASCII))) {
+        LOG("ERROR: Invalid argument type for LIVEQUE command\n");
+        return -1;
+    }
+    bool livexe = my_strncmp(arg->arg[0].ascii, "true", 4) ? false : true;
     for (int i = CMD_CSTART; i < CMD_COUNT; i++) {
-        if (cmd_args[i].cmd_handler) {
+        if (cmd_args[i].handler) {
             LOG("cmd %d (%s) will %s execute upon parsing\n", i, valid_commands[i], livexe ? "now" : "not");
             cmd_args[i].exec = livexe;
         }
@@ -60,18 +115,21 @@ int cmdh_allow_livexe(int idx, char *arg) {
     return 0;
 }
 
-int cmdh_breakproxy(int idx, char* arg) {
+int cmdh_breakproxy(int idx, struct txtcfg_arg_s *arg) {
     if (idx == CMD_ERRBREAK) {
-        if (!arg || !*arg) {
-            LOG("Invalid argument for ERRBREAK command\n");
+        if (!arg || !arg->handler) {
+            LOG("ERROR: Invalid argument for ERRBREAK command\n");
             return -1;
         }
-        LOG("ERRBREAK command parsed with arg: %s\n", arg);
-        if (!my_strncmp(arg, "true", 4)) {
+        if (!(arg->types & TXTCFG_TYPES_PARSE(0, _ASCII))) {
+            LOG("ERROR: Invalid argument type for ERRBREAK command\n");
+            return -1;
+        }
+        if (!my_strncmp(arg->arg[0].ascii, "true", 4)) {
             for (int i = CMD_CSTART; i < CMD_COUNT; i++) {
-                if (cmd_args[i].cmd_handler) {
+                if (cmd_args[i].handler) {
                     LOG("cmd %d (%s) will break further config exec on error\n", i, valid_commands[i]);
-                    cmd_args[i].cmd_handler = cmdh_breakproxy;
+                    cmd_args[i].handler = cmdh_breakproxy;
                 }
             }
         } else {
@@ -80,26 +138,25 @@ int cmdh_breakproxy(int idx, char* arg) {
         }
         return 0;
     }
-    int (*actual_handler)(int, char *) = cmdh_dispatch_table(idx);
+    int (*actual_handler)(int, struct txtcfg_arg_s *) = cmdh_dispatch_table(idx);
     if (!actual_handler) {
-        LOG("No handler for command %d (%s)\n", idx, valid_commands[idx]);
+        LOG("ERROR: No handler for command %d (%s)\n", idx, valid_commands[idx]);
         return -1;
     }
     int ret = actual_handler(idx, arg);
     if (ret < 0) {
-        LOG("Error occurred while handling command %d (%s) - BREAK\n", idx, valid_commands[idx]);
+        LOG("ERROR: Error occurred while handling command %d (%s) - BREAK\n", idx, valid_commands[idx]);
         for (int i = CMD_CSTART; i < CMD_COUNT; i++)
-            cmd_args[i].cmd_handler = NULL;
+            cmd_args[i].handler = NULL;
     }
     return ret;
 }
 
-int cmdh_ks(int idx, char* arg) {
-    if (!arg || !*arg) {
-        LOG("Invalid argument for KSP command\n");
+int cmdh_ks(int idx, struct txtcfg_arg_s *arg) {
+    if (!arg || !arg->handler) {
+        LOG("ERROR: Invalid argument for KSP command\n");
         return -1;
     }
-    LOG("KSP command parsed with arg: %s\n", arg);
     struct lv0p_k_s **pk = NULL;
     struct lv0p_k_s *k = lv0p_args.k;
     while (k) {
@@ -110,43 +167,48 @@ int cmdh_ks(int idx, char* arg) {
         pk = &lv0p_args.k;
     *pk = my_malloc(sizeof(struct lv0p_k_s));
     if (!*pk) {
-        LOG("Failed to allocate memory for LV0_ARM_CID command\n");
+        LOG("ERROR: Failed to allocate memory for LV0_ARM_CID command\n");
         return -1;
     }
-    memset(*pk, 0, sizeof(struct lv0p_k_s));
-    char *argx = arg + 2; // 0x
-    if (antoh(argx, (uint8_t*)&(*pk)->id, 2) >= 0) {
-        (*pk)->id = BSWAP16((*pk)->id);
-        argx += (4 + 1 + 2); // ABCD,0x
-        if (antoh(argx, (uint8_t*)&(*pk)->off, 1) >= 0) {
-            argx += (2 + 1); // EF,
-            if (my_strncmp(argx, OS0_MOUNTPATH, strlen(OS0_MOUNTPATH))) {
-                (*pk)->sz = strlen(argx) / 2;
-                if (antoh(argx, (*pk)->data, (*pk)->sz) >= 0) {
-                    LOG("Added KSP: 0x%08X @ 0x%08X [0x%08X] <= 0x%08X\n", (*pk)->id, (*pk)->off, (*pk)->sz, (*pk)->data);
-                    return 0;
-                } else
-                    LOG("KSP: Failed to convert keyslot data\n");
-            } else if (fmgr_get_file(argx, (*pk)->data, 0, 0, &(*pk)->sz)) {
-                LOG("Added KSP: 0x%08X @ 0x%08X [0x%08X] <= %s\n", (*pk)->id, (*pk)->off, (*pk)->sz, argx);
+    k = *pk;
+    memset(k, 0, sizeof(struct lv0p_k_s));
+    int ai = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+        k->id = arg->arg[ai].uintgr;
+        ai++;
+        if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+            k->off = arg->arg[ai].uintgr;
+            ai++;
+        }
+        if ((ai == 2) && (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT))) {
+            k->sz = arg->arg[ai].uintgr;
+            ai++;
+        }
+        if ((arg->types & TXTCFG_TYPES_PARSE(ai, _RDATA, _FDATA)) && arg->arg[ai].act_len) {
+            if (ai == 1)
+                k->off = 0;
+            else if (ai == 2)
+                k->sz = arg->arg[ai].act_len;
+            if (k->sz <= sizeof(k->data)) {
+                memcpy(k->data, arg->arg[ai].data, k->sz);
+                LOG("Added KSP: [0x%08X] => 0x%08X @ 0x%08X\n", k->sz, k->id, k->off);
                 return 0;
             } else
-                LOG("KSP: Failed to read file %s\n", argx);
+                LOG("ERROR: KSP patch data too large\n");
         } else
-            LOG("KSP: Failed to convert keyslot offset\n");
+            LOG("ERROR: Invalid KSP data arg\n");
     } else
-        LOG("KSP: Failed to convert keyslot id\n");
-    my_free(*pk);
+        LOG("ERROR: Invalid keyslot index type\n");
+    my_free(k);
     *pk = NULL;
     return -1;
 }
 
-int cmdh_lv0dat(int idx, char* arg) {
-    if (!arg || !*arg) {
-        LOG("Invalid argument for LV0_DAT command\n");
+int cmdh_lv0dat(int idx, struct txtcfg_arg_s *arg) {
+    if (!arg || !arg->handler) {
+        LOG("ERROR: Invalid argument for LV0_DAT command\n");
         return -1;
     }
-    LOG("LV0_DAT command parsed with arg: %s\n", arg);
     struct lv0p_d_s **pd = NULL;
     struct lv0p_d_s *d = lv0p_args.d;
     while (d) {
@@ -160,59 +222,43 @@ int cmdh_lv0dat(int idx, char* arg) {
         LOG("Failed to allocate memory for LV0_DAT command\n");
         return -1;
     }
-    memset(*pd, 0, sizeof(struct lv0p_d_s));
-    char *argx = arg + 2; // 0x
-    if (antoh(argx, (uint8_t*)&(*pd)->dst, 4) >= 0) {
-        (*pd)->dst = BSWAP32((*pd)->dst);
-        argx += (8 + 1); // ABCDEF01,
-        if (!my_strncmp(argx, "0x", 2)) {
-            argx += 2; // 0x
-            if (antoh(argx, (uint8_t*)&(*pd)->src, 4) >= 0) {
-                (*pd)->src = BSWAP32((*pd)->src);
-                argx += (8 + 1 + 2); // ABCDEF01,0x
-                if (antoh(argx, (uint8_t*)&(*pd)->sz, 4) >= 0) {
-                    (*pd)->sz = BSWAP32((*pd)->sz);
-                    (*pd)->ncopyin = true;
-                    LOG("Added LV0_DAT: 0x%08X @ 0x%08X => 0x%08X\n", (*pd)->sz, (*pd)->src, (*pd)->dst);
-                    return 0;
-                } else
-                    LOG("LV0_DAT: Failed to convert size\n");
-            } else
-                LOG("LV0_DAT: Failed to convert src address\n");
-        } else if (!my_strncmp(argx, OS0_MOUNTPATH, strlen(OS0_MOUNTPATH))) {
-            (*pd)->src_va = fmgr_get_file(argx, NULL, 0, 0, &(*pd)->sz);
-            if ((*pd)->src_va) {
-                LOG("Added LV0_DAT: 0x%08X <= %s [0x%08X]\n", (*pd)->dst, argx, (*pd)->sz);
+    d = *pd;
+    memset(d, 0, sizeof(struct lv0p_d_s));
+    int ai = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+        d->dst = arg->arg[ai].uintgr;
+        ai++;
+        if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+            d->sz = arg->arg[ai].uintgr;
+            ai++;
+            if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+                d->src = arg->arg[ai].uintgr;
+                d->ncopyin = true;
+                LOG("Added LV0_DAT: [0x%08X] 0x%08X => 0x%08X\n", d->sz, d->src, d->dst);
                 return 0;
-            } else
-                LOG("LV0_DAT: Failed to read file %s\n", argx);
-        } else {
-            (*pd)->sz = strlen(argx) / 2;
-            (*pd)->src_va = my_malloc((*pd)->sz);
-            if ((*pd)->src_va) {
-                if (antoh(argx, (*pd)->src_va, (*pd)->sz) >= 0) {
-                    LOG("Added LV0_DAT: 0x%08X <= 0x%08X [0x%08X]\n", (*pd)->dst, (*pd)->src_va, (*pd)->sz);
-                    return 0;
-                } else
-                    LOG("LV0_DAT: Failed to convert data\n");
-                my_free((*pd)->src_va);
-                (*pd)->src_va = NULL;
-            } else
-                LOG("LV0_DAT: Failed to allocate memory for data\n");
+            }
         }
+        if ((arg->types & TXTCFG_TYPES_PARSE(ai, _RDATA, _FDATA)) && arg->arg[ai].act_len) {
+            if (ai == 1)
+                d->sz = arg->arg[ai].act_len;
+            d->src_va = arg->arg[ai].data;
+            arg->arg[ai].data = NULL; // transfer ownership to the runner
+            LOG("Added LV0_DAT: [0x%08X] => 0x%08X\n", d->sz, d->dst);
+            return 0;
+        } else
+            LOG("ERROR: Invalid LV0_DAT src arg\n");
     } else
-        LOG("LV0_DAT: Failed to convert id\n");
-    my_free(*pd);
+        LOG("ERROR: Invalid LV0_DAT dest arg\n");
+    my_free(d);
     *pd = NULL;
     return -1;
 }
 
-int cmdh_lv0x(int idx, char *arg) {
-    if (!arg || !*arg) {
-        LOG("Invalid argument for LV0X command\n");
+int cmdh_lv0x(int idx, struct txtcfg_arg_s *arg) {
+    if (!arg || !arg->handler) {
+        LOG("ERROR: Invalid argument for LV0X command\n");
         return -1;
     }
-    LOG("LV0X command parsed with arg: %s\n", arg);
     struct lv0p_x_s **px = NULL;
     struct lv0p_x_s *x = lv0p_args.x;
     while (x) {
@@ -223,97 +269,73 @@ int cmdh_lv0x(int idx, char *arg) {
         px = &lv0p_args.x;
     *px = my_malloc(sizeof(struct lv0p_x_s));
     if (!*px) {
-        LOG("Failed to allocate memory for LV0X command\n");
+        LOG("ERROR: Failed to allocate memory for LV0X command\n");
         return -1;
     }
-    memset(*px, 0, sizeof(struct lv0p_x_s));
-    char *argx = arg + 2; // 0x
-    if (antoh(argx, (uint8_t*)&(*px)->arg, 4) >= 0) {
-        (*px)->arg = BSWAP32((*px)->arg);
-        argx += (8 + 1); // ABCDEF01,
-        if (!my_strncmp(argx, "0x", 2)) {
-            argx += 2; // 0x
-            if (antoh(argx, (uint8_t*)&(*px)->addr, 4) >= 0) {
-                (*px)->addr = BSWAP32((*px)->addr);
-                LOG("Added LV0X: 0x%08X(0x%08X)\n", (*px)->addr, (*px)->arg);
-                return 0;
-            } else
-                LOG("LV0X: Failed to convert func paddress\n");
-        } else if (!my_strncmp(argx, OS0_MOUNTPATH, strlen(OS0_MOUNTPATH))) {
-            (*px)->src_va = fmgr_get_file(argx, NULL, 0, 0, &(*px)->c_sz);
-            if ((*px)->src_va) {
-                LOG("Added LV0X: 0x%08X @ %s(0x%08X)\n", (*px)->c_sz, argx, (*px)->arg);
-                return 0;
-            } else
-                LOG("LV0X: Failed to read file %s\n", argx);
-        } else {
-            (*px)->c_sz = strlen(argx) / 2;
-            (*px)->src_va = my_malloc((*px)->c_sz);
-            if ((*px)->src_va) {
-                if (antoh(argx, (*px)->src_va, (*px)->c_sz) >= 0) {
-                    LOG("Added LV0X: %s(0x%08X)\n", argx, (*px)->arg);
-                    return 0;
-                } else
-                    LOG("LV0X: Failed to convert data\n");
-                my_free((*px)->src_va);
-                (*px)->src_va = NULL;
-            } else
-                LOG("LV0X: Failed to allocate memory for data\n");
+    x = *px;
+    memset(x, 0, sizeof(struct lv0p_x_s));
+    int ai = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+        x->arg = arg->arg[ai].uintgr;
+        ai++;
+        if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+            x->addr = arg->arg[ai].uintgr;
+            LOG("Added LV0X: 0x%08X(0x%08X)\n", x->addr, x->arg);
+            return 0;
         }
+    }
+    if ((arg->types & TXTCFG_TYPES_PARSE(ai, _RDATA, _FDATA)) && arg->arg[ai].act_len) {
+        x->c_sz = arg->arg[ai].act_len;
+        x->src_va = arg->arg[ai].data;
+        arg->arg[ai].data = NULL;
+        LOG("Added LV0X: dyn(0x%08X)\n", x->arg);
+        return 0;
     } else
-        LOG("LV0X: Failed to convert arg\n");
-    my_free(*px);
+        LOG("ERROR: Invalid LV0X src arg\n");
+    my_free(x);
     *px = NULL;
     return -1;
 }
 
-int cmdh_kblp(int idx, char *arg) {
-    if (!arg || !*arg) {
-        LOG("Invalid argument for KBLPARAM command\n");
+int cmdh_kblp(int idx, struct txtcfg_arg_s *arg) {
+    if (!arg || !arg->handler) {
+        LOG("ERROR: Invalid argument for KBLPARAM command\n");
         return -1;
     }
-    LOG("KBLPARAM command parsed with arg: %s\n", arg);
-    uint8_t off = 0;
-    char *argx = arg + 2; // 0x
-    if (antoh(argx, &off, 1) >= 0) {
-        argx += (2 + 1);
-        uint8_t *kblp = g_eex_ports.kbl_param;
-        if (my_strncmp(argx, OS0_MOUNTPATH, strlen(OS0_MOUNTPATH))) {
-            int d_len = strlen(argx) / 2;
-            LOG("KBLPARAM: %s -> 0x%08X [0x%02X]\n", argx, off, d_len);
-            if (d_len) {
-                if (antoh(argx, kblp + off, d_len) >= 0) {
-                    LOG("Patched main kbl_param at offset 0x%02X with data: %s\n", off, argx);
-                    kblp = (uint8_t *)(*(uint32_t *)(*(uint32_t *)(0x51138a3c) + 0x6c));
-                    if (antoh(argx, kblp + off, d_len) >= 0) {
-                        LOG("Patched sysrootNP2 kbl_param at offset 0x%02X with data: %s\n", off, argx);
-                        return 0;
-                    } else
-                        LOG("KBLPARAM: Failed to convert data (NP2)\n");
-                } else
-                    LOG("KBLPARAM: Failed to convert data (MAIN)\n");
-            } else
-                LOG("KBLPARAM: No data to patch with\n");
-        } else {
-            uint32_t rb = 0;
-            if (fmgr_get_file(argx, kblp + off, 0, 0, &rb)) {
-                memcpy((uint8_t *)(*(uint32_t *)(*(uint32_t *)(0x51138a3c) + 0x6c)) + off, kblp + off, rb);
-                LOG("Patched main & sysrootNP2 kbl_param at offset 0x%02X with file: %s [0x%08X]\n", off, argx, rb);
-                return 0;
-            } else
-                LOG("KBLPARAM: Failed to read patch data from file %s\n", argx);
+    uint8_t *kblp1 = g_eex_ports.kbl_param;
+    uint8_t *kblp2 = (uint8_t *)(*(uint32_t *)(*(uint32_t *)(0x51138a3c) + 0x6c));
+    if (!(arg->types & TXTCFG_TYPES_PARSE(0, _UINT))) {
+        LOG("ERROR: Invalid KBLP offset argument\n");
+        return -1;
+    }
+    int ai = 1;
+    uint32_t size = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+        size = arg->arg[ai].uintgr;
+        if (!size) {
+            LOG("ERROR: Invalid KBLP size argument\n");
+            return -1;
         }
+        ai++;
+    }
+    if ((arg->types & TXTCFG_TYPES_PARSE(ai, _RDATA, _FDATA, _UINT)) && arg->arg[ai].act_len) {
+        if (!size)
+            size = arg->arg[ai].act_len;
+        memcpy(kblp1 + arg->arg[0].uintgr, arg->arg[ai].data, size);
+        LOG("Patched kbl_param at offset 0x%02X with data from 0x%08X\n", arg->arg[0].uintgr, arg->arg[ai].data);
+        memcpy(kblp2 + arg->arg[0].uintgr, arg->arg[ai].data, size);
+        LOG("Patched kbl_param NP2 at offset 0x%02X with data from 0x%08X\n", arg->arg[0].uintgr, arg->arg[ai].data);
+        return 0;
     } else
-        LOG("KBLPARAM: Failed to convert offset\n");
+        LOG("ERROR: Invalid KBLP src arg\n");
     return -1;
 }
 
-int cmdh_armd(int idx, char *arg) {
-    if (!arg || !*arg) {
-        LOG("Invalid argument for ARM D command\n");
+int cmdh_armd(int idx, struct txtcfg_arg_s *arg) {
+    if (!arg || !arg->handler) {
+        LOG("ERROR: Invalid argument for ARM D command\n");
         return -1;
     }
-    LOG("ARM D command parsed with arg: %s\n", arg);
     struct armp_d_s **pd = NULL;
     struct armp_d_s *d = armp_args.d;
     while (d) {
@@ -324,63 +346,46 @@ int cmdh_armd(int idx, char *arg) {
         pd = &armp_args.d;
     *pd = my_malloc(sizeof(struct armp_d_s));
     if (!*pd) {
-        LOG("Failed to allocate memory for ARM D command data\n");
+        LOG("ERROR: Failed to allocate memory for ARM D command data\n");
         return -1;
     }
-    memset(*pd, 0, sizeof(struct armp_d_s));
-    char *argx = arg + 2; // 0x
-    if (antoh(argx, (uint8_t *)&(*pd)->dst, 4) >= 0) {
-        (*pd)->dst = (void *)BSWAP32((*pd)->dst);
-        argx += (8 + 1); // ABCDEF01,
-        if (!my_strncmp(argx, "0x", 2)) {
-            argx += 2; // 0x
-            if (antoh(argx, (uint8_t *)&(*pd)->src, 4) >= 0) {
-                (*pd)->src = (void *)BSWAP32((*pd)->src);
-                argx += (8 + 1 + 2); // ABCDEF01,0x
-                if (antoh(argx, (uint8_t *)&(*pd)->sz, 4) >= 0) {
-                    (*pd)->sz = BSWAP32((*pd)->sz);
-                    LOG("Added ARM D: 0x%08X @ 0x%08X => 0x%08X\n", (*pd)->sz, (*pd)->src, (*pd)->sz);
-                    return 0;
-                } else
-                    LOG("ARM D: Failed to convert size\n");
-            } else
-                LOG("ARM D: Failed to convert source address\n");
-        } else if (!my_strncmp(argx, OS0_MOUNTPATH, strlen(OS0_MOUNTPATH))) {
-            (*pd)->src = fmgr_get_file(argx, NULL, 0, 0, &(*pd)->sz);
-            if ((*pd)->src) {
-                (*pd)->src_fa = true;
-                LOG("Added ARM D: 0x%08X @ %s => 0x%08X\n", (*pd)->sz, argx, (*pd)->dst);
+    d = *pd;
+    memset(d, 0, sizeof(struct armp_d_s));
+    int ai = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+        d->dst = arg->arg[ai].data;
+        ai++;
+        if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+            d->sz = arg->arg[ai].uintgr;
+            ai++;
+            if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+                d->src = arg->arg[ai].data;
+                LOG("Added ARM_DAT: [0x%08X] 0x%08X => 0x%08X\n", d->sz, d->src, d->dst);
                 return 0;
-            } else
-                LOG("ARM D: Failed to read file %s\n", argx);
-        } else {
-            (*pd)->sz = strlen(argx) / 2;
-            (*pd)->src = my_malloc((*pd)->sz);
-            if ((*pd)->src) {
-                if (antoh(argx, (*pd)->src, (*pd)->sz) >= 0) {
-                    (*pd)->src_fa = true;
-                    LOG("Added ARM D: 0x%08X @ %s => 0x%08X\n", (*pd)->sz, argx, (*pd)->dst);
-                    return 0;
-                } else
-                    LOG("ARM D: Failed to convert data\n");
-                my_free((*pd)->src);
-                (*pd)->src = NULL;
-            } else
-                LOG("ARM D: Failed to allocate memory for data\n");
+            }
         }
+        if ((arg->types & TXTCFG_TYPES_PARSE(ai, _RDATA, _FDATA)) && arg->arg[ai].act_len) {
+            if (ai == 1)
+                d->sz = arg->arg[ai].act_len;
+            d->src = arg->arg[ai].data;
+            arg->arg[ai].data = NULL;
+            d->src_fa = true; // indicate that the source is a freeable address
+            LOG("Added ARM_DAT: [0x%08X] => 0x%08X\n", d->sz, d->dst);
+            return 0;
+        } else
+            LOG("ERROR: Invalid ARM_DAT src arg\n");
     } else
-        LOG("ARM D: Failed to convert destination address\n");
-    my_free(*pd);
+        LOG("ERROR: Invalid ARM_DAT dest arg\n");
+    my_free(d);
     *pd = NULL;
     return -1;
 }
 
-int cmdh_armx(int idx, char *arg) {
-    if (!arg || !*arg) {
-        LOG("Invalid argument for ARM X command\n");
+int cmdh_armx(int idx, struct txtcfg_arg_s *arg) {
+    if (!arg || !arg->handler) {
+        LOG("ERROR: Invalid argument for ARM X command\n");
         return -1;
     }
-    LOG("ARM X command parsed with arg: %s\n", arg);
     struct armp_x_s **px = NULL;
     struct armp_x_s *x = armp_args.x;
     while (x) {
@@ -391,46 +396,30 @@ int cmdh_armx(int idx, char *arg) {
         px = &armp_args.x;
     *px = my_malloc(sizeof(struct armp_x_s));
     if (!*px) {
-        LOG("Failed to allocate memory for ARM X command data\n");
+        LOG("ERROR: Failed to allocate memory for ARM X command data\n");
         return -1;
     }
-    memset(*px, 0, sizeof(struct armp_x_s));
-    char *argx = arg + 2; // 0x
-    if (antoh(argx, (uint8_t *)&(*px)->arg, 4) >= 0) {
-        (*px)->arg = BSWAP32((*px)->arg);
-        argx += (8 + 1); // ABCDEF01,
-        if (!my_strncmp(argx, "0x", 2)) {
-            argx += 2; // 0x
-            if (antoh(argx, (uint8_t *)&(*px)->src, 4) >= 0) {
-                (*px)->src = (void *)BSWAP32((*px)->src);
-                LOG("Added ARM X: 0x%08X(0x%08X)\n", (*px)->src, (*px)->arg);
-                return 0;
-            } else
-                LOG("ARM X: Failed to convert function address\n");
-        } else if (!my_strncmp(argx, OS0_MOUNTPATH, strlen(OS0_MOUNTPATH))) {
-            (*px)->src = fmgr_get_file(argx, NULL, 0, 0, &(*px)->c_sz);
-            if ((*px)->src) {
-                LOG("Added ARM X: 0x%08X @ %s(0x%08X)\n", (*px)->c_sz, argx, (*px)->arg);
-                return 0;
-            } else
-                LOG("ARM X: Failed to read file %s\n", argx);
-        } else {
-            (*px)->c_sz = strlen(argx) / 2;
-            (*px)->src = my_malloc((*px)->c_sz);
-            if ((*px)->src) {
-                if (antoh(argx, (*px)->src, (*px)->c_sz) >= 0) {
-                    LOG("Added ARM X: 0x%08X @ %s(0x%08X)\n", (*px)->c_sz, argx, (*px)->arg);
-                    return 0;
-                } else
-                    LOG("ARM X: Failed to convert data\n");
-                my_free((*px)->src);
-                (*px)->src = NULL;
-            } else
-                LOG("ARM X: Failed to allocate memory for data\n");
+    x = *px;
+    memset(x, 0, sizeof(struct armp_x_s));
+    int ai = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+        x->arg = arg->arg[ai].uintgr;
+        ai++;
+        if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
+            x->src = arg->arg[ai].data;
+            LOG("Added ARM X: 0x%08X(0x%08X)\n", x->src, x->arg);
+            return 0;
         }
+    }
+    if ((arg->types & TXTCFG_TYPES_PARSE(ai, _RDATA, _FDATA)) && arg->arg[ai].act_len) {
+        x->c_sz = arg->arg[ai].act_len;
+        x->src = arg->arg[ai].data;
+        arg->arg[ai].data = NULL;
+        LOG("Added ARM X: dyn(0x%08X)\n", x->arg);
+        return 0;
     } else
-        LOG("ARM X: Failed to convert address\n");
-    my_free(*px);
+        LOG("ERROR: Invalid ARM X src arg\n");
+    my_free(x);
     *px = NULL;
     return -1;
 }
@@ -450,7 +439,7 @@ void *cmdh_dispatch_table(int idx) {
     if (idx)
         return dispatch_table[idx];
     for (int i = 0; i < CMD_COUNT; i++)
-        cmd_args[i].cmd_handler = dispatch_table[i];
+        cmd_args[i].handler = dispatch_table[i];
     return NULL;
 }
 

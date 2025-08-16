@@ -4,19 +4,29 @@
 #include "stor.h"
 #include "fmgr.h"
 
-char *my_strchr(const char *s, int c) {
+char *my_strchr(const char *s, char c) {
     while (*s) {
-        if (*s == (char)c)
+        if (*s == c)
             return (char *)s;
         s++;
     }
     return NULL;
 }
 
-char *my_strrchr(const char *s, int c) {
+char *my_strnchr(const char *s, char c, int len) {
+    while (*s && len > 0) {
+        if (*s == c)
+            return (char *)s;
+        s++;
+        len--;
+    }
+    return NULL;
+}
+
+char *my_strrchr(const char *s, char c) {
 	const char *last = NULL;
 	while (*s) {
-		if (*s == (char)c)
+		if (*s == c)
 			last = s;
 		s++;
 	}
@@ -445,41 +455,133 @@ static int txtcfg_getCmdIDX(struct txtcfg_s* cfg, char *line, char *end) {
     return 0;
 }
 
-static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *command_line, char *end) {
-    char *arg = command_line + strlen(cfg->args.names[idx]);
-    if (*(uint8_t *)arg != 0x3D)
-        return;
+static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *arg, char *end) {
+	LOG("Preparing command by index: %d\n", idx);
+    struct txtcfg_arg_s *pcfg = &cfg->args.parsed[idx];
+	if (pcfg->parsed) {
+		LOG("WARN: Command already prepared\n");
+		return;
+	}
+    arg += strlen(cfg->args.names[idx]);
+    if (*(uint8_t *)arg != 0x3D) {
+        LOG("ERROR: Invalid command format (!=)\n");
+		return;
+	}
     arg++;
 
-    int arglen = end - arg;
-
     // cut invalid and comments (" " and "#")
-    for (int i = 0; i < arglen; i++) {
+    for (int i = 0; i < (int)(end - arg); i++) {
         if (*(uint8_t *)(arg + i) == 0x20 || *(uint8_t *)(arg + i) == 0x23) {
-            arglen = i;
+            end = arg + i;
             break;
         }
     }
 
-    if (!arglen || arglen < cfg->args.parsed[idx].min_ascii_arg_len || arglen > cfg->args.parsed[idx].max_ascii_arg_len) {
-        return;
-	}
-	
-	if (cfg->args.parsed[idx].ascii_arg)
+    char *carg = (char*)my_malloc((uint32_t)(end - arg) + 1);
+	if (!carg) {
+		LOG("ERROR: Failed to allocate memory for command argument\n");
 		return;
+	}
+	char *cend = carg + (end - arg);
+    memset(carg, 0, cend - carg);
+    memcpy(carg, arg, end - arg);
 
-    cfg->args.parsed[idx].ascii_arg = my_malloc(arglen + 1);
-    if (cfg->args.parsed[idx].ascii_arg) {
-        cfg->args.parsed[idx].ascii_arg[arglen] = 0;
-        memcpy(cfg->args.parsed[idx].ascii_arg, arg, arglen);
-        if (!memcmp(cfg->args.parsed[idx].ascii_arg, arg, arglen)) {
-			if (cfg->args.parsed[idx].exec && cfg->args.parsed[idx].cmd_handler) {
-                cfg->args.parsed[idx].cmd_handler(idx, cfg->args.parsed[idx].ascii_arg);
-                my_free(cfg->args.parsed[idx].ascii_arg);
-				cfg->args.parsed[idx].ascii_arg = NULL;
+    char *sub_arg = carg;
+    for (int a = 0; a < 4; a++) {
+        char *sub_end = my_strnchr(sub_arg, ',', cend - sub_arg);
+        if (!sub_end || sub_end > cend)
+			sub_end = cend;
+		*sub_end = 0;
+        pcfg->arg[a].uintgr = 0;
+        pcfg->arg[a].act_len = 0;
+        pcfg->types &= ~TXTCFG_TYPES_PARSE_ALL(a);
+        if ((pcfg->types & TXTCFG_TYPES_ALLOW(a, _UINT)) && !my_strncmp(sub_arg, "0x", 2)) {
+            sub_arg += 2;
+			pcfg->arg[a].act_len = strlen(sub_arg) / 2;
+			if ((pcfg->arg[a].act_len < pcfg->arg[a].min_len) || (pcfg->arg[a].act_len > pcfg->arg[a].max_len)) {
+				LOG("ERROR: Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [UINT]\n", a, pcfg->arg[a].min_len, pcfg->arg[a].act_len, pcfg->arg[a].max_len);
+				goto txtcfg_frexit; // hard break
 			}
-		}
-    }
+			if (antoh(sub_arg, (uint8_t *)&pcfg->arg[a].uintgr, pcfg->arg[a].act_len) < 0) {
+				LOG("ERROR: Could not convert command argument %d [UINT]\n", a);
+				goto txtcfg_frexit;
+            }
+            if (pcfg->arg[a].act_len == 4)
+                pcfg->arg[a].uintgr = BSWAP32(pcfg->arg[a].uintgr);
+			else if (pcfg->arg[a].act_len == 3)
+                pcfg->arg[a].uintgr = BSWAP24(pcfg->arg[a].uintgr);
+			else if (pcfg->arg[a].act_len == 2)
+                pcfg->arg[a].uintgr = BSWAP16(pcfg->arg[a].uintgr);
+            pcfg->types |= TXTCFG_TYPES_PARSE(a, _UINT);
+        } else if ((pcfg->types & TXTCFG_TYPES_ALLOW(a, _FDATA)) && !my_strncmp(sub_arg, "mnt", 3)) {
+            pcfg->arg[a].act_len = fmgr_get_file_size(sub_arg);
+			if ((pcfg->arg[a].act_len < pcfg->arg[a].min_len) || (pcfg->arg[a].act_len > pcfg->arg[a].max_len)) {
+				LOG("ERROR: Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [FDATA]\n", a, pcfg->arg[a].min_len, pcfg->arg[a].act_len, pcfg->arg[a].max_len);
+				goto txtcfg_frexit;
+			}
+			pcfg->arg[a].data = fmgr_get_file(sub_arg, NULL, pcfg->arg[a].act_len, 0, NULL);
+			if (!pcfg->arg[a].data) {
+				LOG("ERROR: Could not read file for command argument %d [FDATA]\n", a);
+				goto txtcfg_frexit;
+			}
+			pcfg->types |= TXTCFG_TYPES_PARSE(a, _FDATA);
+        } else if (pcfg->types & TXTCFG_TYPES_ALLOW(a, _RDATA)) {
+            pcfg->arg[a].act_len = strlen(sub_arg) / 2;
+            if ((pcfg->arg[a].act_len < pcfg->arg[a].min_len) || (pcfg->arg[a].act_len > pcfg->arg[a].max_len)) {
+                LOG("ERROR: Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [RDATA]\n", a, pcfg->arg[a].min_len, pcfg->arg[a].act_len, pcfg->arg[a].max_len);
+                goto txtcfg_frexit;  // hard break
+            }
+			pcfg->arg[a].data = my_malloc(pcfg->arg[a].act_len);
+			if (!pcfg->arg[a].data) {
+				LOG("ERROR: Could not allocate memory for command argument %d [RDATA]\n", a);
+				goto txtcfg_frexit;
+			}
+			if (antoh(sub_arg, pcfg->arg[a].data, pcfg->arg[a].act_len) < 0) {
+				LOG("ERROR: Could not convert command argument %d [RDATA]\n", a);
+				my_free(pcfg->arg[a].data);
+				pcfg->arg[a].data = NULL;
+				goto txtcfg_frexit;
+			}
+			pcfg->types |= TXTCFG_TYPES_PARSE(a, _RDATA);
+        } else if (pcfg->types & TXTCFG_TYPES_ALLOW(a, _ASCII)) {
+            pcfg->arg[a].act_len = strlen(sub_arg);
+			if ((pcfg->arg[a].act_len < pcfg->arg[a].min_len) || (pcfg->arg[a].act_len > pcfg->arg[a].max_len)) {
+				LOG("ERROR: Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [ASCII]\n", a, pcfg->arg[a].min_len, pcfg->arg[a].act_len, pcfg->arg[a].max_len);
+				goto txtcfg_frexit; // hard break
+			}
+			pcfg->arg[a].ascii = my_malloc(pcfg->arg[a].act_len + 1);
+			if (!pcfg->arg[a].ascii) {
+				LOG("ERROR: Could not allocate memory for command argument %d [ASCII]\n", a);
+				goto txtcfg_frexit;
+			}
+			memcpy(pcfg->arg[a].ascii, sub_arg, pcfg->arg[a].act_len);
+			pcfg->arg[a].ascii[pcfg->arg[a].act_len] = 0;
+            pcfg->types |= TXTCFG_TYPES_PARSE(a, _ASCII);
+        }
+		if (sub_end == cend)
+			break;
+        sub_arg = sub_end + 1;
+	}
+	if (pcfg->exec && pcfg->handler) {
+		LOG("Executing handler for command %d\n", idx);
+		pcfg->handler(idx, pcfg);
+        for (int a = 0; a < 4; a++) {
+            if ((pcfg->types & TXTCFG_TYPES_PARSE(a, _FDATA)) || (pcfg->types & TXTCFG_TYPES_PARSE(a, _RDATA)) || (pcfg->types & TXTCFG_TYPES_PARSE(a, _ASCII))) {
+                if (pcfg->arg[a].data) {
+                    LOG("Freeing command argument %d data\n", a);
+                    my_free(pcfg->arg[a].data);
+                }
+            }
+			pcfg->arg[a].act_len = 0;
+            pcfg->arg[a].uintgr = 0;
+            pcfg->types &= ~TXTCFG_TYPES_PARSE_ALL(a);
+        }
+    } else
+		pcfg->parsed = true;
+
+txtcfg_frexit:
+    my_free(carg);
+	return;
 }
 
 void txtcfg_parse(struct txtcfg_s *cfg) {
@@ -502,9 +604,21 @@ void txtcfg_parse(struct txtcfg_s *cfg) {
 
 void txtcfg_cleanup(struct txtcfg_s *cfg) {
     for (int i = 0; i < cfg->args.count; i++) {
-        if (cfg->args.parsed[i].ascii_arg) {
-            my_free(cfg->args.parsed[i].ascii_arg);
-            cfg->args.parsed[i].ascii_arg = NULL;
+		struct txtcfg_arg_s *arg = &cfg->args.parsed[i];
+        if (arg->parsed) {
+            for (int a = 0; a < 4; a++) {
+                if ((arg->types & TXTCFG_TYPES_PARSE(a, _FDATA)) || (arg->types & TXTCFG_TYPES_PARSE(a, _RDATA)) ||
+                    (arg->types & TXTCFG_TYPES_PARSE(a, _ASCII))) {
+                    if (arg->arg[a].data) {
+						LOG("Freeing command %d argument %d data\n", i, a);
+						my_free(arg->arg[a].data);
+					}
+                }
+                arg->arg[a].uintgr = 0;
+				arg->arg[a].act_len = 0;
+                arg->types &= ~TXTCFG_TYPES_PARSE_ALL(a);
+            }
+			arg->parsed = false;
         }
     }
 }
@@ -517,8 +631,8 @@ int txtcfg_loadExec(struct txtcfg_s *cfg, bool cleanup) {
 	txtcfg_parse(cfg);
 	LOG("Executing config file: %s\n", cfg->args.names[0]);
 	for (int i = 0; i < cfg->args.count; i++) {
-		if (cfg->args.parsed[i].ascii_arg && cfg->args.parsed[i].cmd_handler)
-			cfg->args.parsed[i].cmd_handler(i, cfg->args.parsed[i].ascii_arg);
+		if (cfg->args.parsed[i].parsed && cfg->args.parsed[i].handler)
+			cfg->args.parsed[i].handler(i, &cfg->args.parsed[i]);
 	}
 	if (cleanup) {
         LOG("Freeing config file: %s\n", cfg->args.names[0]);
@@ -540,8 +654,10 @@ int armp_run(struct armp_arg_s *armp, enum CHAIN_FREE_TYPES free) {
         LOG("Processing ARMP D argument %d: %d @ 0x%08X -> 0x%08X\n", i++, d->sz, d->src, d->dst);
 		bool fable = d->src_fa;
         DACR_OFF(d->ret = (int)memcpy(d->dst, d->src, d->sz););
-        if (fable && d->src && (free & CHAIN_FREE_NESTED))
+        if (fable && d->src && (free & CHAIN_FREE_NESTED)) {
             my_free(d->src);
+			d->src = NULL;
+		}
 		pd = d;
 		d = d->next;
 		if (free & CHAIN_FREE_ENTRIES)
@@ -575,8 +691,10 @@ int armp_run(struct armp_arg_s *armp, enum CHAIN_FREE_TYPES free) {
                 x->ret = -1;
 				ret = -1;
             }
-			if (x->src && (free & CHAIN_FREE_NESTED))
+			if (x->src && (free & CHAIN_FREE_NESTED)) {
 				my_free(x->src);
+				x->src = NULL;
+			}
         } else {
 			x->ret = x->func(x->arg);
 			LOG("Function returned: 0x%08X\n", x->ret);
