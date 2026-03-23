@@ -70,7 +70,7 @@ struct mount_ctx {
 
 #define IS_GCSD_INITIALIZED() (!!(*(uint32_t *)NSKBL_DEVICE_GCSD_TGT_CTX))
 
-#define STOR_MAX_MOUNTS 3 // two main, one temp
+#define STOR_MAX_MOUNTS 4 // two main, one temp, os0
 
 enum STOR_PARTITIONS {
     STOR_PART_ENTIRE = 0,
@@ -88,7 +88,8 @@ enum STOR_PARTITIONS {
     STOR_PART_SYSDATA,
     STOR_PART_MEDIAID,
     STOR_PART_PIDATA,
-    STOR_PART_UNUSED
+    STOR_PART_UNUSED,
+    STOR_PART_COUNT
 };
 
 enum STOR_PART_ACTIVES {

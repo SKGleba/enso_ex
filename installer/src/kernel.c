@@ -17,7 +17,7 @@
 
 #include "enso.h"
 #include "fatcheck.h"
-#include "../core/ex_defs.h"
+#include "../../core/ex_defs.h"
 
 #define printf(str, x...) do { printf_file("%s:%d: " str, __PRETTY_FUNCTION__, __LINE__, ## x); } while (0)
 #define ARRAYSIZE(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))

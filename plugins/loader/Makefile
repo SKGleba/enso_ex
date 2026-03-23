@@ -5,7 +5,7 @@ PLUGIN_LIBS = -lSceKblForKernel_365_stub
 
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc
-CFLAGS  = -Wl,-q -Wall -O3
+CFLAGS  = -Wl,-q -Wall -Os -fdiagnostics-color=always
 ASFLAGS = $(CFLAGS)
 
 all: e2x_ckldr.skprx
@@ -18,3 +18,6 @@ e2x_ckldr.velf: e2x_ckldr.elf
 
 e2x_ckldr.elf: $(PLUGIN_OBJS)
 	$(CC) $(CFLAGS) $^ $(PLUGIN_LIBS) -o $@ -nostdlib
+
+clean:
+	rm -f *.o *.skprx *.velf *.elf

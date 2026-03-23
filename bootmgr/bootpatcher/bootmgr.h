@@ -16,5 +16,8 @@
 #include "stor.h"
 #include "utils.h"
 #include "view.h"
+#include "txtcfg.h"
+
+#include "ff.h"
 
 #endif // __BOOTMGR_H__

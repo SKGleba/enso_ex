@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "view.h"
 #include "lv0.h"
+#include "txtcfg.h"
 
 #define EXPORTS_VERSION 1
 #define EXPORTS_MAGIC_1 0xE2E2E2E2
@@ -35,6 +36,7 @@ struct recovery_export_s {
     const volatile struct exports_stor_s *stor;
     const volatile struct exports_util_s *utils;
     const volatile struct exports_view_s *view;
+    const volatile struct exports_txtcfg_s *txtcfg;
     struct {
         struct exports_bmx_s bmx;
         struct exports_lbm_s lbm;
@@ -47,6 +49,7 @@ struct recovery_export_s {
         struct exports_stor_s stor;
         struct exports_util_s utils;
         struct exports_view_s view;
+        struct exports_txtcfg_s txtcfg;
     } d;
 };
 

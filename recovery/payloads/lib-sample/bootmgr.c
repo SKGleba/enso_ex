@@ -7,18 +7,18 @@
 static int init_logview(bool init) {  // initialize display and exr temp view for visual log
     if (init) {
         if (g_eex_params.boot_mode == BOOTSTRAP_MODE_LIB) {
-            LOG("Enabling display & views\n");
+            ILOG("Enabling display & views\n");
             if (bmx_displaymgr(DISPLAYMGR_NSTATE_ON, DISPLAYMGR_OPT_INCLUDE_FB) < 0) {
-                LOG("Failed to initialize display!\n");
+                ELOG("Failed to initialize display!\n");
                 return -1;
             }
             if (view_init() < 0) {
-                LOG("Failed to initialize views!\n");
+                ELOG("Failed to initialize views!\n");
                 return -1;
             }
         }
         view_switch(VIEW_TEMP);
-        LOG("Initializing the default view..\n");
+        ILOG("Initializing the default view..\n");
         default_paper.view_idx = VIEW_TEMP;
         // draw the title area
         paper_area(&default_paper, DFL_PAPER_START_X, DFL_PAPER_START_Y, DFL_PAPER_END_X, DFL_PAPER_END_Y);
@@ -30,13 +30,13 @@ static int init_logview(bool init) {  // initialize display and exr temp view fo
         paper_clear(&default_paper, LOG_PAPER_COLR);
         pen_reset(&default_paper, LOG_PEN_COLR);
         default_paper.blank_mode = LOG_PAPER_BLANK_MODE;
-        g_log_targets |= LOG_TARGET_LOGPAPER;
+        log_outputs |= LOG_TARGET_LOGPAPER;
     } else {
-        g_log_targets &= ~LOG_TARGET_LOGPAPER;
+        log_outputs &= ~LOG_TARGET_LOGPAPER;
         default_paper.view_idx = VIEW_DEFAULT;
         view_switch(VIEW_DEFAULT);
         if (g_eex_params.boot_mode == BOOTSTRAP_MODE_LIB) {
-            LOG("Disabling display & views\n");
+            ILOG("Disabling display & views\n");
             bmx_displaymgr(DISPLAYMGR_NSTATE_OFF, DISPLAYMGR_OPT_INCLUDE_FB);
             delay(4000);
         }
@@ -47,7 +47,7 @@ static int init_logview(bool init) {  // initialize display and exr temp view fo
 int b_main(void) {
     if (init_logview(true) < 0)
         return -1;
-    LOG("Hello World!\nPress SQUARE to exit\n");
+    ULOG("Hello World!\nPress SQUARE to exit\n");
     bmx_ctrl_wait(CTRL_SQUARE, 4000, 1);
     init_logview(false);
     return 0;

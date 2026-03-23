@@ -12,6 +12,8 @@ enum STAGE2_GCSD_MODES {
 	STAGE2_GCSD_MODE_INIT = 3
 };
 
+#define BOOTPATCH_TXTCFG "os0:/boot.patch"
+
 #ifndef RXP_PIE
 extern struct menu_s stage2_menu_s;
 extern struct stage2_options stage2_opts;

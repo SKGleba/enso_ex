@@ -15,7 +15,7 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 set(VITA_APP_NAME "ensō_ex")
 set(VITA_TITLEID  "MLCL00003")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fno-builtin-printf")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fno-builtin-printf -fdiagnostics-color=always")
 if (DEFINED SAFETY)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
 endif()
@@ -99,7 +99,7 @@ target_link_libraries(emmc_helper
   SceSysclibForDriver_stub
   SceThreadmgrForDriver_stub
   SceModulemgrForDriver_stub
-  SceModulemgrForKernel_367_stub
+  SceModulemgrForKernel_363_stub
   SceSblAIMgrForDriver_stub
   SceIofilemgrForDriver_stub
   SceSysmemForKernel_stub

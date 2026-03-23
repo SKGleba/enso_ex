@@ -6,40 +6,43 @@
 #include "bm_ext.h"
 #include "main.h"
 #include "lv0.h"
+#include "txtcfg.h"
 
 #include "../../../core/enso.h"
 #include "../../../core/ex_defs.h"
 
 #include "fmgr.h"
 
-static const char *fmgr_mount_names[STOR_MAX_MOUNTS] = {
+const char *fmgr_mount_names[STOR_MAX_MOUNTS] = {
     "mnt0:",
     "mnt1:",
     "mnt2:",
+	"os0:"
 };
 
-static FATFS fmgr_mountp[3] = {
+static FATFS fmgr_mountp[4] = {
     {0},  // mnt0
     {0},  // mnt1
     {0},  // mnt2
+	{0},  // os0:
 };
 
 // -- BASE FUNCTIONS --
 int fmgr_mount(bool mount, int idx) {
     if (idx < 0 || idx >= STOR_MAX_MOUNTS) {
-        LOG("Invalid mount index: %d\n", idx);
+        ELOG("mount() Invalid index: %d\n", idx);
         return -1;
     }
     if (mount) {
-        LOG("Mounting %s...\n", fmgr_mount_names[idx]);
+        ILOG("Mounting %s...\n", fmgr_mount_names[idx]);
         if (f_mount(&fmgr_mountp[idx], fmgr_mount_names[idx], 1) != FR_OK) {
-            LOG("Failed to mount %s\n", fmgr_mount_names[idx]);
+            ELOG("Failed to mount %s\n", fmgr_mount_names[idx]);
             return -1;
         }
     } else {
-        LOG("Unmounting %s...\n", fmgr_mount_names[idx]);
-        if (f_mount(NULL, fmgr_mount_names[idx], 1) != FR_OK) {
-            LOG("Failed to unmount %s\n", fmgr_mount_names[idx]);
+        ILOG("Unmounting %s...\n", fmgr_mount_names[idx]);
+        if (f_unmount(fmgr_mount_names[idx]) != FR_OK) {
+            ELOG("Failed to unmount %s\n", fmgr_mount_names[idx]);
             return -1;
         }
     }
@@ -52,7 +55,7 @@ int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int 
     FILINFO fno;
     res = f_opendir(&dir, path);
     if (res != FR_OK) {
-        LOG("Failed to open directory %s: %d\n", path, res);
+        ELOG("Failed to open directory %s: %d\n", path, res);
         return -1;
     }
     int count = 0;
@@ -60,14 +63,14 @@ int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int 
         res = f_readdir(&dir, &fno);
         if (res != FR_OK || fno.fname[0] == 0) {
             f_closedir(&dir);
-            LOG("Index %d out of bounds for directory %s\n", i, path);
+            ELOG("Index %d out of bounds for directory %s\n", i, path);
             return 0;
         }
     }
     while (count < max) {
         res = f_readdir(&dir, &fno);
         if (res != FR_OK) {
-            LOG("Failed to read directory %s: %d\n", path, res);
+            ELOG("Failed to read directory %s: %d\n", path, res);
             f_closedir(&dir);
             return -1;
         }
@@ -76,7 +79,7 @@ int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int 
             break;  // end of directory
 
         if (strlen(fno.fname) > entry_len - 1) {
-            LOG("Filename too long: %s\n", fno.fname);
+            WLOG("Filename too long: %s\n", fno.fname);
             // continue;  // skip long filenames
         }
 
@@ -94,7 +97,7 @@ int fmgr_list_dir(const char *path, char *output, int entry_len, int start, int 
 
 static const char *mount_master_names[] = {[MOUNT_MASTER_EMMC] = "eMMC", [MOUNT_MASTER_GCSD] = "GC-SD"};
 int fmgr_scan_masters(char *output_s, int entry_len, uint32_t *output_i, int start, int max) {
-    LOG("fmgr_scan_masters(output_s=%08X, output_i=%08X, entry_len=%d, start=%d, max=%d)\n", output_s, output_i, entry_len, start, max);
+    ILOG("fmgr_scan_masters(output_s=%08X, output_i=%08X, entry_len=%d, start=%d, max=%d)\n", output_s, output_i, entry_len, start, max);
     int count = 0;
     int started = !start;  // welp, who cares, memory is free anyways
     max = start + max;
@@ -151,11 +154,11 @@ int fmgr_scan_masters(char *output_s, int entry_len, uint32_t *output_i, int sta
 }
 
 void *fmgr_get_file(const char *path, void *buf, int size, int offset, uint32_t *ret_br) {
-	LOG("fmgr_get_file(path=%s, buf=%08X, size=%d, offset=%d, ret_br=%08X)\n", path, buf, size, offset, ret_br);
+	ILOG("fmgr_get_file(path=%s, buf=%08X, size=%d, offset=%d, ret_br=%08X)\n", path, buf, size, offset, ret_br);
 	FIL file;
 	FRESULT res = f_open(&file, path, FA_READ);
 	if (res != FR_OK) {
-		LOG("Failed to open file %s: %d\n", path, res);
+		ELOG("Failed to open file %s: %d\n", path, res);
 		return NULL;
 	}
 	if (!size)
@@ -163,7 +166,7 @@ void *fmgr_get_file(const char *path, void *buf, int size, int offset, uint32_t 
 	if (!buf) {
 		buf = my_malloc(size);
 		if (!buf) {
-			LOG("Failed to allocate buffer for file %s\n", path);
+			ELOG("Failed to allocate buffer for file %s\n", path);
 			f_close(&file);
 			return NULL;
 		}
@@ -171,7 +174,7 @@ void *fmgr_get_file(const char *path, void *buf, int size, int offset, uint32_t 
 	if (offset) {
 		res = f_lseek(&file, offset);
 		if (res != FR_OK) {
-			LOG("Failed to seek in file %s: %d\n", path, res);
+			ELOG("Failed to seek in file %s: %d\n", path, res);
 			f_close(&file);
 			return NULL;
 		}
@@ -179,144 +182,219 @@ void *fmgr_get_file(const char *path, void *buf, int size, int offset, uint32_t 
 	UINT bytes_read = 0;
 	res = f_read(&file, buf, size, &bytes_read);
 	if (res != FR_OK)
-		LOG("Failed to read file %s: %d\n", path, res);
+		ELOG("Failed to read file %s: %d\n", path, res);
 	f_close(&file);
-	LOG("Read %d bytes from file %s\n", bytes_read, path);
+	DLOG("Read %d bytes from file %s\n", bytes_read, path);
 	if (ret_br)
 		*ret_br = bytes_read;
 	return buf;
 }
 
 int fmgr_set_file(const char *path, const void *buf, int size, uint32_t *ret_bw) {
-	LOG("fmgr_set_file(path=%s, buf=%08X, size=%d, ret_bw=%08X)\n", path, buf, size, ret_bw);
+	ILOG("fmgr_set_file(path=%s, buf=%08X, size=%d, ret_bw=%08X)\n", path, buf, size, ret_bw);
 	FIL file;
 	FRESULT res = f_open(&file, path, FA_WRITE | FA_CREATE_ALWAYS);
 	if (res != FR_OK) {
-		LOG("Failed to open file %s: %d\n", path, res);
+		ELOG("Failed to open file %s: %d\n", path, res);
 		return -1;
 	}
 	UINT bytes_written = 0;
 	res = f_write(&file, buf, size, &bytes_written);
 	if (res != FR_OK || bytes_written < size) {
-		LOG("Failed to write file %s: %d\n", path, res);
+		ELOG("Failed to write file %s: %d\n", path, res);
 		f_close(&file);
 		return -1;
 	}
 	f_close(&file);
-	LOG("Wrote %d bytes to file %s\n", bytes_written, path);
+	DLOG("Wrote %d bytes to file %s\n", bytes_written, path);
 	if (ret_bw)
 		*ret_bw = bytes_written;
 	return 0;
 }
 
 uint32_t fmgr_copy_file(const char *src_path, const char *dest_path) {
-	LOG("fmgr_copy_file(src=%s, dest=%s)\n", src_path, dest_path);
-	char dst_buf[FMGR_MAX_PATH_LEN];
-	const char *actual_dest = dest_path;
+	ILOG("fmgr_copy_file(src=%s, dest=%s)\n", src_path, dest_path);
+	char *actual_dest = dest_path;
 	if (HAS_ENDSLASH(dest_path)) {
 		// extract the filename from the source path
 		const char *filename = my_strrchr(src_path, '/');
 		if (!filename || filename == src_path) {
-			LOG("Invalid source path %s, cannot extract filename\n", src_path);
+			ELOG("Invalid source path %s, cannot extract filename\n", src_path);
 			return 0;
 		}
-		my_snprintf(dst_buf, sizeof(dst_buf), "%s%s", actual_dest, filename + 1);
-		actual_dest = dst_buf;
+		int dblen = strlen(actual_dest) + strlen(filename + 1) + 1;
+        actual_dest = (char *)my_malloc(dblen);
+        if (!actual_dest) {
+			ELOG("Failed to allocate memory for destination path\n");
+			return 0;
+		}
+		my_snprintf(actual_dest, dblen, "%s%s", actual_dest, filename + 1);
 	}
-	LOG("Actual destination path: %s\n", actual_dest);
+	DLOG("Actual destination path: %s\n", actual_dest);
 
+	uint32_t writlen = 0;
 	FIL src_file, dest_file;
 	FRESULT res = f_open(&src_file, src_path, FA_READ);
 	if (res != FR_OK) {
-		LOG("Failed to open source file %s: %d\n", src_path, res);
-		return 0;
+		ELOG("Failed to open source file %s: %d\n", src_path, res);
+        goto fmgr_cpf_free;
+    }
+    uint32_t file_size = f_size(&src_file);
+	if (!file_size) {
+		ELOG("Source file %s is empty\n", src_path);
+		goto fmgr_cpf_csrc;
 	}
-	res = f_open(&dest_file, actual_dest, FA_WRITE | FA_CREATE_ALWAYS);
+    res = f_open(&dest_file, actual_dest, FA_WRITE | FA_CREATE_ALWAYS);
 	if (res != FR_OK) {
-		LOG("Failed to open destination file %s: %d\n", actual_dest, res);
-		f_close(&src_file);
-		return 0;
-	}
-	UINT bytes_read = 0, bytes_written = 0;
-	char buffer[512];
-	while ((res = f_read(&src_file, buffer, sizeof(buffer), &bytes_read)) == FR_OK && bytes_read > 0) {
+		ELOG("Failed to open destination file %s: %d\n", actual_dest, res);
+        goto fmgr_cpf_csrc;
+    }
+	uint32_t bufsize = (file_size > RMEMBLOCK_MAX_SIZE) ? RMEMBLOCK_MAX_SIZE : file_size;
+	void *buffer = my_malloc(bufsize);
+	if (!buffer) {
+		WLOG("Failed to allocate BIG buffer for file %s, trying small\n", src_path);
+		bufsize = RMEMBLOCK_MIN_SIZE;
+        buffer = my_malloc(bufsize);
+		if (!buffer) {
+			ELOG("Failed to allocate small buffer for file %s\n", src_path);
+			goto fmgr_cpf_cdst;
+		}
+    }
+    UINT bytes_read = 0, bytes_written = 0;
+    while ((res = f_read(&src_file, buffer, bufsize, &bytes_read)) == FR_OK && bytes_read > 0) {
+		bytes_written = 0;
 		res = f_write(&dest_file, buffer, bytes_read, &bytes_written);
 		if (res != FR_OK || bytes_written < bytes_read) {
-			LOG("Failed to write to destination file %s: %d\n", actual_dest, res);
-			f_close(&src_file);
-			f_close(&dest_file);
-			return 0;
-		}
+			ELOG("Failed to write to destination file %s: %d [@%d]\n", actual_dest, res, bytes_written);
+            writlen = 0;
+            goto fmgr_cpf_bend;
+        }
+		writlen += bytes_written;
+		bytes_read = 0;
 	}
+    if (writlen == file_size)
+        DLOG("Copied %d bytes from %s to %s\n", writlen, src_path, actual_dest);
+	else {
+		ELOG("Partial copy: %d bytes from %s to %s\n", writlen, src_path, actual_dest);
+		writlen = 0;
+	}
+fmgr_cpf_bend:
+	my_free((void*)buffer);
+fmgr_cpf_cdst:
+    f_close(&dest_file);
+fmgr_cpf_csrc:
 	f_close(&src_file);
-	f_close(&dest_file);
-	LOG("Copied %d bytes from %s to %s\n", bytes_written, src_path, actual_dest);
-	return bytes_written;
+fmgr_cpf_free:
+    if (dest_path != actual_dest)
+        my_free((void *)actual_dest);
+    return writlen;
 }
 
 int fmgr_copy_dir(const char *src_path, const char *dest_path) {
-	LOG("fmgr_copy_dir(src=%s, dest=%s)\n", src_path, dest_path);
-    char dst_buf[FMGR_MAX_PATH_LEN];
-	my_snprintf(dst_buf, sizeof(dst_buf), "%s%s", dest_path, find_rnth(src_path, '/', 2) + 1);
-	const char *actual_dest = dst_buf;
-    LOG("Actual destination path: %s\n", actual_dest);
+    int ret = -1;
+    ILOG("fmgr_copy_dir(src=%s, dest=%s)\n", src_path, dest_path);
+	int adlen = strlen(dest_path) + strlen(find_rnth(src_path, '/', 2) + 1) + 2;
+    char *actual_dest = (char*)my_malloc(adlen);
+	if (!actual_dest) {
+		ELOG("Failed to allocate memory for actual_dest\n");
+		return -1;
+	}
+	my_snprintf(actual_dest, adlen, HAS_ENDSLASH(dest_path) ? "%s%s" : "%s%s/", dest_path, find_rnth(src_path, '/', 2) + 1);
+    DLOG("Actual destination path: %s\n", actual_dest);
     FRESULT res = f_mkdir(actual_dest);
 	if (res != FR_OK && res != FR_EXIST) {
-		LOG("Failed to create destination directory %s: %d\n", actual_dest, res);
-		return -1;
+		ELOG("Failed to create destination directory %s: %d\n", actual_dest, res);
+		goto fmgr_cmpd_frexit;
 	}
     FILINFO fno;
 	DIR dir;
 	res = f_opendir(&dir, src_path);
 	if (res != FR_OK) {
-		LOG("Failed to open source directory %s: %d\n", src_path, res);
-		return -1;
-	}
+		ELOG("Failed to open source directory %s: %d\n", src_path, res);
+        goto fmgr_cmpd_frexit;
+    }
 	while (1) {
 		res = f_readdir(&dir, &fno);
 		if (res != FR_OK || fno.fname[0] == 0)
 			break;  // end of directory
-		char src_file[FMGR_MAX_PATH_LEN];
-		char dest_file[FMGR_MAX_PATH_LEN];
-		my_snprintf(src_file, sizeof(src_file), "%s%s", src_path, fno.fname);
-        my_snprintf(dest_file, sizeof(dest_file), "%s%s", actual_dest, fno.fname);
-        if (fno.fattrib & AM_DIR) {
-			res = f_mkdir(dest_file);
-			if (res != FR_OK && res != FR_EXIST) {
-				LOG("Failed to create directory %s: %d\n", dest_file, res);
-				f_closedir(&dir);
-				return -1;
-			}
-			fmgr_copy_dir(src_file, dest_file);  // recursive call for subdirectories
-		} else {
-			fmgr_copy_file(src_file, dest_file);  // copy files
+        int sflen = strlen(src_path) + strlen(fno.fname) + 2;
+        char *src_file = (char*)my_malloc(sflen);
+		if (!src_file) {
+			ELOG("Failed to allocate memory for src_file\n");
+			goto fmgr_cmpd_cfrexit;
 		}
+        my_snprintf(src_file, sflen, (fno.fattrib & AM_DIR) ? "%s%s/" : "%s%s", src_path, fno.fname);
+        if (fno.fattrib & AM_DIR)
+            fmgr_copy_dir(src_file, actual_dest);  // copy dir
+        else {
+			int dflen = strlen(actual_dest) + strlen(fno.fname) + 1;
+            char *dest_file = (char*)my_malloc(dflen);
+            if (!dest_file) {
+                ELOG("Failed to allocate memory for dest_file\n");
+				my_free(src_file);
+                goto fmgr_cmpd_cfrexit;
+            }
+            my_snprintf(dest_file, dflen, "%s%s", actual_dest, fno.fname);
+            fmgr_copy_file(src_file, dest_file);  // copy file
+            my_free(dest_file);
+		}
+		my_free(src_file);
 	}
-	f_closedir(&dir);
-	return 0;
+	ret = 0;
+fmgr_cmpd_cfrexit:
+    f_closedir(&dir);
+fmgr_cmpd_frexit:
+	my_free(actual_dest);
+	return ret;
 }
 
 int fmgr_delete(const char *path) {
-	LOG("fmgr_delete(path=%s)\n", path);
-	FRESULT res = f_unlink(path);
+	ILOG("fmgr_delete(path=%s)\n", path);
+    FRESULT res;
+    if (HAS_ENDSLASH(path)) {
+		// empty the directory first
+        FILINFO fno;
+        DIR dir;
+        res = f_opendir(&dir, path);
+        if (res != FR_OK) {
+            ELOG("Failed to open directory %s: %d\n", path, res);
+            return -1;
+        }
+        while (1) {
+            res = f_readdir(&dir, &fno);
+            if (res != FR_OK || fno.fname[0] == 0)
+                break;  // end of directory
+			int fplen = strlen(path) + strlen(fno.fname) + 2;
+            char *file_path = (char*)my_malloc(fplen);
+            if (!file_path) {
+                ELOG("Failed to allocate memory for file_path, skipping %s\n", fno.fname);
+                continue;
+            }
+            my_snprintf(file_path, fplen, (fno.fattrib & AM_DIR) ? "%s%s/" : "%s%s", path, fno.fname);
+            fmgr_delete(file_path);
+            my_free(file_path);
+        }
+        f_closedir(&dir);
+    }
+	res = f_unlink(path);
 	if (res != FR_OK) {
-		LOG("Failed to delete %s: %d\n", path, res);
+		ELOG("Failed to delete %s: %d\n", path, res);
 		return -1;
 	}
-	LOG("Deleted %s successfully\n", path);
+	DLOG("Deleted %s successfully\n", path);
 	return 0;
 }
 
 int fmgr_move_file(const char *src_path, const char *dest_path) {
-	LOG("fmgr_move_file(src=%s, dest=%s)\n", src_path, dest_path);
+	ILOG("fmgr_move_file(src=%s, dest=%s)\n", src_path, dest_path);
 	// if they are on the same mountpoint, we can just rename
     if (my_strncmp(src_path, dest_path, (my_strchr(dest_path, '/') - dest_path) + 1) == 0) {
         FRESULT res = f_rename(src_path, dest_path);
 		if (res != FR_OK) {
-			LOG("Failed to rename file from %s to %s: %d\n", src_path, dest_path, res);
+			ELOG("Failed to rename file from %s to %s: %d\n", src_path, dest_path, res);
 			return -1;
 		}
-		LOG("Renamed file from %s to %s successfully\n", src_path, dest_path);
+		DLOG("Renamed file from %s to %s successfully\n", src_path, dest_path);
 		return 0;
     }
     // if they are on different mountpoints, we need to copy and delete
@@ -326,15 +404,15 @@ int fmgr_move_file(const char *src_path, const char *dest_path) {
 }
 
 int fmgr_move_dir(const char *src_path, const char *dest_path) {
-	LOG("fmgr_move_dir(src=%s, dest=%s)\n", src_path, dest_path);
+	ILOG("fmgr_move_dir(src=%s, dest=%s)\n", src_path, dest_path);
 	// if they are on the same mountpoint, we can just rename
     if (my_strncmp(src_path, dest_path, (my_strchr(dest_path, '/') - dest_path) + 1) == 0) {
         FRESULT res = f_rename(src_path, dest_path);
 		if (res != FR_OK) {
-			LOG("Failed to rename directory from %s to %s: %d\n", src_path, dest_path, res);
+			ELOG("Failed to rename directory from %s to %s: %d\n", src_path, dest_path, res);
 			return -1;
 		}
-		LOG("Renamed directory from %s to %s successfully\n", src_path, dest_path);
+		DLOG("Renamed directory from %s to %s successfully\n", src_path, dest_path);
 		return 0;
     }
     // if they are on different mountpoints, we need to copy and delete
@@ -344,11 +422,11 @@ int fmgr_move_dir(const char *src_path, const char *dest_path) {
 }
 
 uint32_t fmgr_get_file_size(const char *path) {
-	LOG("fmgr_get_file_size(path=%s)\n", path);
+	ILOG("fmgr_get_file_size(path=%s)\n", path);
 	FIL file;
 	FRESULT res = f_open(&file, path, FA_READ);
 	if (res != FR_OK) {
-		LOG("Failed to open file %s: %d\n", path, res);
+		ELOG("Failed to open file %s: %d\n", path, res);
 		return 0;
 	}
 	uint32_t file_size = f_size(&file);
@@ -357,14 +435,14 @@ uint32_t fmgr_get_file_size(const char *path) {
 }
 
 int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest_dir) {
-	LOG("fmgr_raw_dump(sector_start=%d, sector_count=%d, dest_dir=%s)\n", sector_start, sector_count, dest_dir);
+	ILOG("fmgr_raw_dump(sector_start=%d, sector_count=%d, dest_dir=%s)\n", sector_start, sector_count, dest_dir);
 	if (!dest_dir || sector_count <= 0 || !HAS_ENDSLASH(dest_dir)) {
-		LOG("Invalid parameters for raw dump\n");
+		ELOG("Invalid parameters for raw dump\n");
 		return -1;
 	}
 	void *buf = rmemblock_alloc(FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE, MEMBLOCK_TYPE_RW, 0);
 	if (!buf) {
-		LOG("Failed to allocate buffer for raw dump\n");
+		ELOG("Failed to allocate buffer for raw dump\n");
 		return -1;
 	}
     int ret = 0;
@@ -375,7 +453,7 @@ int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest
     my_snprintf(dest_path, sizeof(dest_path), "%sraw_dump_%08X_%d.bin", dest_dir, sector_start, segment);
 	res = f_open(&file, dest_path, FA_WRITE | FA_CREATE_ALWAYS);
 	if (res != FR_OK) {
-		LOG("Failed to open file %s for writing: %d\n", dest_path, res);
+		ELOG("Failed to open file %s for writing: %d\n", dest_path, res);
 		rmemblock_free(buf);
 		return -1;
 	}
@@ -384,28 +462,28 @@ int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest
 		if (copied > 0 && (copied % FMGR_RAWDUMP_SEGMENT_BLKCOUNT) == 0) {
 			// close the current file and open a new one
 			f_close(&file);
-            LOG("Successfully dumped %d sectors to %s\n", copied, dest_path);
+            DLOG("Successfully dumped %d sectors to %s\n", copied, dest_path);
             segment++;
 			my_snprintf(dest_path, sizeof(dest_path), "%s/raw_dump_%08X_%d.bin", dest_dir, sector_start, segment);
 			res = f_open(&file, dest_path, FA_WRITE | FA_CREATE_ALWAYS);
 			if (res != FR_OK) {
-				LOG("Failed to open file %s for writing: %d\n", dest_path, res);
+				ELOG("Failed to open file %s for writing: %d\n", dest_path, res);
 				rmemblock_free(buf);
 				return -1;
 			}
 			bytes_written = 0;
-			LOG("Dumping segment %d to file %s\n", segment, dest_path);
+			ILOG("Dumping segment %d to file %s\n", segment, dest_path);
 		}
 		ret = EMMCREAD(sector_start + copied, buf, FMGR_RAWDUMP_BLOCK_SECCOUNT);
 		if (ret != 0) {
-			LOG("Failed to read sectors %d-%d: %d\n", sector_start + copied, sector_start + copied + FMGR_RAWDUMP_BLOCK_SECCOUNT - 1, ret);
+			ELOG("Failed to read sectors %d-%d: %d\n", sector_start + copied, sector_start + copied + FMGR_RAWDUMP_BLOCK_SECCOUNT - 1, ret);
 			f_close(&file);
 			rmemblock_free(buf);
 			return -1;
 		}
 		res = f_write(&file, buf, FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE, &bytes_written);
 		if (res != FR_OK || bytes_written < FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE) {
-			LOG("Failed to write to file %s: %d\n", dest_path, res);
+			ELOG("Failed to write to file %s: %d\n", dest_path, res);
 			f_close(&file);
 			rmemblock_free(buf);
 			return -1;
@@ -416,14 +494,14 @@ int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest
 		// read the remaining sectors
 		ret = EMMCREAD(sector_start + copied, buf, sector_count - copied);
 		if (ret != 0) {
-			LOG("Failed to read remaining sectors %d-%d: %d\n", sector_start + copied, sector_start + sector_count - 1, ret);
+			ELOG("Failed to read remaining sectors %d-%d: %d\n", sector_start + copied, sector_start + sector_count - 1, ret);
 			f_close(&file);
 			rmemblock_free(buf);
 			return -1;
 		}
 		res = f_write(&file, buf, (sector_count - copied) * SECTOR_SIZE, &bytes_written);
 		if (res != FR_OK || bytes_written < (sector_count - copied) * SECTOR_SIZE) {
-			LOG("Failed to write remaining sectors to file %s: %d\n", dest_path, res);
+			ELOG("Failed to write remaining sectors to file %s: %d\n", dest_path, res);
 			f_close(&file);
 			rmemblock_free(buf);
 			return -1;
@@ -432,35 +510,35 @@ int fmgr_raw_dump(uint32_t sector_start, uint32_t sector_count, const char *dest
 	}
 	f_close(&file);
 	rmemblock_free(buf);
-	LOG("Successfully dumped %d sectors to %s\n", copied, dest_path);
+	DLOG("Successfully dumped %d sectors to %s\n", copied, dest_path);
 	return 0;
 }
 
 int fmgr_load_exec(const char *path, enum FMGR_EXEC_TYPES exec_type) {
-    LOG("fmgr_load_exec(path=%s, exec_type=%d)\n", path, exec_type);
+    ILOG("fmgr_load_exec(path=%s, exec_type=%d)\n", path, exec_type);
 	uint32_t fsz = 0;
     void *buf = fmgr_get_file(path, NULL, 0, 0, &fsz);
     if (!buf || !fsz) {
-        LOG("Failed to get file %s\n", path);
+        ELOG("Failed to get file %s\n", path);
         return -1;
     }
 	int ret = 0;
     if (exec_type == FMGR_EXEC_TYPE_ARM) {
         if (my_rxmap(buf) < 0) {
-            LOG("Failed to remap file %s to RX\n", path);
+            ELOG("Failed to remap file %s to RX\n", path);
             my_free(buf);
             return -1;
         }
-        LOG("Executing file %s at %08X\n", path, buf);
+        DLOG("Executing file %s at %08X\n", path, buf);
         int (*entry)(uint32_t magic) = (int (*)(uint32_t))((uint32_t)buf | 1);
         ret = entry(E2X_MAGIC);
-        LOG("Execution of file %s returned: %d\n", path, ret);
+        ILOG("Execution of file %s returned: %d\n", path, ret);
         if (ret & E2X_EXE_RET_NORESIDENT)
             my_free(buf);
     } else if (exec_type == FMGR_EXEC_TYPE_LV0)
         ret = lv0_spl_exec(buf, 0, fsz, E2X_MAGIC);
     else {
-		LOG("Unknown execution type: %d\n", exec_type);
+		ELOG("Unknown execution type: %d\n", exec_type);
 		my_free(buf);
 		ret = -2;
 	}
@@ -468,29 +546,29 @@ int fmgr_load_exec(const char *path, enum FMGR_EXEC_TYPES exec_type) {
 }
 
 int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
-    LOG("fmgr_fd_partition(is_flash=%d, part_info=%08X, dest_string=%s)\n", is_flash, part_info, dest_string);
+   	ILOG("fmgr_fd_partition(is_flash=%d, part_info=%08X, dest_string=%s)\n", is_flash, part_info, dest_string);
 	int ret = 0;
     enum MOUNT_MASTERS p_m = FMGR_MASTER_SCAN_UNPACK(MASTER, part_info);
     enum STOR_PARTITIONS p_id = FMGR_MASTER_SCAN_UNPACK(PARTITION, part_info);
     enum STOR_PART_ACTIVES p_act = FMGR_MASTER_SCAN_UNPACK(ACTIVE, part_info);
     if (p_id == STOR_PART_ENTIRE) {
-        LOG("Unsupported partition: entire/invalid\n");
+        ELOG("Unsupported partition: entire/invalid\n");
         return -1;
     }
     if (is_flash) {
         if (HAS_ENDSLASH(dest_string)) {
-            LOG("Destination path for flashing should not end with a slash: %s\n", dest_string);
+            ELOG("Destination path for flashing should not end with a slash: %s\n", dest_string);
             return -2;
         }
 		if (p_id == STOR_PART_IDSTOR || (p_id == STOR_PART_SLOADER && p_act == STOR_PART_ACTIVE_YES)) {
-            screset();
-            scrclog(RED, "WARNING: ");
-            scrlog("Writing invalid data WILL brick the device!\n");
-            scrlog("Are you sure that you want to continue?\n");
-            scrclog(GREEN, "Press CIRCLE to continue, CROSS to cancel.\n");
+            lpreset();
+            lpclog(RED, "WARNING: ");
+            lplog("Writing invalid data WILL brick the device!\n");
+            lplog("Are you sure that you want to continue?\n");
+            lpclog(GREEN, "Press CIRCLE to continue, CROSS to cancel.\n");
             ret = bmx_ctrl_wait(CTRL_CIRCLE | CTRL_CROSS, 4000, 1);
             if (!BMX_CTRL_BUTTON_HELD(ret, CTRL_CIRCLE)) {
-				LOG("User cancelled flashing process\n");
+				WLOG("User cancelled flashing process\n");
 				return -3;
 			}
         }
@@ -498,18 +576,18 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 
     void *buf = rmemblock_alloc(FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE, MEMBLOCK_TYPE_RW, 0);
     if (!buf) {
-        LOG("Failed to allocate buffer for partition dump/flash\n");
+        ELOG("Failed to allocate buffer for partition dump/flash\n");
         return -4;
     }
     ret = stor_init_mount(2, p_m, p_id, p_act);
 	if (ret < 0) {
-		LOG("Failed to initialize mount for partition %s (%d) on master %s (%d): %d\n",
+		ELOG("Failed to initialize mount for partition %s (%d) on master %s (%d): %d\n",
 			get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
 		goto free_exit;
 	}
 	struct mount_ctx *ctx = stor_get_validate_mctx(2);
 	if (!ctx) {
-		LOG("Failed to get mount context for partition %s (%d) on master %s (%d)\n",
+		ELOG("Failed to get mount context for partition %s (%d) on master %s (%d)\n",
 			get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 		ret = -5;
 		goto free_exit;
@@ -517,7 +595,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 
 	uint32_t p_sz = ctx->params->sz;
 	if (!p_sz) {
-		LOG("Partition %s (%d) on master %s (%d) has zero size\n",
+		ELOG("Partition %s (%d) on master %s (%d) has zero size\n",
 			get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 		stor_umount(2);
 		ret = -6;
@@ -529,7 +607,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
         my_snprintf(dest_path, sizeof(dest_path), "%s%s_%d.bin", dest_string, get_partition_name(p_id), p_act);
 		dest_string = dest_path;
 	}
-	LOG("Destination path for partition dump/flash: %s\n", dest_string);
+	DLOG("Destination path for partition dump/flash: %s\n", dest_string);
 
 	FIL file;
 	FRESULT res;
@@ -539,7 +617,7 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 	else
 		res = f_open(&file, dest_string, FA_WRITE | FA_CREATE_ALWAYS);
 	if (res != FR_OK) {
-		LOG("Failed to open file %s: %d\n", dest_string, res);
+		ELOG("Failed to open file %s: %d\n", dest_string, res);
 		ret = -7;
 		goto free_exit;
 	}
@@ -549,37 +627,37 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 		if (is_flash) {
 			res = f_read(&file, buf, FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE, &brobw);
 			if (res != FR_OK || brobw < FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE) {
-				LOG("Failed to read from file %s: %d\n", dest_string, res);
+				ELOG("Failed to read from file %s: %d\n", dest_string, res);
 				f_close(&file);
 				ret = -8;
 				goto free_exit;
 			}
 			ret = stor_write_mount(2, copied, buf, FMGR_RAWDUMP_BLOCK_SECCOUNT);
 			if (ret < 0) {
-				LOG("Failed to write to mount for partition %s (%d) on master %s (%d): %d\n",
+				ELOG("Failed to write to mount for partition %s (%d) on master %s (%d): %d\n",
 					get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
 				f_close(&file);
 				goto free_exit;
 			}
-			LOG("Wrote %d bytes to mount for partition %s (%d) on master %s (%d)\n",
+			ILOG("Wrote %d bytes to mount for partition %s (%d) on master %s (%d)\n",
 				brobw, get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 			copied += FMGR_RAWDUMP_BLOCK_SECCOUNT;
 		} else {
 			ret = stor_read_mount(2, copied, buf, FMGR_RAWDUMP_BLOCK_SECCOUNT);
 			if (ret < 0) {
-				LOG("Failed to read from mount for partition %s (%d) on master %s (%d): %d\n",
+				ELOG("Failed to read from mount for partition %s (%d) on master %s (%d): %d\n",
 					get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
 				f_close(&file);
 				goto free_exit;
 			}
 			res = f_write(&file, buf, FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE, &brobw);
 			if (res != FR_OK || brobw < FMGR_RAWDUMP_BLOCK_SECCOUNT * SECTOR_SIZE) {
-				LOG("Failed to write to file %s: %d\n", dest_string, res);
+				ELOG("Failed to write to file %s: %d\n", dest_string, res);
 				f_close(&file);
 				ret = -9;
 				goto free_exit;
 			}
-			LOG("Wrote %d bytes to file %s for partition %s (%d) on master %s (%d)\n",
+			ILOG("Wrote %d bytes to file %s for partition %s (%d) on master %s (%d)\n",
 				brobw, dest_string, get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 			copied += FMGR_RAWDUMP_BLOCK_SECCOUNT;
 		}
@@ -590,42 +668,42 @@ int fmgr_fd_partition(int is_flash, uint32_t part_info, char *dest_string) {
 		if (is_flash) {
 			res = f_read(&file, buf, (p_sz - copied) * SECTOR_SIZE, &brobw);
 			if (res != FR_OK || brobw < (p_sz - copied) * SECTOR_SIZE) {
-				LOG("Failed to read remaining sectors from file %s: %d\n", dest_string, res);
+				ELOG("Failed to read remaining sectors from file %s: %d\n", dest_string, res);
 				f_close(&file);
 				ret = -10;
 				goto free_exit;
 			}
 			ret = stor_write_mount(2, copied, buf, p_sz - copied);
 			if (ret < 0) {
-				LOG("Failed to write remaining sectors to mount for partition %s (%d) on master %s (%d): %d\n",
+				ELOG("Failed to write remaining sectors to mount for partition %s (%d) on master %s (%d): %d\n",
 					get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
 				f_close(&file);
 				goto free_exit;
 			}
-			LOG("Wrote remaining %d bytes to mount for partition %s (%d) on master %s (%d)\n",
+			ILOG("Wrote remaining %d bytes to mount for partition %s (%d) on master %s (%d)\n",
 				brobw, get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 		} else {
 			ret = stor_read_mount(2, copied, buf, p_sz - copied);
 			if (ret < 0) {
-				LOG("Failed to read remaining sectors from mount for partition %s (%d) on master %s (%d): %d\n",
+				ELOG("Failed to read remaining sectors from mount for partition %s (%d) on master %s (%d): %d\n",
 					get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
 				f_close(&file);
 				goto free_exit;
 			}
 			res = f_write(&file, buf, (p_sz - copied) * SECTOR_SIZE, &brobw);
 			if (res != FR_OK || brobw < (p_sz - copied) * SECTOR_SIZE) {
-				LOG("Failed to write remaining sectors to file %s: %d\n", dest_string, res);
+				ELOG("Failed to write remaining sectors to file %s: %d\n", dest_string, res);
 				f_close(&file);
 				ret = -11;
 				goto free_exit;
 			}
-			LOG("Wrote remaining %d bytes to file %s for partition %s (%d) on master %s (%d)\n",
+			ILOG("Wrote remaining %d bytes to file %s for partition %s (%d) on master %s (%d)\n",
 				brobw, dest_string, get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 		}
 		copied = p_sz;
 	}
 	f_close(&file);
-	LOG("Successfully %s partition %s (%d) on master %s (%d) with %d bytes\n",
+	ILOG("Successfully %s partition %s (%d) on master %s (%d) with %d bytes\n",
 		is_flash ? "flashed" : "dumped", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, copied);
 
 free_exit:
@@ -636,7 +714,7 @@ free_exit:
 }
 
 static void fmgr_emmcdump(char *path) {
-    LOG("Dumping eMMC to file %s...\n", path);
+    ILOG("Dumping eMMC to file %s...\n", path);
     master_block_t mbr;
     memset(&mbr, 0, sizeof(mbr));
     int ret = EMMCREAD(0, &mbr, sizeof(mbr) / SECTOR_SIZE);
@@ -644,13 +722,13 @@ static void fmgr_emmcdump(char *path) {
         if (mbr.sig == 0xAA55) {
             ret = fmgr_raw_dump(0, mbr.device_size, path);
             if (ret < 0)
-                LOG("Failed to dump eMMC: 0x%08X\n", ret);
+                ELOG("Failed to dump eMMC: 0x%08X\n", ret);
             else
-                LOG("Successfully dumped eMMC to %s\n", path);
+                ILOG("Successfully dumped eMMC to %s\n", path);
         } else
-            LOG("Invalid MBR signature: 0x%04X\n", mbr.sig);
+            ELOG("Invalid MBR signature: 0x%04X\n", mbr.sig);
     } else
-        LOG("Failed to read MBR: 0x%08X\n", ret);
+        ELOG("Failed to read MBR: 0x%08X\n", ret);
 }
 
 static void fmgr_upeex(char *path) {
@@ -658,106 +736,108 @@ static void fmgr_upeex(char *path) {
     void *buf = NULL;
     char fpath[2 * FMGR_MAX_PATH_LEN];
     view_switch(VIEW_DEFAULT);  // switch to the log view
-    LOG("Updating the enso_ex recovery from %s (DIR)...\n", path);
+    ILOG("Updating the enso_ex recovery from %s (DIR)...\n", path);
 
     my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_MBR_FNAME);
     buf = fmgr_get_file(fpath, NULL, SECTOR_SIZE, 0, NULL);
     if (buf) {
-        LOG("Flashing recovery MBR from %s\n", fpath);
+        ILOG("Flashing recovery MBR from %s\n", fpath);
         ret = EMMCWRITE(E2X_RECOVERY_MBR_OFFSET, buf, 1);
         if (ret < 0)
-            LOG("Failed to write recovery MBR to EMMC: 0x%08X\n", ret);
+            ELOG("Failed to write recovery MBR to EMMC: 0x%08X\n", ret);
         else
-            LOG("Successfully wrote recovery MBR to EMMC\n");
+            ILOG("Successfully wrote recovery MBR to EMMC\n");
         my_free(buf);
     } else
-        LOG("No recovery MBR found at %s or error\n", fpath);
+        ELOG("No recovery MBR found at %s or error\n", fpath);
 
     my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_CONFIG_FNAME);
     buf = fmgr_get_file(fpath, NULL, E2X_RCONF_SIZE, 0, NULL);
     if (buf) {
-        LOG("Flashing recovery config from %s\n", fpath);
+        ILOG("Flashing recovery config from %s\n", fpath);
         ret = EMMCWRITE(E2X_RCONF_OFFSET, buf, E2X_RCONF_SIZE / SECTOR_SIZE);
         if (ret < 0)
-            LOG("Failed to write recovery config to EMMC: 0x%08X\n", ret);
+            ELOG("Failed to write recovery config to EMMC: 0x%08X\n", ret);
         else
-            LOG("Successfully wrote recovery config to EMMC\n");
+            ILOG("Successfully wrote recovery config to EMMC\n");
         my_free(buf);
     } else
-        LOG("No recovery config found at %s or error\n", fpath);
+        ELOG("No recovery config found at %s or error\n", fpath);
 
     my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_BLOB_FNAME);
     buf = fmgr_get_file(fpath, NULL, FMGR_UPR_BUFSIZE, 0, NULL);
     if (buf) {
-        LOG("Flashing recovery blob from %s\n", fpath);
+        ILOG("Flashing recovery blob from %s\n", fpath);
         ret = EMMCWRITE(E2X_RBLOB_OFFSET, buf, E2X_RBLOB_SIZE / SECTOR_SIZE);
         if (ret < 0)
-            LOG("Failed to write recovery blob to EMMC: 0x%08X\n", ret);
+            ELOG("Failed to write recovery blob to EMMC: 0x%08X\n", ret);
         else
-            LOG("Successfully wrote recovery blob to EMMC\n");
+            ILOG("Successfully wrote recovery blob to EMMC\n");
         my_free(buf);
     } else
-        LOG("No recovery blob found at %s or error\n", fpath);
+        ELOG("No recovery blob found at %s or error\n", fpath);
 
     if (((struct sysroot_buffer *)(g_eex_ports.kbl_param))->boot_type_indicator_1 & 0x80004) {
         my_snprintf(fpath, sizeof(fpath), "%s%s", path, FMGR_UPR_SECOND_FNAME);
         buf = fmgr_get_file(fpath, NULL, SECOND_PAYLOAD_SIZE, 0, NULL);
         if (buf) {
-            LOG("Flashing stage 2 payload from %s\n", fpath);
+            ILOG("Flashing stage 2 payload from %s\n", fpath);
             ret = EMMCWRITE(SECOND_PAYLOAD_OFFSET, buf, SECOND_PAYLOAD_SIZE / SECTOR_SIZE);
             if (ret < 0)
-                LOG("Failed to write stage 2 payload to EMMC: 0x%08X\n", ret);
+                ELOG("Failed to write stage 2 payload to EMMC: 0x%08X\n", ret);
             else
-                LOG("Successfully wrote stage 2 payload to EMMC\n");
+                ILOG("Successfully wrote stage 2 payload to EMMC\n");
             my_free(buf);
         } else
-            LOG("No stage 2 payload found at %s or error\n", fpath);
+            ELOG("No stage 2 payload found at %s or error\n", fpath);
     } else
-        LOG("Skipping stage 2 payload flash - only available in manufacturing mode\n");
+        WLOG("Skipping stage 2 payload flash - only available in manufacturing mode\n");
 
-    LOG("enso_ex update procedure complete\n");
+    ILOG("enso_ex update procedure complete\n");
 }
 
 int fmgr_format(uint32_t part_info, int type) {
-    LOG("fmgr_format: part_info=0x%08X, type=%d\n", part_info, type);
+    ILOG("fmgr_format: part_info=0x%08X, type=%d\n", part_info, type);
     enum MOUNT_MASTERS p_m = FMGR_MASTER_SCAN_UNPACK(MASTER, part_info);
     enum STOR_PARTITIONS p_id = FMGR_MASTER_SCAN_UNPACK(PARTITION, part_info);
     enum STOR_PART_ACTIVES p_act = FMGR_MASTER_SCAN_UNPACK(ACTIVE, part_info);
     if (p_id == STOR_PART_ENTIRE) {
-        LOG("Unsupported partition: entire/invalid\n");
+        ELOG("Unsupported partition: entire/invalid\n");
         return -3;
     }
     if (p_m == MOUNT_MASTER_EMMC && (p_id == STOR_PART_IDSTOR || (p_id == STOR_PART_SLOADER && p_act == STOR_PART_ACTIVE_YES))) {
-        screset();
-        scrclog(RED, "WARNING: ");
-        scrlog("Formatting this partition WILL brick the device!\n");
-        scrlog("Are you sure that you want to continue?\n");
-        scrclog(GREEN, "Press CIRCLE to continue, CROSS to cancel.\n");
+        lpreset();
+        lpclog(RED, "WARNING: ");
+        lplog("Formatting this partition WILL brick the device!\n");
+        lplog("Are you sure that you want to continue?\n");
+        lpclog(GREEN, "Press CIRCLE to continue, CROSS to cancel.\n");
         if (!BMX_CTRL_BUTTON_HELD(bmx_ctrl_wait(CTRL_CIRCLE | CTRL_CROSS, 4000, 1), CTRL_CIRCLE)) {
-            LOG("User cancelled flashing process\n");
+            WLOG("User cancelled flashing process\n");
             return -3;
         }
     }
-    LOG("Stopping other mounts because i dont trust fatfs\n");
-    LOG("Stopping all FF mounts...\n");
+    DLOG("Stopping other mounts because i dont trust fatfs\n");
+    ILOG("Stopping all FF mounts...\n");
     f_unmount("mnt0:");
     f_unmount("mnt1:");
-    LOG("Stopping all STOR mounts...\n");
+    f_unmount("mnt2:");
+    f_unmount("os0:");
+    ILOG("Stopping all STOR mounts...\n");
     for (int i = 0; i < STOR_MAX_MOUNTS; i++) {
         if (stor_ff_init_mount(i) < 0)
             continue;  // skip uninitialized mounts
         stor_umount(i);
     }
-    LOG("Mounting partition %s (%d) on master %s (%d) to temp\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
+    DLOG("Mounting partition %s (%d) on master %s (%d) to temp\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
     int ret = stor_init_mount(2, p_m, p_id, p_act);
     if (ret < 0) {
-        LOG("Failed to initialize mount for partition %s (%d) on master %s (%d): 0x%08X\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
+        ELOG("Failed to initialize mount for partition %s (%d) on master %s (%d): 0x%08X\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
         return -1;
     }
 
 	void *work = my_malloc(SECTOR_SIZE * SECTOR_SIZE);
 	if (!work) {
-		LOG("Failed to allocate memory for work buffer\n");
+		ELOG("Failed to allocate memory for work buffer\n");
         stor_umount(2);
         return -5;
 	}
@@ -769,15 +849,15 @@ int fmgr_format(uint32_t part_info, int type) {
 	my_free(work);
     stor_umount(2);
     if (res != FR_OK) {
-        LOG("Failed to format partition %s (%d) on master %s (%d): %d\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, res);
+        ELOG("Failed to format partition %s (%d) on master %s (%d): %d\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, res);
         return -4;
     } else
-		LOG("Successfully formatted partition %s (%d) on master %s (%d)\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
+		ILOG("Successfully formatted partition %s (%d) on master %s (%d)\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
 
     return 0;
 }
 
-uint32_t fmgr_get_nskbl_os0(void) {
+uint32_t fmgr_get_nskbl_os0(bool mount) {
 	uint32_t *part_ctx = (uint32_t *)NSKBL_PARTITION_OS0;
 	if (!part_ctx[4])
 		return -1;
@@ -788,7 +868,24 @@ uint32_t fmgr_get_nskbl_os0(void) {
 		p_m = MOUNT_MASTER_GCSD;
     if (!(part_ctx[0] & 0x10000))
 		p_id = STOR_PART_ENTIRE;
-	return FMGR_MASTER_SCAN_PACK(p_m, p_id, p_act);
+    if (mount) {
+		ILOG("Mounting OS0 partition %s (%d) on master %s (%d)\n", get_partition_name(p_id), p_id, mount_master_names[p_m], p_m);
+		if (stor_get_master_info(p_m, NULL) == MOUNT_MASTER_TYPE_NONE)
+			stor_init_master(p_m);
+        int ret = stor_init_mount(FMGR_OS0_MOUNT, p_m, p_id, p_act);
+        if (ret < 0) {
+			ELOG("Failed to initialize mount for OS0 partition %s (%d) on master %s (%d): 0x%08X\n",
+				get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
+			return -1;
+		}
+		ret = fmgr_mount(true, FMGR_OS0_MOUNT);
+		if (ret < 0) {
+			ELOG("Failed to FF mount OS0 partition %s (%d) on master %s (%d): 0x%08X\n",
+				get_partition_name(p_id), p_id, mount_master_names[p_m], p_m, ret);
+			return -1;
+		}
+	}
+    return FMGR_MASTER_SCAN_PACK(p_m, p_id, p_act);
 }
 
 // -- END BASE FUNCTIONS --
@@ -796,11 +893,12 @@ uint32_t fmgr_get_nskbl_os0(void) {
 
 // -- UI FUNCTIONS --
 static char *fmgr_file_options[FMGR_FILE_OP_COUNT] = {
-	"Copy to the other side",
-	"Move to the other side",
-	"Delete file",
-	"Run ARM payload",
-	"Use for lv0 SPL init",
+    "Copy to the other side",
+    "Move to the other side",
+    "Delete file",
+    "Execute e2xr config",
+    "Run ARM payload",
+    "Use for lv0 SPL init",
 };
 
 static char *fmgr_dir_options[FMGR_DIR_OP_COUNT] = {
@@ -900,7 +998,7 @@ static struct fmgr_prev_xv_ctx_s {
 };
 static int fmgr_draw_context(int new_uview) {
 	if (new_uview < FMGR_PAPERS_LV || new_uview > FMGR_PAPERS_RV) {
-		LOG("Invalid view: %d\n", new_uview);
+		ELOG("Invalid view: %d\n", new_uview);
 		return -1;
 	}
     struct fmgr_xv_ctx_s *lctx = &fmgr_xv_ctx[FMGR_PAPERS_LV];
@@ -960,7 +1058,7 @@ static int fmgr_draw_context(int new_uview) {
 
 static int fmgr_print_loc(struct fmgr_xv_ctx_s *ctx) {
 	if (!ctx || !ctx->active || !ctx->paper) {
-		LOG("Invalid context\n");
+		ELOG("Invalid context\n");
 		return -1;
 	}
 	char *entries = ctx->loc.entries[0];
@@ -995,12 +1093,12 @@ static int fmgr_print_loc(struct fmgr_xv_ctx_s *ctx) {
 			my_snprintf(cwp, sizeof(cwp), "Options");
 			break;
 		default:
-			LOG("Invalid location ID: %d\n", ctx->loc.id);
+			ELOG("Invalid location ID: %d\n", ctx->loc.id);
 			return -1;
     }
 
     if (ctx->loc.entry_count < 0) {
-        LOG("Failed to list location\n", cwp);
+        ELOG("Failed to list location\n", cwp);
         return -1;
     }
 
@@ -1018,7 +1116,7 @@ static int fmgr_print_loc(struct fmgr_xv_ctx_s *ctx) {
 
 static int fmgr_init_xv(int side) {
 	if (side < 0 || side > FMGR_PAPERS_RV) {
-		LOG("Invalid side index: %d\n", side);
+		ELOG("Invalid side index: %d\n", side);
 		return -1;
 	}
 	struct fmgr_xv_ctx_s *ctx = &fmgr_xv_ctx[side];
@@ -1042,7 +1140,7 @@ static int fmgr_init_xv(int side) {
 
 static enum FMGR_ENTRY_TYPES fmgr_guess_entype(struct fmgr_xv_ctx_s *ctx) {
 	if (!ctx || !ctx->active || !ctx->paper) {
-		LOG("Invalid context for guessing entry type\n");
+		ELOG("Invalid context for guessing entry type\n");
 		return FMGR_ENTRY_TYPE_FILE;  // default to file
 	}
     enum FMGR_ENTRY_TYPES s_type = HAS_ENDSLASH(ctx->loc.entries[ctx->loc.selection]);
@@ -1056,7 +1154,7 @@ static enum FMGR_ENTRY_TYPES fmgr_guess_entype(struct fmgr_xv_ctx_s *ctx) {
     } else if (ctx->loc.id == FMGR_XV_LOC_ROOT)
         s_type = FMGR_ENTRY_TYPE_MOUNT_ACTIVE;
 	
-	LOG("Guessed entry type: %d for selection %d in location %d\n", s_type, ctx->loc.selection, ctx->loc.id);
+	DLOG("Guessed entry type: %d for selection %d in location %d\n", s_type, ctx->loc.selection, ctx->loc.id);
 	return s_type;
 }
 
@@ -1064,7 +1162,7 @@ static void fmgr_handle_circle(void) {
     struct fmgr_prev_xv_ctx_s *pctx = &fmgr_prev_xv_ctx;
     struct fmgr_xv_ctx_s *cctx = &fmgr_xv_ctx[pctx->uview];
     if (!cctx || !cctx->active || !cctx->paper) {
-        LOG("Invalid context for circle handling\n");
+        ELOG("Invalid context for circle handling\n");
         return;
     }
     if (cctx->loc.id == FMGR_XV_LOC_ROOT)
@@ -1088,16 +1186,16 @@ static void fmgr_handle_circle(void) {
     cut++;
     *cut = '\0';
 
-    LOG("Going up to directory: %s\n", cctx->loc.cwd);
+    DLOG("Going up to directory: %s\n", cctx->loc.cwd);
     cctx->loc.entry_start = 0;  // reset entry start
     cctx->loc.selection = 0;    // reset selection
     if (strlen(cctx->loc.cwd) == 6 && cctx->loc.cwd[4] == ':') {
         cctx->loc.id = FMGR_XV_LOC_MOUNT;
-        LOG("Reached top of mount %s\n", cctx->loc.cwd);
+        DLOG("Reached top of mount %s\n", cctx->loc.cwd);
     } else
         cctx->loc.id = FMGR_XV_LOC_DIR;
     if (fmgr_print_loc(cctx) < 0)
-        LOG("Failed to print directory %s\n", cctx->loc.cwd);
+        ELOG("Failed to print directory %s\n", cctx->loc.cwd);
     fmgr_draw_context(pctx->uview);
 
     return;
@@ -1107,7 +1205,7 @@ static void fmgr_handle_cross(void) {
     struct fmgr_prev_xv_ctx_s *pctx = &fmgr_prev_xv_ctx;
     struct fmgr_xv_ctx_s *cctx = &fmgr_xv_ctx[pctx->uview];
 	if (!cctx || !cctx->active || !cctx->paper) {
-		LOG("Invalid context for cross handling\n");
+		ELOG("Invalid context for cross handling\n");
 		return;
 	}
 
@@ -1116,23 +1214,23 @@ static void fmgr_handle_cross(void) {
     switch (s_type) {
         case FMGR_ENTRY_TYPE_FILE: {
             if (fmgr_list_dir(cctx->loc.cwd, tmp_path, FMGR_MAX_PATH_LEN, cctx->loc.selection + cctx->loc.entry_start, 1) < 0) {
-                LOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
+                ELOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
                 return;
             }
 			if (HAS_ENDSLASH(tmp_path))
 				goto actually_dir;  // it's a directory, name probably truncated
-            LOG("Crossed a file: %s\n", tmp_path);
+            DLOG("Crossed a file: %s\n", tmp_path);
 			if (strlen(cctx->loc.cwd) + strlen(tmp_path) >= FMGR_MAX_PATH_LEN) {
-				LOG("ERROR: Path too long, cannot handle file %s\n", tmp_path);
+				ELOG("ERROR: Path too long, cannot handle file %s\n", tmp_path);
 				return;
 			}
             memcpy(&cctx->loc.cwd[strlen(cctx->loc.cwd)], tmp_path, FMGR_MAX_PATH_LEN - strlen(cctx->loc.cwd));
-			LOG("Loading options for file %s\n", cctx->loc.cwd);
+			DLOG("Loading options for file %s\n", cctx->loc.cwd);
 			cctx->loc.id = FMGR_XV_LOC_OPTS;
             cctx->pp.off = cctx->loc.entry_start;
             cctx->loc.entry_start = 0;
 			if (fmgr_print_loc(cctx) < 0) {
-				LOG("Failed to print options for file %s (??)\n", cctx->loc.cwd);
+				ELOG("Failed to print options for file %s (?)\n", cctx->loc.cwd);
 				return;
 			}
             cctx->pp.sel = cctx->loc.selection;
@@ -1145,12 +1243,12 @@ static void fmgr_handle_cross(void) {
 			// Change the current directory to the selected one
 			{
 				if (fmgr_list_dir(cctx->loc.cwd, tmp_path, FMGR_MAX_PATH_LEN, cctx->loc.selection + cctx->loc.entry_start, 1) < 0) {
-					LOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
+					ELOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
 					return;
 				}
 actually_dir:
 				if (strlen(cctx->loc.cwd) + strlen(tmp_path) >= FMGR_MAX_PATH_LEN) {
-					LOG("ERROR: Path too long, cannot change directory to %s\n", tmp_path);
+					ELOG("ERROR: Path too long, cannot change directory to %s\n", tmp_path);
 					cctx->loc.entry_start = 0;  // reset entry start
 					fmgr_print_loc(cctx);
 					return;
@@ -1158,10 +1256,10 @@ actually_dir:
                 memcpy(&cctx->loc.cwd[strlen(cctx->loc.cwd)], tmp_path, FMGR_MAX_PATH_LEN - strlen(cctx->loc.cwd));
 				cctx->pp.off = cctx->loc.entry_start;
                 cctx->loc.entry_start = 0;  // reset entry start
-				LOG("Changing directory to %s\n", cctx->loc.cwd);
+				DLOG("Changing directory to %s\n", cctx->loc.cwd);
 				cctx->loc.id = FMGR_XV_LOC_DIR;
 				if (fmgr_print_loc(cctx) < 0) {
-					LOG("Failed to print directory %s\n", cctx->loc.cwd);
+					ELOG("Failed to print directory %s\n", cctx->loc.cwd);
 					return;
 				}
                 cctx->pp.sel = cctx->loc.selection;
@@ -1176,25 +1274,25 @@ actually_dir:
                 uint32_t scan_results = 0;
                 int ret = fmgr_scan_masters(NULL, 0, &scan_results, cctx->loc.selection, 1);
                 if (ret != 1) {
-                    LOG("Could not get partition info for selection %d: %d [%X]\n", cctx->loc.selection, ret, scan_results);
+                    ELOG("Could not get partition info for selection %d: %d [%X]\n", cctx->loc.selection, ret, scan_results);
                     return;
                 }
                 ret = stor_init_mount(cctx->mount_idx, FMGR_MASTER_SCAN_UNPACK(MASTER, scan_results), FMGR_MASTER_SCAN_UNPACK(PARTITION, scan_results),
                                       FMGR_MASTER_SCAN_UNPACK(ACTIVE, scan_results));
                 if (ret < 0) {
-                    LOG("Failed to init mount %d (%d, %d, %d): %d\n", cctx->mount_idx, FMGR_MASTER_SCAN_UNPACK(MASTER, scan_results),
+                    ELOG("Failed to init mount %d (%d, %d, %d): %d\n", cctx->mount_idx, FMGR_MASTER_SCAN_UNPACK(MASTER, scan_results),
                         FMGR_MASTER_SCAN_UNPACK(PARTITION, scan_results), FMGR_MASTER_SCAN_UNPACK(ACTIVE, scan_results), ret);
                     return;
                 }
                 cctx->loc.cwd[4] = '\0';  // reset cwd to 'mntX'
                 FRESULT res = f_mount(&fmgr_mountp[cctx->mount_idx], fmgr_mount_names[cctx->mount_idx], 1);
                 if (res != FR_OK) {
-                    LOG("Failed to f_mount %s: %d\n", fmgr_mount_names[cctx->mount_idx], res);
+                    ELOG("Failed to f_mount %s: %d\n", fmgr_mount_names[cctx->mount_idx], res);
 					stor_umount(cctx->mount_idx);  // unmount the partition
                     return;
                 }
                 cctx->loc.selection = cctx->mount_idx;  // reset selection
-                LOG("Mounted partition %s to mnt%d successfully.\n", fmgr_mount_names[cctx->mount_idx], cctx->mount_idx);
+                ILOG("Mounted partition %s to mnt%d successfully.\n", fmgr_mount_names[cctx->mount_idx], cctx->mount_idx);
 				s_type = FMGR_ENTRY_TYPE_MOUNT_ACTIVE;  // change type to mount active
             } // fall through to mount active/inactive handling
         case FMGR_ENTRY_TYPE_MOUNT_ACTIVE:
@@ -1206,13 +1304,13 @@ actually_dir:
 				my_snprintf(cctx->loc.cwd, sizeof(cctx->loc.cwd), "mnt%d:/", cctx->mount_idx);
 				cctx->pp.off = cctx->loc.entry_start;
 				cctx->loc.entry_start = 0;
-				LOG("Entering mount %d: %s\n", cctx->mount_idx, cctx->loc.cwd);
+				DLOG("Entering mount %d: %s\n", cctx->mount_idx, cctx->loc.cwd);
 				if (s_type == FMGR_ENTRY_TYPE_MOUNT_ACTIVE)
 					cctx->loc.id = FMGR_XV_LOC_MOUNT;  // mount active
 				else
 					cctx->loc.id = FMGR_XV_LOC_PARTITIONS;  // mount inactive, show partitions
 				if (fmgr_print_loc(cctx) < 0) {
-					LOG("Failed to print mount directory %s\n", cctx->loc.cwd);
+					ELOG("Failed to print mount directory %s\n", cctx->loc.cwd);
 					return;
 				}
 				cctx->pp.sel = cctx->loc.selection;
@@ -1223,7 +1321,7 @@ actually_dir:
 			break;
 		case FMGR_ENTRY_TYPE_OPTION:
 			{
-				LOG("Selected option: %s for %s\n", fmgr_options_per_type[cctx->pp.type][cctx->loc.selection], cctx->loc.cwd);
+				DLOG("Selected option: %s for %s\n", fmgr_options_per_type[cctx->pp.type][cctx->loc.selection], cctx->loc.cwd);
 				view_switch(VIEW_DEFAULT);  // switch to log view
 				switch (cctx->pp.type) {
 					case FMGR_ENTRY_TYPE_FILE:
@@ -1241,12 +1339,15 @@ actually_dir:
 								case FMGR_FILE_OP_DELETE:
 									fmgr_delete(cctx->loc.cwd);
 									break;
+								case FMGR_FILE_OP_TXTCFG:
+									cmdh_lxp(cctx->loc.cwd);
+									break;
                                 case FMGR_FILE_OP_EXECUTE:
 									fmgr_load_exec(cctx->loc.cwd, FMGR_EXEC_TYPE_ARM);
 									break;
 								case FMGR_FILE_OP_LV0_XI:
 									if (!lv0_initialized) {
-										LOG("Initializing lv0 with file %s\n", cctx->loc.cwd);
+										ILOG("Initializing lv0 with file %s\n", cctx->loc.cwd);
 										lv0_init(cctx->loc.cwd);
 										if (lv0_initialized)
                                             fmgr_file_options[FMGR_FILE_OP_LV0_XI] = "Run f00d payload";
@@ -1254,7 +1355,7 @@ actually_dir:
                                         fmgr_load_exec(cctx->loc.cwd, FMGR_EXEC_TYPE_LV0);
                                     break;
 								default:
-									LOG("Unknown file option selected: %d\n", cctx->loc.selection);
+									ELOG("Unknown file option selected: %d\n", cctx->loc.selection);
 									break;
 							}
 						}
@@ -1281,7 +1382,7 @@ actually_dir:
                                     fmgr_emmcdump(cctx->loc.cwd);
 									break;
 								default:
-									LOG("Unknown directory option selected: %d\n", cctx->loc.selection);
+									ELOG("Unknown directory option selected: %d\n", cctx->loc.selection);
 									break;
 							}
 						}
@@ -1290,40 +1391,40 @@ actually_dir:
 						{
                             struct mount_ctx *pmctx = stor_get_validate_mctx(cctx->pp.sel);
 							if (!pmctx) {
-								LOG("Invalid mount context for selection %d\n", cctx->pp.sel);
+								ELOG("Invalid mount context for selection %d\n", cctx->pp.sel);
 								break;
 							}
 							uint32_t partition_i = FMGR_MASTER_SCAN_PACK(pmctx->mount_master, pmctx->params->code, pmctx->params->active);
-							LOG("Selected mount %d (%s) with partition info %X\n", cctx->pp.sel, fmgr_mount_names[cctx->pp.sel], partition_i);
+							DLOG("Selected mount %d (%s) with partition info %X\n", cctx->pp.sel, fmgr_mount_names[cctx->pp.sel], partition_i);
 							switch (cctx->loc.selection) {
 								case FMGR_AMOUNT_OP_REFRESH:
 									break;
                                 case FMGR_AMOUNT_OP_REMOUNT:
                                 case FMGR_AMOUNT_OP_UMOUNT:
-									LOG("Stopping FF mount %d (%s)\n", cctx->pp.sel, fmgr_mount_names[cctx->pp.sel]);
+									ILOG("Stopping FF mount %d (%s)\n", cctx->pp.sel, fmgr_mount_names[cctx->pp.sel]);
                                     f_unmount(fmgr_mount_names[cctx->pp.sel]);
-                                    LOG("Stopping STOR mount %d (%s)\n", cctx->pp.sel, fmgr_mount_names[cctx->pp.sel]);
+                                    ILOG("Stopping STOR mount %d (%s)\n", cctx->pp.sel, fmgr_mount_names[cctx->pp.sel]);
 									if (stor_umount(cctx->pp.sel) < 0) {
-										LOG("Failed to unmount partition %s\n", fmgr_mount_names[cctx->pp.sel]);
+										ELOG("Failed to unmount partition %s\n", fmgr_mount_names[cctx->pp.sel]);
 										break;
 									}
                                     if (cctx->loc.selection == FMGR_AMOUNT_OP_UMOUNT)
                                         break;
-									LOG("Remounting partition %s: STOR\n", fmgr_mount_names[cctx->pp.sel]);
+									ILOG("Remounting partition %s: STOR\n", fmgr_mount_names[cctx->pp.sel]);
 									if (stor_init_mount(cctx->pp.sel, FMGR_MASTER_SCAN_UNPACK(MASTER, partition_i),
 														FMGR_MASTER_SCAN_UNPACK(PARTITION, partition_i),
 														FMGR_MASTER_SCAN_UNPACK(ACTIVE, partition_i)) < 0) {
-										LOG("Failed to remount partition %s\n", fmgr_mount_names[cctx->pp.sel]);
+										ELOG("Failed to remount partition %s\n", fmgr_mount_names[cctx->pp.sel]);
 										break;
 									}
-									LOG("Remounting partition %s: FF\n", fmgr_mount_names[cctx->pp.sel]);
+									ILOG("Remounting partition %s: FF\n", fmgr_mount_names[cctx->pp.sel]);
 									if (f_mount(&fmgr_mountp[cctx->pp.sel], fmgr_mount_names[cctx->pp.sel], 1) != FR_OK) {
-										LOG("Failed to remount partition %s\n", fmgr_mount_names[cctx->pp.sel]);
+										ELOG("Failed to remount partition %s\n", fmgr_mount_names[cctx->pp.sel]);
 										break;
 									}
 									break;
 								default:
-									LOG("Unknown Amount option selected: %d\n", cctx->loc.selection);
+									ELOG("Unknown Amount option selected: %d\n", cctx->loc.selection);
 									break;
 							}
 						}
@@ -1335,7 +1436,7 @@ actually_dir:
 							struct fmgr_xv_ctx_s *octx = &fmgr_xv_ctx[!pctx->uview];
 							uint32_t partition_info = 0;
 							if (fmgr_scan_masters(NULL, 0, &partition_info, cctx->pp.off + cctx->pp.sel, 1) != 1) {
-                                LOG("Failed to get partition info for selection %d\n", cctx->pp.off + cctx->pp.sel);
+                                ELOG("Failed to get partition info for selection %d\n", cctx->pp.off + cctx->pp.sel);
                                 break;
 							}
 							switch(cctx->loc.selection) {
@@ -1359,12 +1460,12 @@ actually_dir:
 									fmgr_print_loc(octx);
 									break;
 								default:
-									LOG("Unknown partition option selected: %d\n", cctx->loc.selection);
+									ELOG("Unknown partition option selected: %d\n", cctx->loc.selection);
 							}
 						}
 						break;
 					default:
-						LOG("Unknown entry type for options: %d\n", cctx->pp.type);
+						ELOG("Unknown entry type for options: %d\n", cctx->pp.type);
 						break;
 				}
 				view_switch(VIEW_FMGR);
@@ -1373,7 +1474,7 @@ actually_dir:
 			break;
 	}
 
-	LOG("Unhandled entry type: %d\n", s_type);
+	ELOG("Unhandled entry type: %d\n", s_type);
 }
 
 static struct fmgr_chandler_s {
@@ -1388,7 +1489,7 @@ void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*han
 	if (set) {
         fmgr_chandler.exp_entypes = exp_entypes;
 		fmgr_chandler.fmgr_custom_handler = handler;
-		LOG("Square handler set for entry of types %d: %p\n", exp_entypes, handler);
+		DLOG("Square handler set for entry of types %d: %p\n", exp_entypes, handler);
 	}
 	return (void *)fmgr_chandler.fmgr_custom_handler;  // return current handler
 }
@@ -1397,24 +1498,24 @@ static void fmgr_handle_square(enum VIEW_ASSIGNS *next_uview) {
     struct fmgr_prev_xv_ctx_s *pctx = &fmgr_prev_xv_ctx;
     struct fmgr_xv_ctx_s *cctx = &fmgr_xv_ctx[pctx->uview];
     if (!cctx || !cctx->active || !cctx->paper) {
-        LOG("Invalid context for triangle handling\n");
+        ELOG("Invalid context for triangle handling\n");
         return;
     }
 	if (!fmgr_chandler.fmgr_custom_handler) {
-		LOG("No custom handler set for square\n");
+		ELOG("No custom handler set for square\n");
 		return;
 	}
     enum FMGR_ENTRY_TYPES s_type = fmgr_guess_entype(cctx);
     if (!(fmgr_chandler.exp_entypes & BITN(s_type))) {
-        LOG("Expected entry types %d, but got %d\n", fmgr_chandler.exp_entypes, s_type);
+        ELOG("Expected entry types %d, but got %d\n", fmgr_chandler.exp_entypes, s_type);
         return;
     }
     char tmp_path[FMGR_MAX_PATH_LEN];
     if (fmgr_list_dir(cctx->loc.cwd, tmp_path, FMGR_MAX_PATH_LEN, cctx->loc.selection + cctx->loc.entry_start, 1) < 0) {
-        LOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
+        ELOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
         return;
     }
-    LOG("Passing selected path to square handler: %s%s\n", cctx->loc.cwd, tmp_path);
+    DLOG("Passing selected path to square handler: %s%s\n", cctx->loc.cwd, tmp_path);
     fmgr_chandler.fmgr_custom_handler(s_type, cctx->loc.cwd, tmp_path, next_uview);
     return;  // custom handler took care of it
 }
@@ -1423,13 +1524,13 @@ static void fmgr_handle_triangle(void) {
     struct fmgr_prev_xv_ctx_s *pctx = &fmgr_prev_xv_ctx;
     struct fmgr_xv_ctx_s *cctx = &fmgr_xv_ctx[pctx->uview];
     if (!cctx || !cctx->active || !cctx->paper) {
-        LOG("Invalid context for triangle handling\n");
+        ELOG("Invalid context for triangle handling\n");
         return;
     }
     enum FMGR_ENTRY_TYPES s_type = fmgr_guess_entype(cctx);
     cctx->pp.type = s_type;
     if (!fmgr_options_per_type[s_type]) {
-		LOG("No options available for entry type %d\n", s_type);
+		WLOG("No options available for entry type %d\n", s_type);
 		return;
 	}
     char tmp_path[FMGR_MAX_PATH_LEN];
@@ -1437,11 +1538,11 @@ static void fmgr_handle_triangle(void) {
 		case FMGR_ENTRY_TYPE_FILE:
 		case FMGR_ENTRY_TYPE_DIR:
     		if (fmgr_list_dir(cctx->loc.cwd, tmp_path, FMGR_MAX_PATH_LEN, cctx->loc.selection + cctx->loc.entry_start, 1) < 0) {
-				LOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
+				ELOG("ERROR: Failed to single-list directory %s\n", cctx->loc.cwd);
 				return;
 			}
     		if (strlen(cctx->loc.cwd) + strlen(tmp_path) >= FMGR_MAX_PATH_LEN) {
-        		LOG("ERROR: Path too long, cannot handle %s\n", tmp_path);
+        		ELOG("ERROR: Path too long, cannot handle %s\n", tmp_path);
         		return;
     		}
 			memcpy(&cctx->loc.cwd[strlen(cctx->loc.cwd)], tmp_path, FMGR_MAX_PATH_LEN - strlen(cctx->loc.cwd));
@@ -1449,28 +1550,28 @@ static void fmgr_handle_triangle(void) {
 		case FMGR_ENTRY_TYPE_MOUNT_ACTIVE:
 		case FMGR_ENTRY_TYPE_MOUNT_INACTIVE:
 			if (cctx->loc.selection >= STOR_MAX_MOUNTS) {
-				LOG("Invalid mount selection: %d\n", cctx->loc.selection);
+				ELOG("Invalid mount selection: %d\n", cctx->loc.selection);
 				return;
 			}
 			memcpy(cctx->loc.cwd, fmgr_mount_names[cctx->loc.selection], strlen(fmgr_mount_names[cctx->loc.selection]) + 1);
 			break;
 		case FMGR_ENTRY_TYPE_PARTITION:
 			if (fmgr_scan_masters(cctx->loc.cwd, FMGR_MAX_PATH_LEN, NULL, cctx->loc.selection, 1) != 1) {
-				LOG("Failed to get partition info for selection %d\n", cctx->loc.selection);
+				ELOG("Failed to get partition info for selection %d\n", cctx->loc.selection);
 				return;
 			}
 			break;
 		default:
-			LOG("Unhandled entry type for triangle: %d\n", s_type);
+			ELOG("Unhandled entry type for triangle: %d\n", s_type);
 			return;
 	}
-    LOG("Loading options for %s\n", cctx->loc.cwd);
+    DLOG("Loading options for %s\n", cctx->loc.cwd);
     cctx->loc.id = FMGR_XV_LOC_OPTS;
 	cctx->pp.sel = cctx->loc.selection;  // save previous mount index
 	cctx->pp.off = cctx->loc.entry_start;  // save previous entry start
     cctx->loc.entry_start = 0;
     if (fmgr_print_loc(cctx) < 0) {
-        LOG("Failed to print options for %s (??)\n", cctx->loc.cwd);
+        ELOG("Failed to print options for %s (?)\n", cctx->loc.cwd);
         return;
     }
     cctx->loc.selection = 0;
@@ -1483,29 +1584,29 @@ static void fmgr_handle_select(void) {
     struct fmgr_xv_ctx_s *rctx = &fmgr_xv_ctx[FMGR_PAPERS_RV];
 	if (!(lctx->mount_idx >= STOR_MAX_MOUNTS) || !(rctx->mount_idx >= STOR_MAX_MOUNTS))
 		return; // can only reinitialize if both views are in root view
-	LOG("Switching user view to log\n");
+	DLOG("Switching user view to log\n");
     view_switch(VIEW_DEFAULT);
-	LOG("Stopping all FF mounts...\n");
+	ILOG("Stopping all FF mounts...\n");
     f_unmount(fmgr_mount_names[0]);
     f_unmount(fmgr_mount_names[1]);
 
-	LOG("Stopping all STOR mounts...\n");
+	ILOG("Stopping all STOR mounts...\n");
 	for (int i = 0; i < STOR_MAX_MOUNTS; i++) {
 		if (stor_ff_init_mount(i) < 0)
 			continue;  // skip uninitialized mounts
 		stor_umount(i);
 	}
 
-	LOG("Initializing physical storage devices...\n");
+	ILOG("Initializing physical storage devices...\n");
 	stor_init_master(MOUNT_MASTER_EMMC);
 	stor_init_master(MOUNT_MASTER_GCSD);
 
-	LOG("Redrawing contexts...\n");
+	ILOG("Redrawing contexts...\n");
     fmgr_init_xv(FMGR_PAPERS_LV);
     fmgr_init_xv(FMGR_PAPERS_RV);
     fmgr_draw_context(FMGR_PAPERS_LV);
 
-    LOG("All done, switching back to file manager view...\n");
+    DLOG("All done, switching back to file manager view...\n");
 	view_switch(VIEW_FMGR);
 }
 
@@ -1514,7 +1615,7 @@ static void fmgr_handle_nav(int button) {
     struct fmgr_prev_xv_ctx_s *pctx = &fmgr_prev_xv_ctx;
 	struct fmgr_xv_ctx_s *cctx = &fmgr_xv_ctx[pctx->uview];
 	if (!cctx || !cctx->active || !cctx->paper) {
-		LOG("Invalid context for navigation\n");
+		ELOG("Invalid context for navigation\n");
 		return;
 	}
 	switch (button) {
@@ -1560,15 +1661,15 @@ int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview) {
         // Wait for user input
         buttons = bmx_ctrl_wait(CTRL_R | CTRL_L | CTRL_PSBUTTON | FMGR_ACTION_BUTTONS | FMGR_NAV_BUTTONS, 4000, 1);
         if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_R)) {
-            LOG("Switching to log view...\n");
+            ILOG("Switching to log view...\n");
             *next_uview = VIEW_DEFAULT;
             return 0;
         } else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_L)) {
-            LOG("Switching to menu view...\n");
+            ILOG("Switching to menu view...\n");
             *next_uview = VIEW_MENU;
             return 0;
 		} else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_PSBUTTON)) {
-            LOG("PS button pressed - temp display state toggle\n");
+            DLOG("PS button pressed - temp display state toggle\n");
             bmx_displaymgr(DISPLAYMGR_NSTATE_TOGGLE, DISPLAYMGR_OPT_DISP_ONLY);
         } else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_DOWN))  // "wish there was a better way to do this" :P
             fmgr_handle_nav(CTRL_DOWN);
@@ -1598,7 +1699,7 @@ int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview) {
 static int fmgr_is_initialized = 0;
 int fmgr_init(void) {
     if (fmgr_is_initialized) {
-        LOG("File manager already initialized!\n");
+        WLOG("File manager already initialized!\n");
 		return 0;
     }
     for (int i = 0; i < FMGR_PAPERS_END; i++) {

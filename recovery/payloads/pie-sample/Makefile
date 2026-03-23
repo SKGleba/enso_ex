@@ -1,5 +1,6 @@
+INCE2XR := "../../blob/include" "../../blob/FatFs" "../../blob/lv0p"
 CC=arm-vita-eabi-gcc
-CFLAGS=-mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access -fpie -fPIC \
+CFLAGS=$(foreach dir,$(INCE2XR),-I$(dir)) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access -fpie -fPIC \
 	  -O1 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable
 OBJCOPY=arm-vita-eabi-objcopy
 LDFLAGS=-nostartfiles -nodefaultlibs -nostdlib

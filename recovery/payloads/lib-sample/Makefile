@@ -1,5 +1,5 @@
 LIBE2XR := "../../output/libe2xr.a"
-INCE2XR := "../../blob/include" "../../blob/FatFs"
+INCE2XR := "../../blob/include" "../../blob/FatFs" "../../blob/lv0p"
 CC := arm-vita-eabi-gcc
 CFLAGS := $(foreach dir,$(INCE2XR),-I$(dir)) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access \
 	  -O1 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable

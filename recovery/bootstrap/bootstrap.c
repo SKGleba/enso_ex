@@ -19,7 +19,7 @@ __attribute__((section(".text._s2cfg"))) const struct stage2_options _s2cfg = {
     .vanilla_boot = 0,
     .protect_bootarea = 0,
     .gcsd_mode = 0,
-    .reserved = 0
+    .bootpatch = 0
 };
 
 __attribute__((section(".text.start"))) int start(int *sctx, uint32_t get_info_va) {

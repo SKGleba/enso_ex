@@ -14,7 +14,7 @@ AS	= $(PREFIX)-as
 AR	= $(PREFIX)-ar
 OBJCOPY	= $(PREFIX)-objcopy
 CFLAGS	= $(foreach dir,$(INCDIRS),-I$(dir)) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access \
-	  -O3 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable
+	  -O3 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable -Wno-multichar -fdiagnostics-color=always
 LDFLAGS	= -nostartfiles -nostdlib -lgcc -lm -lbaremetal
 
 all: $(TARGET_BLOB).e2xp $(TARGET_BOOTMGR).e2xp $(TARGET_LIB).a

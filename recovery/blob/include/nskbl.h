@@ -76,6 +76,11 @@ static int (*nskbl_get_paddr_single)(void *va, void *pa) = (void *)0x5100632d;
 static int (*nskbl_get_paddr_list)(void *vrange, void *palist) = (void *)0x51006345;
 static int (*nskbl_smc_custom)() = (void *)0x51016a10;
 
+static int (*nskbl_iof_open)(char *fname, int flags, int mode) = (void *)0x510017D5;
+static int (*nskbl_iof_lseek)(int fd, int fd_hi, uint32_t off, uint32_t off_hi, int mode) = (void *)0x510018a9;
+static int (*nskbl_iof_close)(uint32_t fdlike) = (void *)0x51001901;
+static int (*nskbl_iof_read)(uint32_t fdlike, void *buf, uint32_t sizelike) = (void *)0x510209ed;
+
 #define NSKBL_EXPORTS_ADDR 0x5102778c
 #define NSKBL_EXPORTS(num) (NSKBL_EXPORTS_ADDR + (num * 4))
 enum NSKBL_EXPORTS_FS {

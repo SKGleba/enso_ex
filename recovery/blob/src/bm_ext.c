@@ -46,9 +46,9 @@ static void bmx_display_deinit(int free) { // required for OS to be able to rese
     }
     if (free && bmx_fb_uid >= 0) {
         if (sceKernelFreeMemBlock(bmx_fb_uid) < 0)
-            LOG("Failed to free framebuffer memblock\n");
+            ELOG("Failed to free framebuffer memblock\n");
         else
-            LOG("Framebuffer memblock freed\n");
+            DLOG("Framebuffer memblock freed\n");
         bmx_fb_uid = -1;
     }
 }
@@ -60,19 +60,19 @@ static int bmx_display_init(enum display_type type, int view_count) {
         SceKernelAllocMemBlockKernelOpt opt = {.size = 0x58, .attr = 2, .paddr = 0x20000000};
         bmx_fb_uid = sceKernelAllocMemBlock("e2x_recovr_vram", 0x60208006, (ds_config->pitch * ds_config->height * 4) * (1 + view_count), &opt);
         if (bmx_fb_uid < 0) {
-            LOG("Failed to alloc framebuffer memblock: 0x%08X\n", bmx_fb_uid);
+            ELOG("Failed to alloc framebuffer memblock: 0x%08X\n", bmx_fb_uid);
             return -1;
         }
 
         void *fb_base = NULL;
         if (sceKernelGetMemBlockBase(bmx_fb_uid, &fb_base) < 0) {
-            LOG("Failed to get framebuffer memblock base\n");
+            ELOG("Failed to get framebuffer memblock base\n");
             sceKernelFreeMemBlock(bmx_fb_uid);
             return -1;
         }
 
         ds_config->addr = (uint32_t)fb_base;
-        LOG("Framebuffer allocated at %08X\n", (uint32_t)fb_base);
+        DLOG("Framebuffer allocated at %08X\n", (uint32_t)fb_base);
     }
     return 0;
 }
@@ -81,7 +81,7 @@ static int bmx_display_state = 0;
 int bmx_displaymgr(enum DISPLAYMGR_NSTATE enable, enum DISPLAYMGR_OPT opt) {
     int ret = 0;
     if (bmx_display_state == enable) {
-        LOG("Display already in the requested state (%d)!\n", enable);
+        DLOG("Display already in the requested state (%d)!\n", enable);
         return 0;
     } else if (enable == DISPLAYMGR_NSTATE_TOGGLE)
         enable = !bmx_display_state;  // toggle the state
@@ -95,7 +95,7 @@ int bmx_displaymgr(enum DISPLAYMGR_NSTATE enable, enum DISPLAYMGR_OPT opt) {
     } else
         bmx_display_deinit(!opt);
     bmx_display_state = enable;
-    LOG("Display init state changed to %d, ret=%d, opt=%d\n", bmx_display_state, ret, opt);
+    ILOG("Display init state changed to %d, ret=%d, opt=%d\n", bmx_display_state, ret, opt);
     return ret;
 }
 
@@ -129,13 +129,13 @@ uint32_t bmx_get_time(int *since_reset) {
     uint64_t sec;
     if (!syscon_reset_tick) {
         if (syscon_scratchpad_read(0x10, &syscon_reset_tick, 8) < 0) {
-            LOG("Failed to read syscon reset tick\n");
+            ELOG("Failed to read syscon reset tick\n");
             return 0;
         }
         syscon_reset_tick *= (uint64_t)(1 << SC_RTC_SHIFT);
         syscon_reset_tick /= 1000000; // convert to seconds
         syscon_reset_tick -= SC_RTC_OFFSET; // adjust to epoch
-        LOG("Got syscon reset tick: %08X%08X\n",
+        DLOG("Got syscon reset tick: %08X%08X\n",
             (uint32_t)(syscon_reset_tick >> 32), (uint32_t)syscon_reset_tick);
     }
     uint8_t syscon_on_hsec_cmd_rx[SYSCON_RX_HEADER_SIZE + sizeof(uint32_t) + 1];

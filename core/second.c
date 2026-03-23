@@ -384,7 +384,8 @@ static void recovery(int type, int dolce) {
                     break;
             }
         }
-    }
+    } else if (error)
+		init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_EMMC_CTX, 1);
 
     gpio_port_clear(0, 7);
 }

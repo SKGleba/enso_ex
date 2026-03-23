@@ -52,14 +52,15 @@ static void menu_change_selection(struct menu_s *menu, int new_selection) {
 }
 
 int deinit(void) {
-    LOG("Deinitializing baremetal payload...\n");
+    ILOG("Deinitializing baremetal payload...\n");
     rmemblock_stop();
     if (g_eex_params.boot_mode != BOOTSTRAP_MODE_LIB) {
-        g_log_targets &= ~LOG_TARGET_LOGPAPER;
+        log_outputs &= ~LOG_TARGET_LOGPAPER;
+        log_outputs &= ~LOG_TARGET_FRONTPAGE;
         bmx_displaymgr(DISPLAYMGR_NSTATE_OFF, DISPLAYMGR_OPT_INCLUDE_FB);  // turn off & free fb
         delay(4000);
     }
-    LOG("Deinitialized baremetal payload!\n");
+    ILOG("Deinitialized baremetal payload!\n");
     return 0;
 }
 
@@ -69,45 +70,45 @@ int init(struct eex_param_s *eex_params) {
         *bss++ = 0;
     rmemblock_start();
     
-    g_log_targets = LOG_TARGET_CONSOLE;
-	LOG("Baremetal payload started!\n");
+    log_outputs = LOG_TARGET_CONSOLE;
+	ILOG("Baremetal payload started!\n");
     if (eex_params) {
         memcpy(&g_eex_params, eex_params, sizeof(struct eex_param_s));
-        LOG("Using eex_params: boot_mode=%d, get_hwcfg_patched=0x%08X\n", g_eex_params.boot_mode, g_eex_params.get_hwcfg_patched);
+        DLOG("Using eex_params: boot_mode=%d, get_hwcfg_patched=0x%08X\n", g_eex_params.boot_mode, g_eex_params.get_hwcfg_patched);
         g_eex_params.get_hwcfg_patched((patchedHwcfgStruct *)&g_eex_ports);  // call the patched get_hwcfg function
     } else
-        LOG("WARNING: eex_params is NULL, using default values!\n");
+        WLOG("WARNING: eex_params is NULL, using default values!\n");
 
     if (!g_eex_ports.kbl_param) {
-        LOG("WARNING: kbl_param was not given, using nskbl\n");
+        WLOG("WARNING: kbl_param was not given, using nskbl\n");
         g_eex_ports.kbl_param = ns_kbl_param;
     }
     sysroot_init((struct sysroot_buffer *)g_eex_ports.kbl_param);
-    LOG("Setting Session ID:\n");
+    DLOG("Setting Session ID:\n");
     memcpy(session_id, g_eex_ports.kbl_param + SESSION_UID_KBLP_OFF, SESSION_UID_KBLP_SIZE);
     hexdump(session_id, SESSION_UID_KBLP_SIZE);
 
-    LOG("initializing cdram & syscon...\n");
+    DLOG("initializing cdram & syscon...\n");
     cdram_enable();
 	syscon_init();
 
     if (g_eex_params.boot_mode != BOOTSTRAP_MODE_LIB) {
-        LOG("initializing display & views...\n");
+        DLOG("initializing display & views...\n");
         if (bmx_displaymgr(DISPLAYMGR_NSTATE_ON, DISPLAYMGR_OPT_INCLUDE_FB) < 0) {
-            LOG("Failed to initialize display!\n");
+            ELOG("Failed to initialize display!\n");
             return -1;
         }
         if (view_init() < 0) {
-            LOG("Failed to initialize views!\n");
+            ELOG("Failed to initialize views!\n");
             return -1;
         }
     } else
-        LOG("Skipping display & views initialization [BOOTSTRAP_MODE_LIB]\n");
+        DLOG("Skipping display & views initialization [BOOTSTRAP_MODE_LIB]\n");
 
     if (eex_params->stage2_config)
         memcpy(&stage2_opts, eex_params->stage2_config, sizeof(struct stage2_options));
 
-    LOG("Init done!\n");
+    ILOG("Init done!\n");
     return 0;
 }
 
@@ -119,15 +120,15 @@ static int log_view_handler(enum VIEW_ASSIGNS *next_uview) {
         // Wait for user input
         buttons = bmx_ctrl_wait(CTRL_R | CTRL_L | CTRL_PSBUTTON, 4000, 1);
         if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_R)) {
-            LOG("Switching to menu view...\n");
+            ILOG("Switching to menu view...\n");
             *next_uview = VIEW_MENU;
             return 0;
         } else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_L)) {
-            LOG("Switching to the file manager view...\n");
+            ILOG("Switching to the file manager view...\n");
             *next_uview = VIEW_FMGR;
             return 0;
         } else if (BMX_CTRL_BUTTON_HELD(buttons, CTRL_PSBUTTON)) {
-            LOG("PS button pressed - temp display state toggle\n");
+            DLOG("PS button pressed - temp display state toggle\n");
             bmx_displaymgr(DISPLAYMGR_NSTATE_TOGGLE, DISPLAYMGR_OPT_DISP_ONLY);
         }
     }
@@ -147,11 +148,11 @@ static int menu_view_handler(enum VIEW_ASSIGNS *next_uview) {
         else if (BMX_CTRL_BUTTON_HELD(current_menu->prs_buttons, CTRL_UP) && (current_menu->selection > 0))
             menu_change_selection(current_menu, current_menu->selection - 1);
         else if (BMX_CTRL_BUTTON_HELD(current_menu->prs_buttons, CTRL_L)) {
-            LOG("Switching to log view...\n");
+            ILOG("Switching to log view...\n");
             *next_uview = VIEW_DEFAULT;
             return 0;
         } else if (BMX_CTRL_BUTTON_HELD(current_menu->prs_buttons, CTRL_R)) {
-            LOG("Switching to the file manager view...\n");
+            ILOG("Switching to the file manager view...\n");
             *next_uview = VIEW_FMGR;
             return 0;
         } else if (~current_menu->prs_buttons & current_menu->exp_buttons) {
@@ -169,11 +170,11 @@ static int menu_view_handler(enum VIEW_ASSIGNS *next_uview) {
                     deinit();
                     break;
                 default:
-                    LOG("ERROR: Unknown menu return value %d\n", ret);
+                    ELOG("ERROR: Unknown menu return value %d\n", ret);
                     break;
             }
         } else if (BMX_CTRL_BUTTON_HELD(current_menu->prs_buttons, CTRL_PSBUTTON)) {
-            LOG("PS button pressed - temp display state toggle\n");
+            DLOG("PS button pressed - temp display state toggle\n");
             bmx_displaymgr(DISPLAYMGR_NSTATE_TOGGLE, DISPLAYMGR_OPT_DISP_ONLY);
         }
     }
@@ -182,7 +183,7 @@ static int menu_view_handler(enum VIEW_ASSIGNS *next_uview) {
 
 int main(int stage) {
     // TITLES
-    LOG("Initializing the default view..\n");
+    ILOG("Initializing the default views..\n");
     if (stage == 2 || stage == 0xB) { // keeps the logs & titles going from stage 2 to 3
         paper_area(&default_paper, DFL_PAPER_START_X, DFL_PAPER_START_Y, DFL_PAPER_END_X, DFL_PAPER_END_Y);
         for (int i = 0; i < VIEW_TEMP; i++) {
@@ -214,14 +215,14 @@ int main(int stage) {
         pen_reset(&default_paper, LOG_PEN_COLR);
         default_paper.blank_mode = LOG_PAPER_BLANK_MODE;
     }
-    g_log_targets |= LOG_TARGET_LOGPAPER;
+    log_outputs |= LOG_TARGET_LOGPAPER;
 
     // FMGR
-    LOG("Initializing the file manager view..\n");
+    DLOG("Initializing the file manager view..\n");
     fmgr_init();  // initialize the file manager
 
     // MENU
-    LOG("Initializing the menu view..\n");
+    DLOG("Initializing the menu view..\n");
     // -- status
     if (stage != 3) { // keep from s2
         paper_clear(&status_paper, MENU_PAPER_COLR);
@@ -231,11 +232,15 @@ int main(int stage) {
     // -- info
     paper_clear(&info_paper, INFO_PAPER_COLR);
     pen_reset(&info_paper, INFO_PEN_COLR);
-    inflog("Welcome to the enso_ex recovery menu!\n");
-    inflog("Use arrow keys to navigate, X to select.\n");
-    inflog("Pressing L/R will switch active views.\n");
-    if (stage == 2)
-        inflog("START will apply changes and continue boot.\n");
+    log_outputs |= LOG_TARGET_FRONTPAGE;
+    ULOG("Welcome to the enso_ex recovery menu!\n");
+    ULOG("Use arrow keys to navigate, X to select.\n");
+    ULOG("Pressing L/R will switch active views.\n");
+    if (stage == 2) {
+        ULOG("START will apply changes and continue boot.\n");
+        if (g_eex_params.boot_mode == BOOTSTRAP_MODE_EMMC)
+            ULOG("SELECT will make the changes persistent.\n");
+    }
     // -- options
     paper_clear(&menu_paper, MENU_PAPER_COLR);
     pen_reset(&menu_paper, MENU_PEN_COLR);
@@ -252,11 +257,11 @@ int main(int stage) {
 			menu_change_selection(current_menu, 0);
 			break;
         default:
-            LOG("ERROR: Unknown stage %d\n", stage);
+            DLOG("ERROR: Unknown stage %d\n", stage);
             break;
     }
 
-    LOG("Menu view initialized, switching to it\n");
+    ILOG("Menu view initialized, switching to it\n");
     enum VIEW_ASSIGNS user_view = VIEW_MENU;
     int ret = 0;
     while (user_view < VIEW_COUNT) {
@@ -273,9 +278,10 @@ int main(int stage) {
         }
     }
 
-    g_log_targets &= ~LOG_TARGET_LOGPAPER;  // disable paper logging 
+    log_outputs &= ~LOG_TARGET_FRONTPAGE;
+    log_outputs &= ~LOG_TARGET_LOGPAPER;
 
-    LOG("Exiting baremetal payload...\n");
+    ILOG("Exiting baremetal payload...\n");
     if (ret >= 0)
         ret = 0;
 

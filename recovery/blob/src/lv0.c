@@ -49,24 +49,24 @@ static const unsigned char framework_nmp[] = {
 
 static int lv0_sm_loaded = 0;
 int lv0_load_sm(const char *path) {
-	LOG("lv0_load_sm(path=%s)\n", path);
+	ILOG("lv0_load_sm(path=%s)\n", path);
 	if (lv0_sm_loaded) {
-		LOG("Error: SM already loaded!\n");
+		ELOG("Error: SM already loaded!\n");
 		return -1;
 	}
 	uint32_t sm_size = fmgr_get_file_size(path);
 	if (!sm_size) {
-		LOG("Error: SM file size is 0!\n");
+		ELOG("Error: SM file size is 0!\n");
 		return -1;
 	}
     void *sm_buf = rmemblock_alloc((sm_size + 0xfff) & 0xfffff000, 0x10208006, 0);  // fmgr_get_file(path, NULL, 0, 0, &sm_size);
     if (!fmgr_get_file(path, sm_buf, sm_size, 0, NULL)) {
-        LOG("Failed to cache the SM from %s\n", path);
+        ELOG("Failed to cache the SM from %s\n", path);
 		return -1;
     }
     void *cmd_buf = rmemblock_alloc(0x1000, 0x10208006, 0);
     if (!cmd_buf) {
-		LOG("Failed to allocate command buffer for SM\n");
+		ELOG("Failed to allocate command buffer for SM\n");
 		my_free(sm_buf);
 		return -1;
 	}
@@ -83,31 +83,31 @@ int lv0_load_sm(const char *path) {
 	paddr_list.size = sizeof(paddr_list);
 	paddr_list.list = &pairs[0];
 	paddr_list.list_size = 8;
-	LOG("Get pAddr list for SM: addr=0x%08X, length=0x%08X\n", vrange.addr, vrange.length);
+	DLOG("Get pAddr list for SM: addr=0x%08X, length=0x%08X\n", vrange.addr, vrange.length);
 	int ret = nskbl_get_paddr_list(&vrange, &paddr_list);
 	if (ret < 0 || paddr_list.ret_count == 0) {
-		LOG("Failed to get PAddr list for SM : 0x%08X\n", ret);
+		ELOG("Failed to get PAddr list for SM : 0x%08X\n", ret);
 		goto lv0_lsm_end;
 	}
 	uint32_t paddr_pairs_paddr = 0;
 	memcpy(cmd_buf, &pairs, paddr_list.ret_count * sizeof(struct lv0_pa_pair_s));
-	LOG("Get PAddr for command buffer: addr=0x%08X, length=0x%08X\n", (uint32_t)cmd_buf, sizeof(struct lv0_pa_pair_s) * paddr_list.ret_count);
+	DLOG("Get PAddr for command buffer: addr=0x%08X, length=0x%08X\n", (uint32_t)cmd_buf, sizeof(struct lv0_pa_pair_s) * paddr_list.ret_count);
 	ret = nskbl_get_paddr_single(cmd_buf, &paddr_pairs_paddr);
 	if (ret < 0 || !paddr_pairs_paddr) {
-		LOG("Failed to get PAddr for command buffer: 0x%08X\n", ret);
+		ELOG("Failed to get PAddr for command buffer: 0x%08X\n", ret);
 		goto lv0_lsm_end;
 	}
-	LOG("Invoke SM with PAddr list: paddr=0x%08X, count=%d\n", paddr_pairs_paddr, paddr_list.ret_count);
+	DLOG("Invoke SM with PAddr list: paddr=0x%08X, count=%d\n", paddr_pairs_paddr, paddr_list.ret_count);
 	ret = nskbl_smtool_invoke(0, paddr_pairs_paddr, paddr_list.ret_count, NULL, &ctx130, (int *)NSKBL_SMTOOL_CTX);
 	if (ret < 0) {
-		LOG("Failed to invoke SM for TZ: 0x%08X\n", ret);
+		ELOG("Failed to invoke SM for TZ: 0x%08X\n", ret);
 		goto lv0_lsm_end;
 	}
     v16p 0x51016cf2 = 0x2000; // remove the loadsm call from load_kprauthsm (since ussm is already loaded)
     v16p 0x51016cf4 = 0x2000; // ^
 	nskbl_clean_dcache((void *)0x51016cf0, 0x20);
 	nskbl_flush_icache();
-	LOG("Load SM to f00d..\n");
+	DLOG("Load SM to f00d..\n");
 	ret = nskbl_smtool_load_ka();
     v16p 0x51016bec = 0xbf00;  // patch call_kprxauthsm_func to not modify 3rd arg
     nskbl_clean_dcache((void *)0x51016be0, 0x20);
@@ -119,12 +119,13 @@ lv0_lsm_end:
 }
 
 int lv0_stop_sm(void) {
+    ILOG("lv0_stop_sm()\n");
 	if (!lv0_sm_loaded) {
-		LOG("Error: SM not loaded!\n");
+		ELOG("Error: SM not loaded!\n");
 		return -1;
 	}
 	int ret = nskbl_smtool_stop();
-	LOG("nskbl_smtool_stop returned: 0x%08X\n", ret);
+	DLOG("nskbl_smtool_stop returned: 0x%08X\n", ret);
     v16p 0x51016cf2 = 0xf7ff;  // undo load_kprxauthsm patches
     v16p 0x51016cf4 = 0xf915;  // ^
     nskbl_clean_dcache((void *)0x51016cf0, 0x20);
@@ -133,22 +134,26 @@ int lv0_stop_sm(void) {
     nskbl_clean_dcache((void *)0x51016be0, 0x20);
     nskbl_flush_icache();
     lv0_sm_loaded = 0;
-	return ret;;
+	return ret;
 }
 
 int lv0_call_sm(int svc, void *argv, uint32_t size) {
+    ILOG("lv0_call_sm(svc=0x%X, argv=%08X, size=0x%X)\n", svc, argv, size);
 	if (!lv0_sm_loaded) {
-		LOG("Error: SM not loaded!\n");
+		ELOG("Error: SM not loaded!\n");
 		return -1;
 	}
 	if (!argv || !size) {
-		LOG("Invalid arguments for SM call\n");
+		ELOG("Invalid arguments for SM call\n");
 		return -1;
 	}
-	return nskbl_smtool_call_big_ka(argv, size + 0x40, svc);
+    int ret = nskbl_smtool_call_big_ka(argv, size + 0x40, svc);
+    DLOG("nskbl_smtool_call_big_ka returned: 0x%08X\n", ret);
+	return ret;
 }
 
 static int lv0_ussm_corrupt(void *cmd_buf, uint32_t addr) {
+    DLOG("lv0_ussm_corrupt(cmd_buf=%08X, addr=0x%08X)\n", cmd_buf, addr);
 	struct lv0_corrupt_args_cmd_s *cormd = cmd_buf;
 	memset(cmd_buf, 0, sizeof(struct lv0_corrupt_args_cmd_s));
 	cormd->size = sizeof(struct lv0_cmd_0x50002_s) + 0x40;
@@ -164,14 +169,15 @@ static int lv0_ussm_corrupt(void *cmd_buf, uint32_t addr) {
 }
 
 static int lv0_ussm_install_spl(void) {
+    ILOG("lv0_ussm_install_spl()\n");
     void *cmd_args = rmemblock_alloc(sizeof(struct lv0_corrupt_args_cmd_s), 0x10208006, 0);
     if (!cmd_args) {
-		LOG("Failed to allocate jump command buffer\n");
+		ELOG("Failed to allocate jump command buffer\n");
 		return -1;
 	}
     void *payload_buf = rmemblock_alloc(LV0_SPL_BLOCK_SIZE, 0x10208006, LV0_SPL_BLOCK_PA);
     if (!payload_buf) {
-		LOG("Failed to allocate payload buffer\n");
+		ELOG("Failed to allocate payload buffer\n");
 		my_free(cmd_args);
 		return -1;
 	}
@@ -223,9 +229,8 @@ static int lv0_ussm_install_spl(void) {
 	jumd->size = sizeof(struct lv0_jump_args_cmd_s) + 0x40;
 	jumd->service_id = 0xd0002;
 	jumd->req[0] = LV0_SPL_PAYLOAD_PA;  // paddr of stage2
-    LOG("calling modded 0xd0002, pargv:\n");
     int ret = lv0_call_sm(0xd0002, cmd_args, sizeof(struct lv0_jump_args_cmd_s));  // call_kprxauthsm_func
-    LOG("lv0_call_sm ret=0x%08X,lv0rets=%08X %08X %08X\n", ret, *lv0rets[0], *lv0rets[1], *lv0rets[2]);
+    ILOG("lv0_call_sm ret=0x%08X,lv0rets=%08X %08X %08X\n", ret, *lv0rets[0], *lv0rets[1], *lv0rets[2]);
     memcpy(payload_buf, spr_backup, sizeof(spr_backup));
     my_free(payload_buf);
 	my_free(cmd_args);
@@ -234,21 +239,22 @@ static int lv0_ussm_install_spl(void) {
 
 int lv0_initialized = 0;
 int lv0_init(const char *ussm) {
+    ILOG("lv0_init(ussm=%s)\n", ussm);
 	if (lv0_initialized) {
-		LOG("lv0 is already initialized\n");
+		WLOG("lv0 is already initialized!\n");
 		return 0;
 	}
     int ret = lv0_load_sm(ussm);
     if (ret) {
-        LOG("Failed to load update SM: 0x%08X\n", ret);
+        ELOG("Failed to load update SM: 0x%08X\n", ret);
 		return ret;
     } else
 		lv0_sm_loaded = 1;
     ret = lv0_ussm_install_spl();
 	if (ret < 0)
-		LOG("Failed to install lv0 SPL: 0x%08X\n", ret);
+		ELOG("Failed to install lv0 SPL: 0x%08X\n", ret);
 	else {
-		LOG("lv0 SPL installed successfully\n");
+		ILOG("lv0 SPL installed successfully\n");
 		lv0_initialized = 1;
 	}
 	lv0_stop_sm();
@@ -256,12 +262,17 @@ int lv0_init(const char *ussm) {
 }
 
 int lv0_spl_exec(void *payload, uint32_t paddr, int size, uint32_t arg) {
+    ILOG("lv0_spl_exec(payload=%08X, paddr=0x%08X, size=%d, arg=0x%08X)\n", payload, paddr, size, arg);
+    if (!lv0_initialized) {
+        ELOG("Error: lv0 not initialized!\n");
+        return -1;
+    }
 	void *paddr_buf = NULL;
     void *payload_buf = NULL;
     if (size) { // alloc & memcpy
         payload_buf = rmemblock_alloc(LV0_SPL_BLOCK_SIZE, MEMBLOCK_TYPE_UCRW, LV0_SPL_BLOCK_PA);
         if (!payload_buf) {
-            LOG("Failed to allocate payload buffer\n");
+            ELOG("Failed to allocate payload buffer\n");
             return -1;
         }
         if (!paddr)
@@ -269,7 +280,7 @@ int lv0_spl_exec(void *payload, uint32_t paddr, int size, uint32_t arg) {
         if (payload) {
             if ((paddr >= LV0_SPL_BLOCK_PA) && (paddr < (LV0_SPL_BLOCK_PA + LV0_SPL_BLOCK_SIZE))) {
                 if (paddr < LV0_SPL_PAYLOAD_PA) {
-                    LOG("Invalid paddr for SPL payload: 0x%08X\n", paddr);
+                    ELOG("Invalid paddr for SPL payload: 0x%08X\n", paddr);
                     my_free(payload_buf);
                     return -1;
                 } else
@@ -277,7 +288,7 @@ int lv0_spl_exec(void *payload, uint32_t paddr, int size, uint32_t arg) {
             } else {
                 paddr_buf = rmemblock_alloc(size, 0x10208006, paddr);
                 if (!paddr_buf) {
-                    LOG("Failed to allocate payload buffer at paddr 0x%08X\n", paddr);
+                    ELOG("Failed to allocate payload buffer at paddr 0x%08X\n", paddr);
                     my_free(payload_buf);
                     return -1;
                 }
@@ -293,11 +304,11 @@ int lv0_spl_exec(void *payload, uint32_t paddr, int size, uint32_t arg) {
 	spl_nfo->resp = 0;  // response will be filled by the SPL
     spl_nfo->status = 0x34;
     spl_nfo->magic = 0x14ff;
-    LOG("Executing SPL payload at paddr=0x%08X, size=%d, arg=0x%08X\n", paddr, size, arg);
+    DLOG("Executing SPL payload at paddr=0x%08X, size=%d, arg=0x%08X\n", paddr, size, arg);
     nskbl_clean_dcache(payload_buf, LV0_SPL_FMNFO_SZ);
     nskbl_smc_custom(0, 0, 0, 0, 0x13c);
     nskbl_clean_dcache(payload_buf, LV0_SPL_FMNFO_SZ);
-    LOG("SPL execution completed with status: 0x%08X, response: 0x%08X\n", spl_nfo->status, spl_nfo->resp);
+    ILOG("SPL execution completed with status: 0x%08X, response: 0x%08X\n", spl_nfo->status, spl_nfo->resp);
     int ret = (spl_nfo->status == 0x69) ? (int)spl_nfo->resp : -1;
     memset(payload_buf, 0, sizeof(lv0_spl_fm_nfo));
     if (size) {
@@ -310,18 +321,18 @@ int lv0_spl_exec(void *payload, uint32_t paddr, int size, uint32_t arg) {
 
 int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_FREE_TYPES free) {
     if (!argv || argv->magic != LV0P_ARG_MAGIC) {
-        LOG("Invalid lv0p arg struct\n");
+        ELOG("Invalid lv0p arg struct\n");
         return -1;
     }
-    LOG("lv0p_run(0x%08X->0x%08X, 0x%08X, 0x%08X)\n", argv, argv->patcher, argp, args);
+    ILOG("lv0p_run(0x%08X->0x%08X, 0x%08X, 0x%08X)\n", argv, argv->patcher, argp, args);
     if (!argp) {
         argp = LV0_SPL_BLOCK_PA;
         args = LV0_SPL_BLOCK_SIZE;
-        LOG("Using default lv0p args: 0x%08X, 0x%08X\n", argp, args);
+        DLOG("Using default lv0p args: 0x%08X, 0x%08X\n", argp, args);
     }
     void *zbuf = rmemblock_alloc(args, MEMBLOCK_TYPE_UCRW, argp);
     if (!zbuf) {
-        LOG("Failed to allocate lv0p buf\n");
+        ELOG("Failed to allocate lv0p buf\n");
         return -1;
     }
     memset(zbuf, 0, args);
@@ -346,7 +357,7 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
     struct lv0p_k_s *ok = argv->k;
     struct lv0p_k_s *ck = NULL;
     struct lv0p_k_s **pk = &pargv->k;
-	LOG("Copying lv0p_k_s structures\n");
+	DLOG("Copying lv0p_k_s structures\n");
     while (ok) {
         ck = (struct lv0p_k_s *)((uint8_t *)zbuf + e_off);
         *pk = (struct lv0p_k_s *)((uint32_t)argp + e_off);
@@ -361,7 +372,7 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
     struct lv0p_d_s *od = argv->d;
     struct lv0p_d_s *cd = NULL;
     struct lv0p_d_s **pd = &pargv->d;
-	LOG("Copying lv0p_d_s structures\n");
+	DLOG("Copying lv0p_d_s structures\n");
     while (od) {
         cd = (struct lv0p_d_s *)((uint8_t *)zbuf + e_off);
         *pd = (struct lv0p_d_s *)((uint32_t)argp + e_off);
@@ -381,7 +392,7 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
     struct lv0p_x_s *ox = argv->x;
     struct lv0p_x_s *cx = NULL;
     struct lv0p_x_s **px = &pargv->x;
-	LOG("Copying lv0p_x_s structures\n");
+    DLOG("Copying lv0p_x_s structures\n");
     while (ox) {
         cx = (struct lv0p_x_s *)((uint8_t *)zbuf + e_off);
         *px = (struct lv0p_x_s *)((uint32_t)argp + e_off);
@@ -396,11 +407,9 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
         ox = ox->next;
         px = &cx->next;
     }
-    //hexdump(zbuf, 0x800, 0);
     nskbl_clean_dcache(zbuf, args);
     int ret = lv0_spl_exec((argp == LV0_SPL_BLOCK_PA) ? zbuf : lv0p_nmp, pargv->patcher, (argp == LV0_SPL_BLOCK_PA) ? 0 : lv0p_nmp_len, arg_argloc);
     nskbl_clean_dcache(zbuf, args);
-    //hexdump(zbuf, 0x800, 0);
     // Copy return values
     e_off = (arg_argloc - argp);
     pargv = (struct lv0p_arg_s *)((uint8_t *)zbuf + e_off);
@@ -409,7 +418,7 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
         e_off += LV0P_WORKBUF_MIN_SIZE;
     ok = argv->k;
     ck = NULL;
-	LOG("Copying lv0p_k_s rets\n");
+    DLOG("Copying lv0p_k_s rets\n");
     while (ok) {
         ck = (struct lv0p_k_s *)((uint8_t *)zbuf + e_off);
         e_off += sizeof(struct lv0p_k_s);
@@ -421,7 +430,7 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
     }
     od = argv->d;
     cd = NULL;
-	LOG("Copying lv0p_d_s rets\n");
+    DLOG("Copying lv0p_d_s rets\n");
     while (od) {
         cd = (struct lv0p_d_s *)((uint8_t *)zbuf + e_off);
         e_off += sizeof(struct lv0p_d_s);
@@ -436,7 +445,7 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
     }
     ox = argv->x;
     cx = NULL;
-	LOG("Copying lv0p_x_s rets\n");
+    DLOG("Copying lv0p_x_s rets\n");
     while (ox) {
         cx = (struct lv0p_x_s *)((uint8_t *)zbuf + e_off);
         e_off += sizeof(struct lv0p_x_s);

@@ -16,7 +16,7 @@ struct stage2_options {
     int vanilla_boot;      // Boot vanilla OS
     int protect_bootarea;  // Protect boot area from writes
     int gcsd_mode;         // 0: disable, 1: sd0, 2: os0, 3: init
-    int reserved;
+    int bootpatch;         // Run the boot patch cfg
 };
 
 // MUST be copied in

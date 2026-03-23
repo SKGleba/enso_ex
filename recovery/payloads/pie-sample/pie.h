@@ -5,6 +5,6 @@
 #include <stddef.h>
 
 #define RXP_PIE
-#include "../../blob/include/exports.h"
+#include "exports.h"
 
 #endif // __PIE_H__
