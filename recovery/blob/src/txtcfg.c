@@ -504,12 +504,12 @@ int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
             ELOG("Invalid stor partition active %d\n", arg->uarg[3].uintgr);
             return -1;
         }
-        p_x = arg->uarg[3].uintgr;
+        p_a = arg->uarg[3].uintgr;
     } else if (arg->types & TXTCFG_TYPES_PARSE(3, _ASCII)) {
         if (!my_strncmp(arg->uarg[3].data, "act", 3)) {
-            p_x = 1;
+            p_a = 1;
         } else if (!my_strncmp(arg->uarg[3].data, "ina", 3)) {
-            p_x = 0;
+            p_a = 0;
         } else {
             ELOG("Invalid stor partition active %s\n", arg->uarg[3].data);
             return -1;
