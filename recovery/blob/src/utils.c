@@ -486,10 +486,10 @@ int armp_run(struct armp_arg_s *armp, enum CHAIN_FREE_TYPES free) {
             if (fbuf) {
                 memcpy(fbuf, (void*)((uint32_t)x->src & ~1), x->c_sz);
 				if (my_rxmap(fbuf) >= 0) {
-					int (*func)(uint32_t arg) = (int (*)(uint32_t arg))fbuf;
+					int (*func)(uint32_t arg, void *arg2) = (int (*)(uint32_t arg, void *arg2))fbuf;
                     if ((uint32_t)x->src & 1)
-                        func = (int (*)(uint32_t arg))((uint32_t)fbuf | 1);
-					x->ret = func(x->arg);
+                        func = (int (*)(uint32_t arg, void *arg2))((uint32_t)fbuf | 1);
+					x->ret = func(x->arg, x->arg2);
 					ILOG("Function returned: 0x%08X\n", x->ret);
 				} else {
 					ELOG("Failed to rxmap function\n");
@@ -508,7 +508,7 @@ int armp_run(struct armp_arg_s *armp, enum CHAIN_FREE_TYPES free) {
 				x->src = NULL;
 			}
         } else {
-			x->ret = x->func(x->arg);
+			x->ret = x->func(x->arg, x->arg2);
 			ILOG("Function returned: 0x%08X\n", x->ret);
 		}
 		px = x;

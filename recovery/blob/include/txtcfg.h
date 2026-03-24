@@ -37,6 +37,7 @@ struct txtcfg_arg_s {
     bool parsed;
 };
 
+#define TXTCFG_MAX_OVERLAYS 4
 struct txtcfg_s {
 	char *fpath;
     struct {
@@ -48,6 +49,11 @@ struct txtcfg_s {
     struct txtcfg_arg_s *arg;
 	const void *(*h_dispatcher)(int idx);
 	int (*brhandler)(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
+    struct {
+        uint32_t alias;
+        uint32_t size;
+        void *va;
+    } overlay[TXTCFG_MAX_OVERLAYS];
 };
 
 enum CMDH_ENUMS {
@@ -63,6 +69,10 @@ enum CMDH_ENUMS {
     CMDH_ARM_DAT,
     CMDH_ARM_EXE,
     CMDH_KBLPARM,
+    CMDH_M_ALLOC,
+    CMDH_M_FREE,
+    CMDH_M_RMAP,
+    CMDH_DOPATCH,
     CMDH_DCOUNT
 };
 

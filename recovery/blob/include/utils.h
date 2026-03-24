@@ -103,10 +103,11 @@ struct armp_d_s {
 };
 struct armp_x_s {
     union {
-        int (*func)(uint32_t arg);
+        int (*func)(uint32_t arg, void *arg2);
         void *src;
     };
     uint32_t arg;
+    void *arg2;
     union {
         uint32_t c_sz;
         int ret;

@@ -76,8 +76,9 @@ struct txtcfg_arg_s cmdh_args[CMDH_DCOUNT] = {
         .uarg = {
             [0] = {.min_len = 1, .max_len = RMEMBLOCK_MAX_SIZE}, // arg or data
             [1] = {.min_len = 1, .max_len = RMEMBLOCK_MAX_SIZE}, // addr or data
+            [2] = {.min_len = 1, .max_len = RMEMBLOCK_MAX_SIZE}, // arg2 - ptr
         },
-        .types = TXTCFG_TYPES_ALLOW(0, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA)
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(2, _UINT)
     },
     [CMDH_KBLPARM] = {
 		.name = "KBLPARM",
@@ -87,12 +88,59 @@ struct txtcfg_arg_s cmdh_args[CMDH_DCOUNT] = {
             [2] = {.min_len = 1, .max_len = 0x200}, // src or data
         },
         .types = TXTCFG_TYPES_ALLOW(0, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _RDATA, _FDATA) | TXTCFG_TYPES_ALLOW(2, _UINT, _RDATA, _FDATA)
+    },
+    [CMDH_M_ALLOC] = {
+		.name = "M_ALLOC",
+        .uarg = {
+            [0] = {.min_len = 1, .max_len = 4}, // alias/overlay addr
+            [1] = {.min_len = 1, .max_len = 4}, // type (uint or "rx/rw/uc")
+            [2] = {.min_len = 1, .max_len = 255}, // size or file path (read on cmd exec)
+            [3] = {.min_len = 1, .max_len = 4}, // paddr (for PA allocations)
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _ASCII) | TXTCFG_TYPES_ALLOW(2, _UINT, _ASCII) | TXTCFG_TYPES_ALLOW(3, _UINT)
+    },
+    [CMDH_M_FREE] = {
+		.name = "M_FREE",
+        .uarg = {
+            [0] = {.min_len = 1, .max_len = 4}, // alias/overlay addr
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT)
+    },
+    [CMDH_M_RMAP] = {
+		.name = "M_RMAP",
+        .uarg = {
+            [0] = {.min_len = 1, .max_len = 4}, // alias/overlay addr
+            [1] = {.min_len = 1, .max_len = 4}, // type (uint or "rx/rw/uc")
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _ASCII)
+    },
+    [CMDH_DOPATCH] = {
+        .name = "_PATCH_",
+        .uarg = {
+            [0] = {.min_len = 3, .max_len = 4}, // chain - "all"/"arm"/"lv0"
+            [1] = {.min_len = 1, .max_len = 4}, // cleanup - 0/1 or "yes"/"no"
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _ASCII)
     }
 };
 
 struct lv0p_arg_s cmdh_lv0p_args = {.magic = LV0P_ARG_MAGIC, .patcher = 0, .k = NULL, .d = NULL, .x = NULL};
 
 struct armp_arg_s cmdh_armp_args = {.magic = ARMP_ARG_MAGIC, .d = NULL, .x = NULL};
+
+static void *cmdh_get_valias(struct txtcfg_s *cfg, uint32_t alias, bool never_null) {
+    for (int i = 0; i < TXTCFG_MAX_OVERLAYS; i++) {
+        if (cfg->overlay[i].size == 0)
+            continue;
+        if ((alias >= cfg->overlay[i].alias) && (alias < (cfg->overlay[i].alias + cfg->overlay[i].size))) {
+            DLOG("Found alias 0x%08X in overlay %d (0x%08X - 0x%08X)\n", alias, i, cfg->overlay[i].alias, cfg->overlay[i].alias + cfg->overlay[i].size);
+            return (void *)((uint32_t)cfg->overlay[i].va + (alias - cfg->overlay[i].alias));
+        }
+    }
+    if (never_null)
+        return (void *)alias; // if not found, treat alias as a direct address
+    return NULL;
+}
 
 int cmdh_allow_livexe(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!cfg || !cfg->arg || !cfg->arg[idx].handler || (arg != &cfg->arg[idx])) {
@@ -324,9 +372,9 @@ int cmdh_kblp(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if ((arg->types & TXTCFG_TYPES_PARSE(ai, _RDATA, _FDATA, _UINT)) && arg->uarg[ai].act_len) {
         if (!size)
             size = arg->uarg[ai].act_len;
-        memcpy(kblp1 + arg->uarg[0].uintgr, arg->uarg[ai].data, size);
+        memcpy(kblp1 + arg->uarg[0].uintgr, cmdh_get_valias(cfg, arg->uarg[ai].uintgr, true), size);
         ILOG("Patched kbl_param at offset 0x%02X with data from 0x%08X\n", arg->uarg[0].uintgr, arg->uarg[ai].data);
-        memcpy(kblp2 + arg->uarg[0].uintgr, arg->uarg[ai].data, size);
+        memcpy(kblp2 + arg->uarg[0].uintgr, cmdh_get_valias(cfg, arg->uarg[ai].uintgr, true), size);
         ILOG("Patched kbl_param NP2 at offset 0x%02X with data from 0x%08X\n", arg->uarg[0].uintgr, arg->uarg[ai].data);
         return 0;
     } else
@@ -356,13 +404,13 @@ int cmdh_armd(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     memset(d, 0, sizeof(struct armp_d_s));
     int ai = 0;
     if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
-        d->dst = arg->uarg[ai].data;
+        d->dst = cmdh_get_valias(cfg, arg->uarg[ai].uintgr, true);
         ai++;
         if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
             d->sz = arg->uarg[ai].uintgr;
             ai++;
             if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
-                d->src = arg->uarg[ai].data;
+                d->src = cmdh_get_valias(cfg, arg->uarg[ai].uintgr, true);
                 DLOG("Added ARM_DAT: [0x%08X] 0x%08X => 0x%08X\n", d->sz, d->src, d->dst);
                 return 0;
             }
@@ -404,12 +452,15 @@ int cmdh_armx(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     }
     x = *px;
     memset(x, 0, sizeof(struct armp_x_s));
+    if (arg->types & TXTCFG_TYPES_PARSE(2, _UINT))
+        x->arg2 = cmdh_get_valias(cfg, arg->uarg[2].uintgr, true);
+    
     int ai = 0;
     if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
         x->arg = arg->uarg[ai].uintgr;
         ai++;
         if (arg->types & TXTCFG_TYPES_PARSE(ai, _UINT)) {
-            x->src = arg->uarg[ai].data;
+            x->src = cmdh_get_valias(cfg, arg->uarg[ai].uintgr, true);
             DLOG("Added ARM X: 0x%08X(0x%08X)\n", x->src, x->arg);
             return 0;
         }
@@ -443,13 +494,13 @@ int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     } else if (arg->types & TXTCFG_TYPES_PARSE(0, _ASCII)) {
         mntidx = -1;
         for (int i = 0; i < STOR_MAX_MOUNTS; i++) {
-            if (!my_strncmp(arg->uarg[0].data, fmgr_mount_names[i], 3)) {
+            if (!my_strncmp(arg->uarg[0].ascii, fmgr_mount_names[i], 3)) {
                 mntidx = i;
                 break;
             }
         }
         if (mntidx < 0) {
-            ELOG("Invalid mount name %s\n", arg->uarg[0].data);
+            ELOG("Invalid mount name %s\n", arg->uarg[0].ascii);
             return -1;
         }
     } else {
@@ -463,12 +514,12 @@ int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
         }
         p_m = arg->uarg[1].uintgr;
     } else if (arg->types & TXTCFG_TYPES_PARSE(1, _ASCII)) {
-        if (!my_strncmp(arg->uarg[1].data, "eMMC", 4) || !my_strncmp(arg->uarg[1].data, "emmc", 4) || !my_strncmp(arg->uarg[1].data, "EMMC", 4))
+        if (!my_strncmp(arg->uarg[1].ascii, "eMMC", 4) || !my_strncmp(arg->uarg[1].ascii, "emmc", 4) || !my_strncmp(arg->uarg[1].ascii, "EMMC", 4))
             p_m = MOUNT_MASTER_EMMC;
-        else if (!my_strncmp(arg->uarg[1].data, "GCSD", 4) || !my_strncmp(arg->uarg[1].data, "gcsd", 4) || !my_strncmp(arg->uarg[1].data, "sd", 2) || !my_strncmp(arg->uarg[1].data, "SD", 2))
+        else if (!my_strncmp(arg->uarg[1].ascii, "GCSD", 4) || !my_strncmp(arg->uarg[1].ascii, "gcsd", 4) || !my_strncmp(arg->uarg[1].ascii, "sd", 2) || !my_strncmp(arg->uarg[1].ascii, "SD", 2))
             p_m = MOUNT_MASTER_GCSD;
         else {
-            ELOG("Invalid mount master name %s\n", arg->uarg[1].data);
+            ELOG("Invalid mount master name %s\n", arg->uarg[1].ascii);
             return -1;
         }
     } else {
@@ -486,13 +537,13 @@ int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
         p_x = arg->uarg[2].uintgr;
     } else if (arg->types & TXTCFG_TYPES_PARSE(2, _ASCII)) {
         for (int i = 0; i < STOR_PART_COUNT; i++) {
-            if (!my_strncmp(arg->uarg[2].data, get_partition_name(i), arg->uarg[2].act_len)) {
+            if (!my_strncmp(arg->uarg[2].ascii, get_partition_name(i), arg->uarg[2].act_len)) {
                 p_x = i;
                 break;
             }
         }
         if (p_x < 0) {
-            ELOG("Invalid stor partition name %s\n", arg->uarg[2].data);
+            ELOG("Invalid stor partition name %s\n", arg->uarg[2].ascii);
             return -1;
         }
     } else if (p_x < 0) {
@@ -506,12 +557,12 @@ int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
         }
         p_a = arg->uarg[3].uintgr;
     } else if (arg->types & TXTCFG_TYPES_PARSE(3, _ASCII)) {
-        if (!my_strncmp(arg->uarg[3].data, "act", 3)) {
+        if (!my_strncmp(arg->uarg[3].ascii, "act", 3)) {
             p_a = 1;
-        } else if (!my_strncmp(arg->uarg[3].data, "ina", 3)) {
+        } else if (!my_strncmp(arg->uarg[3].ascii, "ina", 3)) {
             p_a = 0;
         } else {
-            ELOG("Invalid stor partition active %s\n", arg->uarg[3].data);
+            ELOG("Invalid stor partition active %s\n", arg->uarg[3].ascii);
             return -1;
         }
     }
@@ -541,16 +592,172 @@ int cmdh_lv0init(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 		return 0;
 	}
     if (arg->types & TXTCFG_TYPES_PARSE(0, _ASCII)) {
-        if (fmgr_get_file_size(arg->uarg[0].data)) {
-            DLOG("Initializing SPL with update_sm @ %s\n", arg->uarg[0].data);
-            return lv0_init(arg->uarg[0].data);
+        if (fmgr_get_file_size(arg->uarg[0].ascii)) {
+            DLOG("Initializing SPL with update_sm @ %s\n", arg->uarg[0].ascii);
+            return lv0_init(arg->uarg[0].ascii);
         } else {
-            ELOG("Invalid update_sm path %s\n", arg->uarg[0].data);
+            ELOG("Invalid update_sm path %s\n", arg->uarg[0].ascii);
             return -1;
         }
     }
     ELOG("No update_sm path provided\n");
     return -1;
+}
+
+int cmdh_memgr(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
+    if (!arg || !arg->handler) {
+        ELOG("Invalid argument for MEMGR command\n");
+        return -1;
+    }
+    uint32_t m_alias = 0xF0000000;
+    if (arg->types & TXTCFG_TYPES_PARSE(0, _UINT))
+        m_alias = arg->uarg[0].uintgr;
+    else {
+        ELOG("No memory alias provided\n");
+        return -1;
+    }
+
+    if (idx == CMDH_M_FREE) {
+        void *va = cmdh_get_valias(cfg, m_alias, false);
+        if (!va) {
+            ELOG("Invalid memory alias 0x%08X for free\n", m_alias);
+            return -1;
+        }
+        DLOG("Freeing memory alias 0x%08X at VA 0x%08X\n", m_alias, va);
+        return my_free(va);
+    }
+
+    uint32_t m_type = MEMBLOCK_TYPE_RW;
+    if (arg->types & TXTCFG_TYPES_PARSE(1, _UINT))
+        m_type = arg->uarg[1].uintgr;
+    else if (arg->types & TXTCFG_TYPES_PARSE(1, _ASCII)) {
+        if (!my_strncmp(arg->uarg[1].ascii, "rx", 2))
+            m_type = MEMBLOCK_TYPE_RX;
+        else if (!my_strncmp(arg->uarg[1].ascii, "rw", 2))
+            m_type = MEMBLOCK_TYPE_RW;
+        else if (!my_strncmp(arg->uarg[1].ascii, "uc", 2))
+            m_type = MEMBLOCK_TYPE_UCRW;
+        else {
+            ELOG("Invalid memblock type %s\n", arg->uarg[1].ascii);
+            return -1;
+        }
+    } else {
+        ELOG("No memblock type provided\n");
+        return -1;
+    }
+
+    if (idx == CMDH_M_RMAP) {
+        void *va = cmdh_get_valias(cfg, m_alias, false);
+        if (!va) {
+            ELOG("Invalid memory alias 0x%08X for rmap\n", m_alias);
+            return -1;
+        }
+        DLOG("Remapping memory alias 0x%08X at VA 0x%08X with type 0x%08X\n", m_alias, va, m_type);
+        return rmemblock_remap(va, m_type);
+    }
+
+    uint32_t m_size = 0;
+    const char *m_file = NULL;
+    if (arg->types & TXTCFG_TYPES_PARSE(2, _UINT)) {
+        m_size = arg->uarg[2].uintgr;
+        if (!m_size || (m_size > RMEMBLOCK_MAX_SIZE)) {
+            ELOG("Invalid memory size 0x%08X\n", m_size);
+            return -1;
+        }
+    } else if (arg->types & TXTCFG_TYPES_PARSE(2, _ASCII)) {
+        if (my_strncmp(arg->uarg[2].ascii, "mnt", 3) && my_strncmp(arg->uarg[2].ascii, "os0", 3)) {
+            ELOG("Invalid file source for memblock %s\n", arg->uarg[2].ascii);
+            return -1;
+        }
+        m_file = arg->uarg[2].ascii;
+        m_size = fmgr_get_file_size(m_file);
+        if (!m_size || (m_size > RMEMBLOCK_MAX_SIZE)) {
+            ELOG("Invalid memory size (0<)0x%08X(<=0x%08X) for file %s\n", m_size, RMEMBLOCK_MAX_SIZE, m_file);
+            return -1;
+        }
+    } else {
+        ELOG("No memory size provided\n");
+        return -1;
+    }
+
+    uint32_t m_paddr = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(3, _UINT))
+        m_paddr = arg->uarg[3].uintgr;
+
+    DLOG("Allocating memory alias 0x%08X with size 0x%08X, type %d, paddr 0x%08X\n", m_alias, m_size, m_type, m_paddr);
+    void *va = rmemblock_alloc(m_size, m_type, m_paddr);
+    if (!va) {
+        ELOG("Failed to allocate memory alias 0x%08X\n", m_alias);
+        return -1;
+    }
+
+    if (m_file) {
+        uint32_t bytes_read = 0;
+        ILOG("Loading file %s into memory alias 0x%08X at VA 0x%08X\n", m_file, m_alias, va);
+        if (!fmgr_get_file(m_file, va, m_size, 0, &bytes_read) || (bytes_read != m_size)) {
+            ELOG("Failed to load file %s into memory alias 0x%08X (%d bytes read)\n", m_file, m_alias, bytes_read);
+            rmemblock_free(va);
+            return -1;
+        }
+        DLOG("Loaded file %s into memory alias 0x%08X (%d bytes)\n", m_file, m_alias, bytes_read);
+    }
+
+    for (int i = 0; i < TXTCFG_MAX_OVERLAYS; i++) {
+        if (cfg->overlay[i].alias == m_alias) {
+            DLOG("WARN: Memory alias 0x%08X was already assigned to overlay %d, overriding\n", m_alias, i);
+            cfg->overlay[i].size = 0; // clear existing overlay to reuse the slot
+        }
+        if (!cfg->overlay[i].size) {
+            cfg->overlay[i].alias = m_alias;
+            cfg->overlay[i].va = va;
+            cfg->overlay[i].size = m_size;
+            ILOG("Assigned memory alias 0x%08X to overlay %d (VA 0x%08X - 0x%08X)\n", m_alias, i, va, (uint32_t)va + m_size);
+            return 0;
+        }
+    }
+    ELOG("No available overlay slots for memory alias 0x%08X\n", m_alias);
+    return -1;
+}
+
+int cmdh_ppatch(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
+    if (!arg || !arg->handler) {
+        ELOG("Invalid argument for _PATCH_ command\n");
+        return -1;
+    }
+    
+    bool do_cleanup = true;
+    if (arg->types & TXTCFG_TYPES_PARSE(1, _UINT))
+        do_cleanup = arg->uarg[1].uintgr ? true : false;
+    else if (arg->types & TXTCFG_TYPES_PARSE(1, _ASCII)) {
+        if (!my_strncmp(arg->uarg[1].ascii, "yes", 3))
+            do_cleanup = true;
+        else if (!my_strncmp(arg->uarg[1].ascii, "no", 2))
+            do_cleanup = false;
+        else {
+            ELOG("Invalid patch cleanup argument %s\n", arg->uarg[1].ascii);
+            return -1;
+        }
+    }
+
+    int iret = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(0, _ASCII)) {
+        if (!my_strncmp(arg->uarg[0].ascii, "arm", 3))
+            iret = cmdh_apply_pchains(NULL, &cmdh_armp_args, do_cleanup);
+        else if (!my_strncmp(arg->uarg[0].ascii, "lv0", 3))
+            iret = cmdh_apply_pchains(&cmdh_lv0p_args, NULL, do_cleanup);
+        else if (!my_strncmp(arg->uarg[0].ascii, "all", 3))
+            iret = cmdh_apply_pchains(&cmdh_lv0p_args, &cmdh_armp_args, do_cleanup);
+        else {
+            ELOG("Invalid patch chain %s\n", arg->uarg[0].ascii);
+            return -1;
+        }
+    } else {
+        ELOG("No patch chain provided\n");
+        return -1;
+    }
+
+    DLOG("Applied patch chain(s) with result 0x%08X\n", iret);
+    return iret;
 }
 
 const void *cmdh_dispatch_table(int idx) {
@@ -566,6 +773,10 @@ const void *cmdh_dispatch_table(int idx) {
         cmdh_armd,
         cmdh_armx,
         cmdh_kblp,
+        cmdh_memgr,
+        cmdh_memgr,
+        cmdh_memgr,
+        cmdh_ppatch,
     };
     if (idx)
         return dispatch_table[idx];
@@ -648,7 +859,7 @@ static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *arg, char *
             sub_arg += 2;
             pcfg->uarg[a].act_len = strlen(sub_arg) / 2;
             if ((pcfg->uarg[a].act_len < pcfg->uarg[a].min_len) || (pcfg->uarg[a].act_len > pcfg->uarg[a].max_len)) {
-                ELOG("Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [UINT]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
+                ELOG("Command argument %d length out of bounds: 0x%08X<=0x%08X=>0x%08X [UINT]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
                     pcfg->uarg[a].max_len);
                 goto txtcfg_fbrexit;  // hard break
             }
@@ -666,7 +877,7 @@ static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *arg, char *
         } else if ((pcfg->types & TXTCFG_TYPES_ALLOW(a, _FDATA)) && (!my_strncmp(sub_arg, "mnt", 3) || !my_strncmp(sub_arg, "os0", 3))) {
             pcfg->uarg[a].act_len = fmgr_get_file_size(sub_arg);
             if ((pcfg->uarg[a].act_len < pcfg->uarg[a].min_len) || (pcfg->uarg[a].act_len > pcfg->uarg[a].max_len)) {
-                ELOG("Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [FDATA]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
+                ELOG("Command argument %d length out of bounds: 0x%08X<=0x%08X=>0x%08X [FDATA]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
                     pcfg->uarg[a].max_len);
                 goto txtcfg_fbrexit;
             }
@@ -679,7 +890,7 @@ static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *arg, char *
         } else if (pcfg->types & TXTCFG_TYPES_ALLOW(a, _RDATA)) {
             pcfg->uarg[a].act_len = strlen(sub_arg) / 2;
             if ((pcfg->uarg[a].act_len < pcfg->uarg[a].min_len) || (pcfg->uarg[a].act_len > pcfg->uarg[a].max_len)) {
-                ELOG("Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [RDATA]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
+                ELOG("Command argument %d length out of bounds: 0x%08X<=0x%08X=>0x%08X [RDATA]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
                     pcfg->uarg[a].max_len);
                 goto txtcfg_fbrexit;  // hard break
             }
@@ -698,7 +909,7 @@ static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *arg, char *
         } else if (pcfg->types & TXTCFG_TYPES_ALLOW(a, _ASCII)) {
             pcfg->uarg[a].act_len = strlen(sub_arg);
             if ((pcfg->uarg[a].act_len < pcfg->uarg[a].min_len) || (pcfg->uarg[a].act_len > pcfg->uarg[a].max_len)) {
-                ELOG("Command argument %d length out of bounds: 0x%08X>=0x%08X=<0x%08X [ASCII]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
+                ELOG("Command argument %d length out of bounds: 0x%08X<=0x%08X=>0x%08X [ASCII]\n", a, pcfg->uarg[a].min_len, pcfg->uarg[a].act_len,
                     pcfg->uarg[a].max_len);
                 goto txtcfg_fbrexit;  // hard break
             }
@@ -849,13 +1060,33 @@ int txtcfg_lxPath(char *path, bool cleanup, struct txtcfg_s *cfg) {
 
 int cmdh_apply_pchains(struct lv0p_arg_s *lv0c, struct armp_arg_s *armc, bool cleanup) {
 	ILOG("cmdh_apply_pchains(lv0c=0x%08X, armp=0x%08X)\n", lv0c, armc);
-	if (!lv0c || !armc) {
-		ELOG("Invalid arguments provided!\n");
-		return -1;
-	}
 	int lv0ret = 0;
 	int armret = 0;
-    if (lv0c->k || lv0c->d || lv0c->x) {
+    if (armc && (armc->d || armc->x)) {
+        ILOG("Starting armp_run with args: d=0x%08X, x=0x%08X\n", (unsigned int)armc->d, (unsigned int)armc->x);
+        int ret = armp_run(armc, CHAIN_FREE_NESTED);
+        DLOG("armp_run returned: 0x%08X\n", ret);
+        if (cleanup) {
+            void *frbuf = NULL;
+            struct armp_d_s *d = armc->d;
+            while (d) {
+                ILOG("ARMP D(0x%08X @ 0x%08X => 0x%08X) ret 0x%08X\n", d->sz, d->src, d->dst, d->ret);
+                frbuf = (void *)d;
+                d = d->next;
+                my_free(frbuf);
+            }
+            struct armp_x_s *x = armc->x;
+            while (x) {
+                ILOG("ARMP X(0x%08X(0x%08X)) ret 0x%08X\n", x->src, x->arg, x->ret);
+                frbuf = (void *)x;
+                x = x->next;
+                my_free(frbuf);
+            }
+			armc->d = NULL;
+			armc->x = NULL;
+        }
+    }
+    if (lv0c && (lv0c->k || lv0c->d || lv0c->x)) {
         ILOG("Starting BIG lv0p_run with args: k=0x%08X, d=0x%08X, x=0x%08X\n", (unsigned int)lv0c->k, (unsigned int)lv0c->d, (unsigned int)lv0c->x);
         lv0ret = lv0p_run(lv0c, LV0_SPL_LV0P_BIG_ADDR, LV0_SPL_LV0P_BIG_SIZE, CHAIN_FREE_NESTED);
         DLOG("lv0p_run returned: 0x%08X\n", lv0ret);
@@ -889,30 +1120,6 @@ int cmdh_apply_pchains(struct lv0p_arg_s *lv0c, struct armp_arg_s *armc, bool cl
 			lv0c->x = NULL;
         }
     }
-    if (armc->d || armc->x) {
-        ILOG("Starting armp_run with args: d=0x%08X, x=0x%08X\n", (unsigned int)armc->d, (unsigned int)armc->x);
-        int ret = armp_run(armc, CHAIN_FREE_NESTED);
-        DLOG("armp_run returned: 0x%08X\n", ret);
-        if (cleanup) {
-            void *frbuf = NULL;
-            struct armp_d_s *d = armc->d;
-            while (d) {
-                ILOG("ARMP D(0x%08X @ 0x%08X => 0x%08X) ret 0x%08X\n", d->sz, d->src, d->dst, d->ret);
-                frbuf = (void *)d;
-                d = d->next;
-                my_free(frbuf);
-            }
-            struct armp_x_s *x = armc->x;
-            while (x) {
-                ILOG("ARMP X(0x%08X(0x%08X)) ret 0x%08X\n", x->src, x->arg, x->ret);
-                frbuf = (void *)x;
-                x = x->next;
-                my_free(frbuf);
-            }
-			armc->d = NULL;
-			armc->x = NULL;
-        }
-    }
     return lv0ret | armret;
 }
 
@@ -923,6 +1130,8 @@ static struct txtcfg_s cmdh_default_cfg = {
     .arg_hardc = CMDH_USTART,
     .arg = cmdh_args,
     .h_dispatcher = cmdh_dispatch_table,
+    .brhandler = NULL,
+    .overlay = {{0}, {0}, {0}, {0}}
 };
 
 int cmdh_lxp(char *fpath) {
