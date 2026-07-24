@@ -88,7 +88,10 @@ int init(struct eex_param_s *eex_params) {
     memcpy(session_id, g_eex_ports.kbl_param + SESSION_UID_KBLP_OFF, SESSION_UID_KBLP_SIZE);
     hexdump(session_id, SESSION_UID_KBLP_SIZE);
 
-    DLOG("initializing cdram & syscon...\n");
+    DLOG("initializing i2c1, cdram & syscon...\n");
+    pervasive_clock_enable_i2c(1);
+	pervasive_reset_exit_i2c(1);
+    i2c_init_bus(1);
     cdram_enable();
 	syscon_init();
 

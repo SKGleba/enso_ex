@@ -256,7 +256,7 @@ static int init_os0(uint32_t mbr_off, unsigned int* ctx, int is_scembr) {
 static int get_hwcfg_patched(uint32_t* dst) {
     if (dst[0] == E2X_MAGIC) {
         patchedHwcfgStruct* expp = (void*)dst;
-        expp->ex_ports.ctrl = (*sysroot_ctx_ptr)->boot_args->field_CC;
+        expp->ex_ports.ctrl = (*sysroot_ctx_ptr)->kbl_param->ctrl;
         expp->ex_ports.nskbl_exports_start = (void*)NSKBL_EXPORTS_ADDR;
         expp->ex_ports.get_file = get_file;
         expp->ex_ports.memcpy = memcpy;
@@ -266,7 +266,7 @@ static int get_hwcfg_patched(uint32_t* dst) {
         expp->ex_ports.get_memblock = sceKernelGetMemBlockBase;
         expp->ex_ports.free_memblock = sceKernelFreeMemBlock;
         expp->ex_ports.module_dir = (char*)NSKBL_LMODLOAD_DIR;
-        expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->boot_args;
+        expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->kbl_param;
         expp->ex_ports.protect_boot = &disable_bootarea_update;
         expp->ex_ports.init_os0 = init_os0;
         expp->ex_ports.printf = printf;

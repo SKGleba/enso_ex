@@ -26,63 +26,53 @@
 #define CTRL_VOLDOWN	(1 << 17)
 #define CTRL_HEADPHONE	(1 << 27)
 
-typedef struct kbl_param_struct {
+typedef struct _kbl_param_s {
   uint16_t version;
   uint16_t size;
-  uint32_t fw_version;
-  uint32_t ship_version;
-  uint32_t field_C;
-  uint32_t field_10;
-  uint32_t field_14;
-  uint32_t field_18;
-  uint32_t field_1C;
-  uint32_t field_20;
-  uint32_t field_24;
-  uint32_t field_28;
-  uint8_t debug_flags[8];
-  uint32_t field_34;
-  uint32_t field_38;
-  uint32_t field_3C;
-  uint8_t dip_switches[0x20];
-  uint32_t dram_base;
+  uint32_t sl_ver;
+  uint32_t min_sl_ver;
+  uint32_t unk_C;
+  uint32_t unk_10;
+  uint32_t unk_14;
+  uint32_t unk_18;
+  uint32_t unk_1C;
+  struct {
+    uint8_t qa[0x10];
+    uint8_t nvs[0x10];
+    uint8_t dipsw[0x20];
+  } flags;
+  uint32_t dram_start;
   uint32_t dram_size;
-  uint32_t field_68;
-  uint32_t boot_type_indicator_1;
-  uint8_t serial[0x10];
-  uint32_t secure_kernel_enp_addr;
-  uint32_t secure_kernel_enp_size;
-  uint32_t field_88;
-  uint32_t field_8C;
-  uint32_t kprx_auth_sm_self_addr;
-  uint32_t kprx_auth_sm_self_size;
-  uint32_t prog_rvk_srvk_addr;
-  uint32_t prog_rvk_srvk_size;
-  uint16_t model;
-  uint16_t device_type;
-  uint16_t device_config;
-  uint16_t retail_type;
-  uint32_t field_A8;
-  uint32_t field_AC;
+  uint32_t unk_68;
+  uint32_t device_mode;
+  uint8_t opsid[0x10];
+  uint32_t sk_enp_start;
+  uint32_t sk_enp_size;
+  uint32_t ctxa_sm_start;
+  uint32_t ctxa_sm_size;
+  uint32_t kprxa_sm_start;
+  uint32_t kprxa_sm_size;
+  uint32_t srvk_start;
+  uint32_t srvk_size;
+  uint64_t pscode;
+  uint64_t stack_cookie;
   uint8_t session_id[0x10];
-  uint32_t field_C0;
-  uint32_t boot_type_indicator_2;
-  uint32_t field_C8;
-  uint32_t field_CC;
-  uint32_t resume_context_addr;
-  uint32_t field_D4;
-  uint32_t field_D8;
-  uint32_t field_DC;
-  uint32_t field_E0;
-  uint32_t field_E4;
-  uint32_t field_E8;
-  uint32_t field_EC;
-  uint32_t field_F0;
-  uint32_t field_F4;
-  uint32_t bootldr_revision;
+  uint32_t wakeup_req;
+  uint32_t wakeup_factor;
+  uint32_t usb_status;
+  uint32_t ctrl;
+  uint32_t resume_addr;
+  uint32_t hw_cfg;
+  uint32_t boot_cause;
+  uint32_t unk_DC;
+  uint32_t unk_resume;
+  uint32_t unk_E4;
+  uint8_t hw_cfg_ext[0x10];
+  uint32_t sl_rev;
   uint32_t magic;
   uint8_t session_key[0x20];
   uint8_t unused[0xE0];
-} __attribute__((packed)) kbl_param_struct;
+} __attribute__((packed)) kbl_param_s;
 
 // This struct is passed to custom plugins at module_start
 // REF: ex_ports_struct @ /base/ex_defs.h
@@ -91,7 +81,7 @@ typedef struct patch_args_struct {
   uint32_t this_version; // version of this struct
   uint32_t ex_ctrl; // ex ctrl data
   void* nskbl_exports_start; // nskbl exports start
-  kbl_param_struct* kbl_param;
+  kbl_param_s* kbl_param;
   int (*ex_get_file)(char* file_path, void* buf, uint32_t read_size, uint32_t offset); // e2x's get_file func
   void* (*kbl_memset)(void* dst, int ch, int sz);
   void* (*kbl_memcpy)(void* dst, const void* src, int sz);

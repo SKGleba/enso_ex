@@ -59,6 +59,7 @@ $(FIN_KBL_STUBS):
 clean:
 	rm -rf $(INSTALLER_DIR)/build
 	rm -rf $(INSTALLER_DIR)/res_ext
+	rm -f $(INSTALLER_DIR)/src/fatcheck.h
 	$(MAKE) -C $(CORE_DIR) clean
 	$(MAKE) -C $(RECOVERY_DIR) clean
 	$(MAKE) -C $(P_CKLDR_DIR) clean

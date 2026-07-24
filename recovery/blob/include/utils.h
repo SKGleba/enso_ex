@@ -84,6 +84,8 @@ struct rmemblock_info_s {
     int id;
     void *va;
 };
+#define RMEMBLOCK_UALIGN_REQ (0x20) // required for stuff like smtool
+#define RMEMBLOCK_UALIGN ((sizeof(struct rmemblock_info_s) + RMEMBLOCK_UALIGN_REQ - 1) & ~(RMEMBLOCK_UALIGN_REQ - 1))
 
 struct rmemblock_master_s {
     struct rmemblock_info_s pallocs[RMEMBLOCK_PA_COUNT];

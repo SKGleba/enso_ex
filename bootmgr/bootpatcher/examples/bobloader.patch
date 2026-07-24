@@ -1,0 +1,27 @@
+# BOOT Patcher Configuration
+## Everything after ' ' or '#' is ignored
+LIVEQUE=true # Execute the commands immediately upon parsing, does not apply to patch chains (LV0_KSP,_DAT,_EXE)
+ERRBREAK=true # Stop execution if any of the following commands fail
+
+## We store bob in tm0
+MNTINIT=mnt0,emmc,vtrm,ina
+
+## Initialize SPL
+ERRBREAK=false
+LV0INIT=mnt0:spl_ussm.self # Custom ussm
+LV0INIT=os0:spl_ussm.self # HFW ussm
+ERRBREAK=true
+LV0INIT=os0:/sm/update_service_sm.self # If custom/hfw wasnt found, try default
+
+## Load bob and its components
+### Config
+LV0_DAT=0x0005BFE0,0000851F00000000 # Framework paddrs - intr & idle
+LV0_DAT=0x0005BFE8,1A000101 # UART config - (bus << 24) | clk [0x1001A = 115200/0x1004E = 38400]
+LV0_DAT=0x0005BFEC,0100000000000000 # run test()? - false/true/paddr & arg
+### BOB
+LV0_DAT=0x00040000,mnt0:/bob.bin
+LV0_EXE=0x0005BFE0,0x000400B0
+### Misc - load if they exist
+ERRBREAK=false # no longer break on fail
+LV0_DAT=0x0005C000,mnt0:/brom.bin # Bootrom (for neutered bob versions)
+M_ALLOC=0xF0000000,uc,mnt0:/alice.bin,0x4F000000 # load Alice to uncached PA 0x4F000000, alias to 0xF0000000

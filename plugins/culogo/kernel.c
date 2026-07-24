@@ -14,14 +14,14 @@
 
 #define DISPLAY_BOOT_LOGO_FUNC (0x6F9C)
 
-static int is_safe_mode(kbl_param_struct *kblparam) {
+static int is_safe_mode(kbl_param_s *kblp) {
     uint32_t v;
-    if (kblparam->debug_flags[7] != 0xFF) {
+    if (kblp->flags.nvs[3] != 0xFF) {
         return 1;
     }
-    v = kblparam->boot_type_indicator_2 & 0x7F;
-    if (v == 0xB || (v == 4 && kblparam->resume_context_addr)) {
-        v = ~kblparam->field_CC;
+    v = kblp->wakeup_factor & 0x7F;
+    if (v == 0xB || (v == 4 && kblp->resume_addr)) {
+        v = ~kblp->ctrl;
         if (((v >> 8) & 0x54) == 0x54 && (v & 0xC0) == 0) {
             return 1;
         } else {
@@ -37,16 +37,16 @@ static int is_safe_mode(kbl_param_struct *kblparam) {
     }
 }
 
-static int is_update_mode(kbl_param_struct *kblparam) {
-    if (kblparam->debug_flags[4] != 0xFF) {
+static int is_update_mode(kbl_param_s *kblp) {
+    if (kblp->flags.nvs[0] != 0xFF) {
         return 1;
     } else {
         return 0;
     }
 }
 
-static inline int skip_patches(kbl_param_struct *kblparam) {
-    return is_safe_mode(kblparam) || is_update_mode(kblparam);
+static inline int skip_patches(kbl_param_s *kblp) {
+    return is_safe_mode(kblp) || is_update_mode(kblp);
 }
 
 void _start() __attribute__ ((weak, alias ("module_start")));

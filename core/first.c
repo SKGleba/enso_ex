@@ -15,13 +15,13 @@
 // this is because we only have 0x180 bytes for first payload
 void go(void) {
     // say hello
-    printf("\nenso_ex v5 | @stage1\n\n");
+    printf("\nenso_ex v5.1 | @stage1\n\n");
 
     // clean after us
     memset((char*)ENSO_CORRUPTED_AREA_START, 0, ENSO_CORRUPTED_AREA_SIZE);
 
     // restore corrupted boot args with our copy
-    memcpy(boot_args, (*sysroot_ctx_ptr)->boot_args, sizeof(*boot_args));
+    memcpy(kbl_param, (*sysroot_ctx_ptr)->kbl_param, sizeof(kbl_param_s));
 	
     // memblock for stage2
     printf("x stage2 a");
@@ -31,7 +31,7 @@ void go(void) {
     
     // read stage2 from emmc or gcsd
     printf("-r");
-    if (CTRL_BUTTON_HELD(boot_args->field_CC, E2X_RECOVERY_SECOND) && *(uint32_t*)NSKBL_DEVICE_GCSD_TGT_CTX)
+    if (*(uint32_t*)NSKBL_DEVICE_GCSD_TGT_CTX && (CTRL_BUTTON_HELD(kbl_param->ctrl, E2X_RECOVERY_SECOND) || E2X_NCONF_CHK(kbl_param, SDECOND)))
         read_sector_sd((int*)*(uint32_t*)NSKBL_DEVICE_GCSD_TGT_CTX, SECOND_PAYLOAD_OFFSET, stage2, SECOND_PAYLOAD_SIZE / SDIF_SECTOR_SIZE);
     else
         read_sector_mmc_direct((int*)*(uint32_t*)NSKBL_DEVICE_EMMC_TGT_CTX, SECOND_PAYLOAD_OFFSET, stage2, SECOND_PAYLOAD_SIZE / SDIF_SECTOR_SIZE);

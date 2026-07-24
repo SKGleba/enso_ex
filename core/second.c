@@ -271,7 +271,7 @@ static int get_hwcfg_patched(uint32_t* dst) {
 		expp->ex_ports.get_memblock = sceKernelGetMemBlockBase;
 		expp->ex_ports.free_memblock = sceKernelFreeMemBlock;
 		expp->ex_ports.module_dir = (char*)NSKBL_LMODLOAD_DIR;
-		expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->boot_args;
+		expp->ex_ports.kbl_param = (void*)(*sysroot_ctx_ptr)->kbl_param;
         expp->ex_ports.protect_boot = &disable_bootarea_update;
         expp->ex_ports.init_os0 = init_os0;
 		expp->ex_ports.printf = printf;
@@ -334,8 +334,8 @@ static void recovery(int type, int dolce) {
         printf("xR GC-SD\n");
 		if (!(*(uint32_t*)NSKBL_DEVICE_GCSD_TGT_CTX)) {
         	syscon_common_write(1, SYSCON_CMD_SET_GCSD, 2);  // enable the GC slot
-        	boot_args->boot_type_indicator_1 |= 0x40000;     // enable sd0 mounting
-        	clean_dcache((void*)boot_args, 0x100);
+        	kbl_param->device_mode |= 0x40000;     // enable sd0 mounting
+        	clean_dcache((void*)kbl_param, 0x100);
         	flush_icache();
         	setup_emmc();  // reinit main storages
 		}
@@ -413,7 +413,7 @@ __attribute__((section(".text.start"))) void start(void* me) {
 	printf("x ctrl: 0x%08X\n", ctrl);
 
 	// change the kernel loader
-	if (!CTRL_BUTTON_HELD(ctrl, E2X_IPATCHES_SKIP)) {
+	if (!CTRL_BUTTON_HELD(ctrl, E2X_IPATCHES_SKIP) || E2X_NCONF_CHK(kbl_param, NIPATCHES)) {
 		*(uint32_t*)NSKBL_LBOOTM_LPSP2BCFG = 0x47806800; // blx to psp2bootconfig string
 		*(uint32_t*)NSKBL_PSP2BCFG_STRING_PTR = (uint32_t)load_psp2bootconfig_patched;
 		clean_dcache((void*)NSKBL_LBOOTM_LPSP2BCFG_CACHER, 0x20);
@@ -422,12 +422,12 @@ __attribute__((section(".text.start"))) void start(void* me) {
 	}
 
 	// Recovery if SELECT held
-    if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_GCSD))
-        recovery(E2X_RECOVERY_GCSD, 0);
-    else if (is_genuine_dolce() && !(CTRL_BUTTON_HELD(ctrl, CTRL_POWER)))
+	if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_EMMC) || E2X_NCONF_CHK(kbl_param, REMMC))
+		recovery(E2X_RECOVERY_EMMC, is_genuine_dolce());
+    else if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_GCSD) || E2X_NCONF_CHK(kbl_param, RGCSD))
+        recovery(E2X_RECOVERY_GCSD, is_genuine_dolce());
+    else if (is_genuine_dolce() && !(CTRL_BUTTON_HELD(ctrl, CTRL_POWER))) // we need to somehow detect in on pstv
         recovery(E2X_RECOVERY_GCSD, 1);
-	else if (CTRL_BUTTON_HELD(ctrl, E2X_RECOVERY_EMMC))
-		recovery(E2X_RECOVERY_EMMC, 0);
 	else
         init_os0(ENSO_EMUMBR_OFFSET, (unsigned int*)NSKBL_DEVICE_EMMC_CTX, 1);
 

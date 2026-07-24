@@ -45,6 +45,16 @@
 #define E2X_CKLDR_CLIST_PADDR (E2X_RCONF_PADDR + E2X_RCONF_SIZE)
 #define E2X_CKLDR_CLIST_SIZE (E2X_MAX_EPATCHES_N * 48) // approx 48 bytes per string
 
+#define E2X_NCONF_BYTE 4
+#define E2X_NCONF_NMASK 0b11000011
+enum E2X_NCONF_FLAGS {
+  E2X_NCONF_FLAG_SDECOND = 2, // run s2 from gc-sd
+  E2X_NCONF_FLAG_NIPATCHES, // disable ipatches (ckldr patches)
+  E2X_NCONF_FLAG_RGCSD, // force GC-SD recovery
+  E2X_NCONF_FLAG_REMMC // force eMMC recovery
+};
+#define E2X_NCONF_CHK(_p, _f) (((_p)->flags.nvs[E2X_NCONF_BYTE] & ((1 << (E2X_NCONF_FLAG_##_f)) | E2X_NCONF_NMASK)) == (1 << (E2X_NCONF_FLAG_##_f)))
+
 // expected MBR sector in external RAW recovery mode
 typedef struct RecoveryBlockStruct {
   uint32_t magic; // expected enso_ex magic

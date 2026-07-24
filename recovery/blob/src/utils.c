@@ -225,7 +225,7 @@ void *rmemblock_alloc(int size, uint32_t opt_type, uint32_t opt_paddr) {
 		WLOG("Ran out of small blocks, allocating normally\n");
 	}
 def_alloc:
-    size = ((size + sizeof(struct rmemblock_info_s)) + (RMEMBLOCK_MIN_SIZE - 1)) & ~(RMEMBLOCK_MIN_SIZE - 1);  // align to 4KB
+    size = ((size + RMEMBLOCK_UALIGN) + (RMEMBLOCK_MIN_SIZE - 1)) & ~(RMEMBLOCK_MIN_SIZE - 1);  // align to 4KB
     DLOG("Allocating rmemblock: size=%d, type=0x%08X\n", size, opt_type);
     int block_id = sceKernelAllocMemBlock("e2xr_malloc", opt_type ?: MEMBLOCK_TYPE_RW, size, NULL);
 	if (block_id < 0) {
@@ -239,10 +239,10 @@ def_alloc:
 		sceKernelFreeMemBlock(block_id);
 		return NULL;
 	}
-	DLOG("INFO: Memory block 0x%08X allocated successfully @ 0x%08X [user=0x%08X]\n", block_id, (unsigned int)block_va, (unsigned int)block_va + sizeof(struct rmemblock_info_s));
+	DLOG("INFO: Memory block 0x%08X allocated successfully @ 0x%08X [user=0x%08X]\n", block_id, (unsigned int)block_va, (unsigned int)block_va + RMEMBLOCK_UALIGN);
     ((struct rmemblock_info_s *)block_va)->id = block_id;
     ((struct rmemblock_info_s *)block_va)->va = block_va;
-    return block_va + sizeof(struct rmemblock_info_s);
+    return (void *)((unsigned int)block_va + RMEMBLOCK_UALIGN);
 }
 
 int rmemblock_remap(void *va, uint32_t type) {
@@ -284,8 +284,8 @@ int rmemblock_remap(void *va, uint32_t type) {
 			}
         }
     }
-    DLOG("INFO: treating VA: 0x%08X as mallocd memblock, trying -%d for info\n", (unsigned int)va, sizeof(struct rmemblock_info_s));
-	struct rmemblock_info_s * actualva = (struct rmemblock_info_s *)(va - sizeof(struct rmemblock_info_s));
+    DLOG("INFO: treating VA: 0x%08X as mallocd memblock, trying -%d for info\n", (unsigned int)va, RMEMBLOCK_UALIGN);
+	struct rmemblock_info_s * actualva = (struct rmemblock_info_s *)((unsigned int)va - RMEMBLOCK_UALIGN);
 	if (actualva->va != (void*)actualva) {
 		ELOG("Attempted to %s an invalid rmemblock at 0x%08X\n", op, (unsigned int)va);
 		return -1;

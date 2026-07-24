@@ -76,8 +76,11 @@ int lv0_load_sm(const char *path) {
 	ctx130.pathId = 2; // os0
 	ctx130.self_type = (ctx130.self_type & 0xFFFFFFF0) | 2; // set self_type to user mode
     struct lv0_paddr_list_s paddr_list;
+    memset(&paddr_list, 0, sizeof(struct lv0_paddr_list_s));
     struct lv0_pa_pair_s pairs[8];
+    memset(&pairs, 0, sizeof(pairs));
 	struct lv0_pa_pair_s vrange;
+    memset(&vrange, 0, sizeof(struct lv0_pa_pair_s));
 	vrange.addr = (uint32_t)sm_buf;
 	vrange.length = sm_size;
 	paddr_list.size = sizeof(paddr_list);
@@ -105,7 +108,7 @@ int lv0_load_sm(const char *path) {
 	}
     v16p 0x51016cf2 = 0x2000; // remove the loadsm call from load_kprauthsm (since ussm is already loaded)
     v16p 0x51016cf4 = 0x2000; // ^
-	nskbl_clean_dcache((void *)0x51016cf0, 0x20);
+	nskbl_clean_dcache((void *)0x51016ce0, 0x20);
 	nskbl_flush_icache();
 	DLOG("Load SM to f00d..\n");
 	ret = nskbl_smtool_load_ka();
@@ -128,7 +131,7 @@ int lv0_stop_sm(void) {
 	DLOG("nskbl_smtool_stop returned: 0x%08X\n", ret);
     v16p 0x51016cf2 = 0xf7ff;  // undo load_kprxauthsm patches
     v16p 0x51016cf4 = 0xf915;  // ^
-    nskbl_clean_dcache((void *)0x51016cf0, 0x20);
+    nskbl_clean_dcache((void *)0x51016ce0, 0x20);
     nskbl_flush_icache();
     v16p 0x51016bec = 0x6073;  // undo the 3rd arg patch
     nskbl_clean_dcache((void *)0x51016be0, 0x20);

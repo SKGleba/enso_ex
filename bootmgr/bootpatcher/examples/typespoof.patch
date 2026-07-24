@@ -1,0 +1,14 @@
+# BOOT Patcher Configuration
+## Everything after ' ' or '#' is ignored
+LIVEQUE=true # Execute the commands immediately upon parsing, does not apply to patch chains (LV0_KSP,_DAT,_EXE)
+
+## Initialize SPL
+LV0INIT=os0:spl_ussm.self # Try HFW ussm path first
+ERRBREAK=true # Stop execution if any of the following commands fail
+LV0INIT=os0:/sm/update_service_sm.self # If hfw wasnt found, try default
+
+## Patch CID in keyring
+LV0_KSP=0x0509,0x05,00 # 00 - itu, 01 - devkit, 02 - testkit, ++ retail
+
+## Patch CID in kblparam/2
+KBLPARM=0xA3,00 # 00 - itu, 01 - devkit, 02 - testkit, ++ retail
