@@ -228,7 +228,7 @@ uint32_t fmgr_copy_file(const char *src_path, const char *dest_path) {
 			ELOG("Failed to allocate memory for destination path\n");
 			return 0;
 		}
-		my_snprintf(actual_dest, dblen, "%s%s", actual_dest, filename + 1);
+		my_snprintf(actual_dest, dblen, "%s%s", dest_path, filename + 1);
 	}
 	DLOG("Actual destination path: %s\n", actual_dest);
 

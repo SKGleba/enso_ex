@@ -54,6 +54,7 @@ struct txtcfg_s {
         uint32_t size;
         void *va;
     } overlay[TXTCFG_MAX_OVERLAYS];
+    bool dead;
 };
 
 enum CMDH_ENUMS {

@@ -199,6 +199,8 @@ int cmdh_breakproxy(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
         ELOG("Error occurred while %s command %d (%s): 0x%08X - BREAK\n", arg ? "handling" : "parsing args of", idx, cfg->arg[idx].name, ret);
         for (int i = 0; i < cfg->arg_count; i++)
             cfg->arg[i].handler = NULL;
+        //cfg->brhandler = NULL;
+        cfg->dead = true;
     }
     return ret;
 }
@@ -926,6 +928,9 @@ static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *arg, char *
             break;
         sub_arg = sub_end + 1;
     }
+
+    ret = 0;
+
     if (pcfg->exec && pcfg->handler) {
         ILOG("Executing handler for command %d\n", idx);
         pcfg->handler(idx, pcfg, cfg);
@@ -945,7 +950,6 @@ static void txtcfg_prepCmdByIDX(struct txtcfg_s *cfg, int idx, char *arg, char *
         pcfg->parsed = true;
 	}
 
-	ret = 0;
 txtcfg_fbrexit:
     my_free(carg);
 txtcfg_brexit:
@@ -964,8 +968,11 @@ void txtcfg_parse(struct txtcfg_s *cfg) {
     while (current_line < endconfig) {
         end_line = find_endline(current_line, endconfig);
         command_idx = txtcfg_getCmdIDX(cfg, current_line, end_line);
-        if (command_idx)
+        if (command_idx) {
             txtcfg_prepCmdByIDX(cfg, command_idx, current_line, end_line);
+            if (cfg->dead)
+                break;
+        }
         current_line = find_nextline(end_line, endconfig);
         if (!current_line)
             break;
@@ -1004,10 +1011,12 @@ int txtcfg_loadExec(struct txtcfg_s *cfg, bool cleanup) {
     } else
         DLOG("Using preloaded config file: %s\n", cfg->fpath);
     txtcfg_parse(cfg);
-    ILOG("Executing config file: %s\n", cfg->fpath);
-    for (int i = 0; i < cfg->arg_count; i++) {
-        if (cfg->arg[i].parsed && cfg->arg[i].handler)
-            cfg->arg[i].handler(i, &cfg->arg[i], cfg);
+    if (!cfg->dead) {
+        ILOG("Executing config file: %s\n", cfg->fpath);
+        for (int i = 0; i < cfg->arg_count; i++) {
+            if (cfg->arg[i].parsed && cfg->arg[i].handler)
+                cfg->arg[i].handler(i, &cfg->arg[i], cfg);
+        }
     }
     if (cleanup) {
         DLOG("Freeing config file: %s\n", cfg->fpath);
@@ -1015,6 +1024,10 @@ int txtcfg_loadExec(struct txtcfg_s *cfg, bool cleanup) {
         my_free(cfg->buf.va);
         cfg->buf.va = NULL;
         cfg->buf.size = 0;
+    }
+    if (cfg->dead) {
+        ELOG("loadExec dead\n");
+        return -2;
     }
     return 0;
 }
@@ -1054,6 +1067,7 @@ int txtcfg_lxPath(char *path, bool cleanup, struct txtcfg_s *cfg) {
 		if (path)
 			cfg->fpath = NULL;
 		cfg->brhandler = NULL;
+        cfg->dead = false;
 	}
     return ret;
 }
@@ -1131,7 +1145,8 @@ static struct txtcfg_s cmdh_default_cfg = {
     .arg = cmdh_args,
     .h_dispatcher = cmdh_dispatch_table,
     .brhandler = NULL,
-    .overlay = {{0}, {0}, {0}, {0}}
+    .overlay = {{0}, {0}, {0}, {0}},
+    .dead = false
 };
 
 int cmdh_lxp(char *fpath) {

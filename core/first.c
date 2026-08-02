@@ -22,6 +22,7 @@ void go(void) {
 
     // restore corrupted boot args with our copy
     memcpy(kbl_param, (*sysroot_ctx_ptr)->kbl_param, sizeof(kbl_param_s));
+    printf("x nconf %02X\n", kbl_param->flags.nvs[E2X_NCONF_BYTE]);
 	
     // memblock for stage2
     printf("x stage2 a");
