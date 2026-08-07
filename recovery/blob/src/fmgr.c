@@ -212,8 +212,8 @@ int fmgr_set_file(const char *path, const void *buf, int size, uint32_t *ret_bw)
 	return 0;
 }
 
-uint32_t fmgr_copy_file(const char *src_path, const char *dest_path) {
-	ILOG("fmgr_copy_file(src=%s, dest=%s)\n", src_path, dest_path);
+uint32_t fmgr_copy_file_ws(const char *src_path, const char *dest_path, uint32_t file_size) {
+	ILOG("fmgr_copy_file_ws(src=%s, dest=%s, size=%d)\n", src_path, dest_path, file_size);
 	char *actual_dest = dest_path;
 	if (HAS_ENDSLASH(dest_path)) {
 		// extract the filename from the source path
@@ -239,10 +239,17 @@ uint32_t fmgr_copy_file(const char *src_path, const char *dest_path) {
 		ELOG("Failed to open source file %s: %d\n", src_path, res);
         goto fmgr_cpf_free;
     }
-    uint32_t file_size = f_size(&src_file);
-	if (!file_size) {
+    uint32_t act_size = f_size(&src_file);
+	if (!act_size) {
 		ELOG("Source file %s is empty\n", src_path);
 		goto fmgr_cpf_csrc;
+	}
+	if (!file_size) {
+		file_size = act_size;
+		DLOG("No copy size specified, using actual size %d\n", file_size);
+	} else if (file_size > act_size) {
+		WLOG("Specified copy file size %d is larger than actual size %d, using actual size\n", file_size, act_size);
+		file_size = act_size;
 	}
     res = f_open(&dest_file, actual_dest, FA_WRITE | FA_CREATE_ALWAYS);
 	if (res != FR_OK) {

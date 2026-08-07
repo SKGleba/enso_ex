@@ -74,6 +74,7 @@ enum CMDH_ENUMS {
     CMDH_M_FREE,
     CMDH_M_RMAP,
     CMDH_DOPATCH,
+    CMDH_FILERW,
     CMDH_DCOUNT
 };
 

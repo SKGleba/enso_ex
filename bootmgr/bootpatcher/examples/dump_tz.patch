@@ -1,0 +1,20 @@
+# BOOT Patcher Configuration
+## Everything after ' ' or '#' is ignored
+LIVEQUE=true # Execute the commands immediately upon parsing, does not apply to patch chains (LV0_KSP,_DAT,_EXE)
+ERRBREAK=true # Stop execution if any of the following commands fail
+
+# MNTINIT=mnt0,emmc,vtrm,ina
+MNTINIT=mnt0,gcsd,entire
+
+## Initialize SPL
+ERRBREAK=false
+LV0INIT=mnt0:spl_ussm.self # Custom ussm
+LV0INIT=os0:spl_ussm.self # HFW ussm
+ERRBREAK=true
+LV0INIT=os0:/sm/update_service_sm.self # If custom/hfw wasnt found, try default
+
+M_ALLOC=0xF0000000,uc,0x00200000,0x4F000000 # alloc a blob in unused dram
+LV0_DAT=0x4F000000,0x00200000,0x40000000 # copy TZ to NS
+_PATCH_=lv0,yes # execute the LV0 chains now
+FILERW=mnt0:/tz.bin,0xF0000000,0x00200000 # write the TZ blob to gcsd
+M_FREE=0xF0000000

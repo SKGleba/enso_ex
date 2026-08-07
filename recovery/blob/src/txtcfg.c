@@ -121,11 +121,19 @@ struct txtcfg_arg_s cmdh_args[CMDH_DCOUNT] = {
             [1] = {.min_len = 1, .max_len = 4}, // cleanup - 0/1 or "yes"/"no"
         },
         .types = TXTCFG_TYPES_ALLOW(0, _ASCII)
+    },
+    [CMDH_FILERW] = {
+        .name = "FILERW",
+        .uarg = {
+            [0] = {.min_len = 1, .max_len = 255}, // dst (addr or path)
+            [1] = {.min_len = 1, .max_len = 255}, // src (addr or path-fdata)
+            [2] = {.min_len = 1, .max_len = 4}, // size
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _ASCII, _UINT) | TXTCFG_TYPES_ALLOW(1, _UINT, _ASCII) | TXTCFG_TYPES_ALLOW(2, _UINT)
     }
 };
 
 struct lv0p_arg_s cmdh_lv0p_args = {.magic = LV0P_ARG_MAGIC, .patcher = 0, .k = NULL, .d = NULL, .x = NULL};
-
 struct armp_arg_s cmdh_armp_args = {.magic = ARMP_ARG_MAGIC, .d = NULL, .x = NULL};
 
 static void *cmdh_get_valias(struct txtcfg_s *cfg, uint32_t alias, bool never_null) {
@@ -144,11 +152,11 @@ static void *cmdh_get_valias(struct txtcfg_s *cfg, uint32_t alias, bool never_nu
 
 int cmdh_allow_livexe(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!cfg || !cfg->arg || !cfg->arg[idx].handler || (arg != &cfg->arg[idx])) {
-        ELOG("Invalid arguments for LIVEQUE command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     if (!(arg->types & TXTCFG_TYPES_PARSE(0, _ASCII))) {
-        ELOG("Invalid argument type for LIVEQUE command\n");
+        ELOG("Invalid argument type for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     bool livexe = my_strncmp(arg->uarg[0].ascii, "true", 4) ? false : true;
@@ -164,11 +172,11 @@ int cmdh_allow_livexe(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 int cmdh_breakproxy(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (idx == CMDH_ERRBREAK) {
         if (!cfg || !cfg->arg || !cfg->arg[idx].handler || (arg != &cfg->arg[idx])) {
-            ELOG("Invalid argument for ERRBREAK command\n");
+            ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
             return -1;
         }
         if (!(arg->types & TXTCFG_TYPES_PARSE(0, _ASCII))) {
-            ELOG("Invalid argument type for ERRBREAK command\n");
+            ELOG("Invalid argument type for command %s\n", cmdh_args[idx].name);
             return -1;
         }
         if (!my_strncmp(arg->uarg[0].ascii, "true", 4)) {
@@ -207,7 +215,7 @@ int cmdh_breakproxy(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_ks(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for KSP command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     struct lv0p_k_s **pk = NULL;
@@ -259,7 +267,7 @@ int cmdh_ks(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_lv0dat(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for LV0_DAT command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     struct lv0p_d_s **pd = NULL;
@@ -309,7 +317,7 @@ int cmdh_lv0dat(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_lv0x(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for LV0X command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     struct lv0p_x_s **px = NULL;
@@ -352,7 +360,7 @@ int cmdh_lv0x(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_kblp(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for KBLPARAM command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     uint8_t *kblp1 = g_eex_ports.kbl_param;
@@ -386,7 +394,7 @@ int cmdh_kblp(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_armd(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for ARM D command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     struct armp_d_s **pd = NULL;
@@ -436,7 +444,7 @@ int cmdh_armd(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_armx(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for ARM X command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     struct armp_x_s **px = NULL;
@@ -482,7 +490,7 @@ int cmdh_armx(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for MNT INIT command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     int mntidx = -1;
@@ -586,7 +594,7 @@ int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_lv0init(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for MNT INIT command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
 	if (lv0_initialized) {
@@ -608,7 +616,7 @@ int cmdh_lv0init(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_memgr(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for MEMGR command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     uint32_t m_alias = 0xF0000000;
@@ -723,7 +731,7 @@ int cmdh_memgr(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
 
 int cmdh_ppatch(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     if (!arg || !arg->handler) {
-        ELOG("Invalid argument for _PATCH_ command\n");
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
         return -1;
     }
     
@@ -762,6 +770,31 @@ int cmdh_ppatch(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
     return iret;
 }
 
+int cmdh_filerw(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
+    if (!arg || !arg->handler) {
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
+        return -1;
+    }
+    uint32_t rw_size = 0;
+    if (arg->types & TXTCFG_TYPES_PARSE(2, _UINT))
+        rw_size = arg->uarg[2].uintgr;
+
+    if ((arg->types & TXTCFG_TYPES_PARSE(0, _ASCII)) && (arg->types & TXTCFG_TYPES_PARSE(1, _ASCII))) // file->file
+        return fmgr_copy_file_ws(arg->uarg[1].ascii, arg->uarg[0].ascii, rw_size);
+    else if ((arg->types & TXTCFG_TYPES_PARSE(0, _UINT)) && (arg->types & TXTCFG_TYPES_PARSE(1, _ASCII))) // file->mem
+        return fmgr_get_file(arg->uarg[1].ascii, cmdh_get_valias(cfg, arg->uarg[0].uintgr, true), rw_size, 0, NULL) ? 0 : -1;
+    else if ((arg->types & TXTCFG_TYPES_PARSE(0, _ASCII)) && (arg->types & TXTCFG_TYPES_PARSE(1, _UINT))) { // mem->file
+        if (!rw_size) {
+            ELOG("Invalid size for mem->file copy\n");
+            return -1;
+        }
+        return fmgr_set_file(arg->uarg[0].ascii, cmdh_get_valias(cfg, arg->uarg[1].uintgr, true), rw_size, NULL);
+    }
+
+    ELOG("Invalid FILERW command arguments\n");
+    return -1;
+}
+
 const void *cmdh_dispatch_table(int idx) {
     void *dispatch_table[CMDH_DCOUNT] = {
         NULL,
@@ -779,6 +812,7 @@ const void *cmdh_dispatch_table(int idx) {
         cmdh_memgr,
         cmdh_memgr,
         cmdh_ppatch,
+        cmdh_filerw
     };
     if (idx)
         return dispatch_table[idx];

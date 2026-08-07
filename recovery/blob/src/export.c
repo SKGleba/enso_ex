@@ -31,7 +31,7 @@ const volatile struct recovery_export_s recovery_export = {.magic = {EXPORTS_MAG
                                                                          .fmgr_move_dir = fmgr_move_dir,
                                                                          .fmgr_move_file = fmgr_move_file,
                                                                          .fmgr_delete = fmgr_delete,
-                                                                         .fmgr_copy_file = fmgr_copy_file,
+                                                                         .fmgr_copy_file_ws = fmgr_copy_file_ws,
                                                                          .fmgr_copy_dir = fmgr_copy_dir,
                                                                          .fmgr_get_file = fmgr_get_file,
                                                                          .fmgr_set_file = fmgr_set_file,

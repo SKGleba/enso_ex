@@ -143,7 +143,7 @@ uint32_t fmgr_get_file_size(const char *path);
 int fmgr_move_dir(const char *src_path, const char *dest_path);
 int fmgr_move_file(const char *src_path, const char *dest_path);
 int fmgr_delete(const char *path);
-uint32_t fmgr_copy_file(const char *src_path, const char *dest_path);
+uint32_t fmgr_copy_file_ws(const char *src_path, const char *dest_path, uint32_t file_size);
 int fmgr_copy_dir(const char *src_path, const char *dest_path);
 void *fmgr_get_file(const char *path, void *buf, int size, int offset, uint32_t *ret_br);
 int fmgr_set_file(const char *path, const void *buf, int size, uint32_t *ret_bw);
@@ -157,6 +157,7 @@ uint32_t fmgr_get_nskbl_os0(bool mount);
 int fmgr_init(void);
 int fmgr_view_handler(enum VIEW_ASSIGNS *next_uview);
 void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*handler)(enum FMGR_ENTRY_TYPES entype, char *path, char *entry, enum VIEW_ASSIGNS *next_uview));
+#define fmgr_copy_file(_a, _b) fmgr_copy_file_ws((_a), (_b), 0)
 #else
 #define r_fmgr_mount_names _r->fmgr->fmgr_mount_names
 #define r_fmgr_mount(...) _r->fmgr->fmgr_mount(__VA_ARGS__)
@@ -164,7 +165,7 @@ void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*han
 #define r_fmgr_move_dir(...) _r->fmgr->fmgr_move_dir(__VA_ARGS__)
 #define r_fmgr_move_file(...) _r->fmgr->fmgr_move_file(__VA_ARGS__)
 #define r_fmgr_delete(...) _r->fmgr->fmgr_delete(__VA_ARGS__)
-#define r_fmgr_copy_file(...) _r->fmgr->fmgr_copy_file(__VA_ARGS__)
+#define r_fmgr_copy_file_ws(...) _r->fmgr->fmgr_copy_file_ws(__VA_ARGS__)
 #define r_fmgr_copy_dir(...) _r->fmgr->fmgr_copy_dir(__VA_ARGS__)
 #define r_fmgr_get_file(...) _r->fmgr->fmgr_get_file(__VA_ARGS__)
 #define r_fmgr_set_file(...) _r->fmgr->fmgr_set_file(__VA_ARGS__)
@@ -178,6 +179,7 @@ void *fmgr_square_handler(int set, enum FMGR_ENTRY_TYPES exp_entypes, void (*han
 #define r_fmgr_init(...) _r->fmgr->fmgr_init(__VA_ARGS__)
 #define r_fmgr_view_handler(...) _r->fmgr->fmgr_view_handler(__VA_ARGS__)
 #define r_fmgr_square_handler(...) _r->fmgr->fmgr_square_handler(__VA_ARGS__)
+#define r_fmgr_copy_file(_a, _b) r_fmgr_copy_file_ws((_a), (_b), 0)
 #endif
 
 struct exports_fmgr_s {
@@ -187,7 +189,7 @@ struct exports_fmgr_s {
     int (*fmgr_move_dir)(const char *src_path, const char *dest_path);
     int (*fmgr_move_file)(const char *src_path, const char *dest_path);
     int (*fmgr_delete)(const char *path);
-    uint32_t (*fmgr_copy_file)(const char *src_path, const char *dest_path);
+    uint32_t (*fmgr_copy_file_ws)(const char *src_path, const char *dest_path, uint32_t file_size);
     int (*fmgr_copy_dir)(const char *src_path, const char *dest_path);
     void *(*fmgr_get_file)(const char *path, void *buf, int size, int offset, uint32_t *ret_br);
     int (*fmgr_set_file)(const char *path, const void *buf, int size, uint32_t *ret_bw);
