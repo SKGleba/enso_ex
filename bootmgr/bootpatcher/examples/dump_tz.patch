@@ -13,8 +13,10 @@ LV0INIT=os0:spl_ussm.self # HFW ussm
 ERRBREAK=true
 LV0INIT=os0:/sm/update_service_sm.self # If custom/hfw wasnt found, try default
 
-M_ALLOC=0xF0000000,uc,0x00200000,0x4F000000 # alloc a blob in unused dram
+M_ALLOC=0xF0000000,uc,0x00208000,0x4F000000 # alloc a blob in unused dram
 LV0_DAT=0x4F000000,0x00200000,0x40000000 # copy TZ to NS
-_PATCH_=lv0,yes # execute the LV0 chains now
+LV0_DAT=0x4F200000,0x00008000,0x1F000000 # copy SPAD32K (0x0) to NS
+_PATCH_=lv0,no # execute the LV0 chains now
 FILERW=mnt0:/tz.bin,0xF0000000,0x00200000 # write the TZ blob to gcsd
+FILERW=mnt0:/spad32k.bin,0xF0200000,0x00008000 # write the SPAD32K blob to gcsd
 M_FREE=0xF0000000

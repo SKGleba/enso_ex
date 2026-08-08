@@ -437,10 +437,12 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
     while (od) {
         cd = (struct lv0p_d_s *)((uint8_t *)zbuf + e_off);
         e_off += sizeof(struct lv0p_d_s);
-        if (!od->ncopyin && od->src_va && (free & CHAIN_FREE_NESTED))
-            my_free(od->src_va);
+        if (!od->ncopyin) {
+            if (od->src_va && (free & CHAIN_FREE_NESTED))
+                my_free(od->src_va);
+            e_off += od->sz;
+        }
         od->ret = cd->ret;
-        e_off += od->sz;
         cd = od;
         od = od->next;
         if (free & CHAIN_FREE_ENTRIES)
