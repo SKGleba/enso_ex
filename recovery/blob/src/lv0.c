@@ -350,6 +350,7 @@ int lv0p_run(struct lv0p_arg_s *argv, uint32_t argp, uint32_t args, enum CHAIN_F
     struct lv0p_arg_s *pargv = (struct lv0p_arg_s *)((uint8_t *)zbuf + e_off);
     pargv->magic = LV0P_ARG_MAGIC;
     pargv->patcher = LV0_SPL_PAYLOAD_PA;
+    pargv->stack = argv->stack;
     e_off += sizeof(struct lv0p_arg_s);
     if (!argv->w_pa) {
         pargv->w_pa = argp + e_off;

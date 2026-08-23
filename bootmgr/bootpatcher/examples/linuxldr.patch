@@ -14,19 +14,23 @@ LV0INIT=os0:spl_ussm.self # HFW ussm
 ERRBREAK=true
 LV0INIT=os0:/sm/update_service_sm.self # If custom/hfw wasnt found, try default
 
-## Load & configure bob
-### BOB
-LV0_DAT=0x00040000,mnt0:/bob.bin
-### Set config (v2) directly in the binary - see bob/config.h for details
-LV0_DAT=0x000400D0,0000000000000000 # Framework paddrs - intr & idle
-LV0_DAT=0x000400D8,1A310109 # (cfgv2|UART1) | (SetUart) | (useThis|resetTest|intTest) | (uartClk & 0xFF)
-LV0_DAT=0x000400DC,E0000400 # test() params pa
+## Alloc workbuf & load files
+M_ALLOC=0xF0000000,uc,0x00200000,0x4F000000 # 2MiB @ uncached PA 0x4F000000, alias to 0xF0000000
+FILERW=0xF0001000,mnt0:/bob.bin,0x00020000 # f00d kernel->4F00_1000, max 128KiB
+FILERW=0xF0021000,mnt0:/alice.bin,0x00008000 # arm kernel->4F02_0, max 32KiB
+FILERW=0xF0029000,mnt0:/regina.bin,0x00001000 # regina->4F02_8000, max 4KiB
+
+## Configure bob - see bob/config.h for details
+ARM_DAT=0xF0000000,0000000000000000 # Framework paddrs - intr & idle
+ARM_DAT=0xF0000008,1A110109 # Features - (cfgv2|UART1) | (SetUart) | (resetTest|intTest) | (uartClk & 0xFF)
+ARM_DAT=0xF000000C,1000004F # test() params pa
 ### Set custom launch function / "Test" params
-LV0_DAT=0x000400E0,FF14AA34 # magic & cfg
-LV0_DAT=0x000400E4,C0000400 # s_alice_stopReloadAlice
-LV0_DAT=0x000400E8,0400009E # src=0x4F000000 << 1 | setUart=1 << 2 | useDram=0 << 1 | enCS=0
+ARM_DAT=0xF0000010,FF14AA34 # magic & cfg
+ARM_DAT=0xF0000014,C0000400 # s_alice_stopReloadAlice
+ARM_DAT=0xF0000018,0420049E # src=0x4F021000 << 1 | setUart=1 << 2 | useDram=0 << 1 | enCS=0
 ### Init
-LV0_EXE=0x000400D0,0x000400B0 # init(&config)
+LV0STCK=0x1F860000 # Required since bob can be bigger than SK, assuming we dont fill spad128k
+LV0_DAT=0x00040000,0x00020000,0x4F001000 # bob->priv128K
+LV0_EXE=0x4F000000,0x000400B0 # init(&config)
 
 ## Read alice
-M_ALLOC=0xFF000000,uc,mnt0:/alice.bin,0x4F000000 # uncached PA 0x4F000000, alias to 0xFF000000

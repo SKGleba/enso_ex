@@ -53,6 +53,7 @@ struct lv0p_arg_s {
 		uint32_t patcher;
 		void *me;
 	};
+	uint32_t stack;
     union {
         void *w;  // at least 0x40
         uint32_t w_pa;

@@ -19,6 +19,7 @@ LV0_DAT=0x0005BFE0,0000851F00000000 # Framework paddrs - intr & idle
 LV0_DAT=0x0005BFE8,1A000101 # UART config - (bus << 24) | clk [0x1001A = 115200/0x1004E = 38400]
 LV0_DAT=0x0005BFEC,0100000000000000 # run test()? - false/true/paddr & arg
 ### BOB
+LV0STCK=0x0005BFE0 # Required since bob can be bigger than SKk
 LV0_DAT=0x00040000,mnt0:/bob.bin
 LV0_EXE=0x0005BFE0,0x000400B0
 ### Misc - load if they exist

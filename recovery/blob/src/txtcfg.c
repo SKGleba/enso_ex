@@ -35,6 +35,13 @@ struct txtcfg_arg_s cmdh_args[CMDH_DCOUNT] = {
         },
         .types = TXTCFG_TYPES_ALLOW(0, _ASCII),
     },
+    [CMDH_LV0STCK] = {
+		.name = "LV0STCK",
+        .uarg = {
+            [0] = {.min_len = 1, .max_len = 4}, // stack ptr
+        },
+        .types = TXTCFG_TYPES_ALLOW(0, _UINT),
+    },
     [CMDH_LV0_KSP] = {
 		.name = "LV0_KSP",
         .uarg = {
@@ -133,7 +140,7 @@ struct txtcfg_arg_s cmdh_args[CMDH_DCOUNT] = {
     }
 };
 
-struct lv0p_arg_s cmdh_lv0p_args = {.magic = LV0P_ARG_MAGIC, .patcher = 0, .k = NULL, .d = NULL, .x = NULL};
+struct lv0p_arg_s cmdh_lv0p_args = {.magic = LV0P_ARG_MAGIC, .patcher = 0, .stack = 0, .k = NULL, .d = NULL, .x = NULL};
 struct armp_arg_s cmdh_armp_args = {.magic = ARMP_ARG_MAGIC, .d = NULL, .x = NULL};
 
 static void *cmdh_get_valias(struct txtcfg_s *cfg, uint32_t alias, bool never_null) {
@@ -211,6 +218,20 @@ int cmdh_breakproxy(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
         cfg->dead = true;
     }
     return ret;
+}
+
+int cmdh_lv0stck(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
+    if (!arg || !arg->handler) {
+        ELOG("Invalid arguments for command %s\n", cmdh_args[idx].name);
+        return -1;
+    }
+    if (!(arg->types & TXTCFG_TYPES_PARSE(0, _UINT))) {
+        ELOG("Invalid argument type for command %s\n", cmdh_args[idx].name);
+        return -1;
+    }
+    cmdh_lv0p_args.stack = arg->uarg[0].uintgr;
+    DLOG("LV0 pchain runner stack set to 0x%08X\n", cmdh_lv0p_args.stack);
+    return 0;
 }
 
 int cmdh_ks(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg) {
@@ -802,6 +823,7 @@ const void *cmdh_dispatch_table(int idx) {
         cmdh_breakproxy,
         cmdh_mntinit,
         cmdh_lv0init,
+        cmdh_lv0stck,
         cmdh_ks,
         cmdh_lv0dat,
         cmdh_lv0x,
@@ -1162,6 +1184,7 @@ int cmdh_apply_pchains(struct lv0p_arg_s *lv0c, struct armp_arg_s *armc, bool cl
                 my_free(frbuf);
             }
 			lv0c->me = NULL;
+            lv0c->stack = 0;
 			lv0c->w = NULL;
 			lv0c->k = NULL;
 			lv0c->d = NULL;
