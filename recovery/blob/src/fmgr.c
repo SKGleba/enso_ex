@@ -5,7 +5,7 @@
 #include "ff.h"
 #include "bm_ext.h"
 #include "main.h"
-#include "lv0.h"
+#include "spl.h"
 #include "txtcfg.h"
 
 #include "../../../core/enso.h"
@@ -543,7 +543,7 @@ int fmgr_load_exec(const char *path, enum FMGR_EXEC_TYPES exec_type) {
         if (ret & E2X_EXE_RET_NORESIDENT)
             my_free(buf);
     } else if (exec_type == FMGR_EXEC_TYPE_LV0)
-        ret = lv0_spl_exec(buf, 0, fsz, E2X_MAGIC);
+        ret = spl_lv0_exec(buf, fsz, 0, 0, SPLV0_ARG2PAPA_FLAG, SPLV0_ARG2PAPA_FLAG + 1, SPLV0_ARG2PAPA_FLAG + 2, SPLV0_ARG2PAPA_FLAG + 3);
     else {
 		ELOG("Unknown execution type: %d\n", exec_type);
 		my_free(buf);
@@ -1353,10 +1353,10 @@ actually_dir:
 									fmgr_load_exec(cctx->loc.cwd, FMGR_EXEC_TYPE_ARM);
 									break;
 								case FMGR_FILE_OP_LV0_XI:
-									if (!lv0_initialized) {
-										ILOG("Initializing lv0 with file %s\n", cctx->loc.cwd);
-										lv0_init(cctx->loc.cwd);
-										if (lv0_initialized)
+									if (spl_NOTinitialized) {
+										ILOG("Initializing SPL with file %s\n", cctx->loc.cwd);
+										spl_init(cctx->loc.cwd, SPL_IFL(_LV0) | SPL_IFL(_TZS));
+										if (!spl_NOTinitialized)
                                             fmgr_file_options[FMGR_FILE_OP_LV0_XI] = "Run f00d payload";
                                     } else
                                         fmgr_load_exec(cctx->loc.cwd, FMGR_EXEC_TYPE_LV0);

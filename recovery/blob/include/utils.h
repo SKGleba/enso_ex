@@ -179,7 +179,7 @@ char *my_strrchr(const char *s, char c);
 int count_chs(const char *s, char c);
 char *find_nth(const char *s, char c, int n);
 char *find_rnth(const char *s, char c, int n);
-int antoh(char *input, uint8_t *output, int output_len);
+int antoh(char *input, uint8_t *output, int output_len, bool endian);
 int hntoa(uint8_t *input, char *output, int output_len);
 
 int idstorage_init(void);
@@ -264,7 +264,7 @@ struct exports_util_s {
     int (*count_chs)(const char *s, char c);
     char *(*find_nth)(const char *s, char c, int n);
     char *(*find_rnth)(const char *s, char c, int n);
-    int (*antoh)(char *input, uint8_t *output, int output_len);
+    int (*antoh)(char *input, uint8_t *output, int output_len, bool endian);
     int (*hntoa)(uint8_t *input, char *output, int output_len);
     int (*idstorage_init)(void);
     int (*idstorage_stop)(void);

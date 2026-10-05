@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "view.h"
 #include "lv0.h"
+#include "spl.h"
 #include "txtcfg.h"
 
 #define EXPORTS_VERSION 1
@@ -29,6 +30,7 @@ struct recovery_export_s {
     const volatile struct exports_lbm_s *lbm;
     const volatile struct exports_fmgr_s *fmgr;
     const volatile struct exports_lv0_s *lv0;
+    const volatile struct exports_spl_s *spl;
     const volatile struct exports_main_s *main;
     const volatile struct exports_paper_s *paper;
     const volatile struct exports_stage2_s *stage2;
@@ -42,6 +44,7 @@ struct recovery_export_s {
         struct exports_lbm_s lbm;
         struct exports_fmgr_s fmgr;
         struct exports_lv0_s lv0;
+        struct exports_spl_s spl;
         struct exports_main_s main;
         struct exports_paper_s paper;
         struct exports_stage2_s stage2;

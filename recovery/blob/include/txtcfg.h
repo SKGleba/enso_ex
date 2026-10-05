@@ -26,6 +26,7 @@ struct txtcfg_arg_s {
         const int max_len;  // we assume no args larger than signed int +range...
         int act_len;
         union {
+            uint32_t arr32[8]; // we have enough mem heh
             uint32_t uintgr;
             void *data;
             char *ascii;
@@ -63,7 +64,7 @@ enum CMDH_ENUMS {
     CMDH_ERRBREAK,
     CMDH_USTART,
     CMDH_MNTINIT = CMDH_USTART,
-    CMDH_LV0INIT,
+    CMDH_SPLINIT,
     CMDH_LV0STCK,
     CMDH_LV0_KSP,
     CMDH_LV0_DAT,
@@ -86,7 +87,7 @@ int txtcfg_loadExec(struct txtcfg_s *cfg, bool cleanup);
 int txtcfg_lxPath(char *path, bool cleanup, struct txtcfg_s *cfg);
 
 extern struct txtcfg_arg_s cmdh_args[CMDH_DCOUNT];
-extern struct lv0p_arg_s cmdh_lv0p_args;
+extern struct splv0p_arg_s cmdh_lv0p_args;
 extern struct armp_arg_s cmdh_armp_args;
 const void *cmdh_dispatch_table(int idx);
 int cmdh_allow_livexe(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
@@ -98,8 +99,8 @@ int cmdh_kblp(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
 int cmdh_armd(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
 int cmdh_armx(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
 int cmdh_mntinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
-int cmdh_lv0init(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
-int cmdh_apply_pchains(struct lv0p_arg_s *lv0c, struct armp_arg_s *armc, bool cleanup);
+int cmdh_splinit(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
+int cmdh_apply_pchains(struct splv0p_arg_s *lv0c, struct armp_arg_s *armc, bool cleanup);
 int cmdh_lxp(char *fpath);
 #else
 #define r_txtcfg_parse(...) _r->txtcfg->txtcfg_parse(__VA_ARGS__)
@@ -119,7 +120,7 @@ int cmdh_lxp(char *fpath);
 #define r_cmdh_armd(...) _r->txtcfg->cmdh_armd(__VA_ARGS__)
 #define r_cmdh_armx(...) _r->txtcfg->cmdh_armx(__VA_ARGS__)
 #define r_cmdh_mntinit(...) _r->txtcfg->cmdh_mntinit(__VA_ARGS__)
-#define r_cmdh_lv0init(...) _r->txtcfg->cmdh_lv0init(__VA_ARGS__)
+#define r_cmdh_splinit(...) _r->txtcfg->cmdh_splinit(__VA_ARGS__)
 #define r_cmdh_apply_pchains(...) _r->txtcfg->cmdh_apply_pchains(__VA_ARGS__)
 #define r_cmdh_lxp(...) _r->txtcfg->cmdh_lxp(__VA_ARGS__)
 #endif
@@ -130,7 +131,7 @@ struct exports_txtcfg_s {
     int (*txtcfg_loadExec)(struct txtcfg_s *cfg, bool cleanup);
     int (*txtcfg_lxPath)(char *path, bool cleanup, struct txtcfg_s *cfg);
     struct txtcfg_arg_s *cmdh_args;
-    struct lv0p_arg_s *cmdh_lv0p_args;
+    struct splv0p_arg_s *cmdh_lv0p_args;
     struct armp_arg_s *cmdh_armp_args;
 	const void *(*cmdh_dispatch_table)(int idx);
 	int (*cmdh_allow_livexe)(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
@@ -142,8 +143,8 @@ struct exports_txtcfg_s {
 	int (*cmdh_armd)(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
 	int (*cmdh_armx)(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
 	int (*cmdh_mntinit)(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
-	int (*cmdh_lv0init)(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
-	int (*cmdh_apply_pchains)(struct lv0p_arg_s *lv0c, struct armp_arg_s *armc, bool cleanup);
+	int (*cmdh_splinit)(int idx, struct txtcfg_arg_s *arg, struct txtcfg_s *cfg);
+	int (*cmdh_apply_pchains)(struct splv0p_arg_s *lv0c, struct armp_arg_s *armc, bool cleanup);
 	int (*cmdh_lxp)(char *fpath);
 };
 

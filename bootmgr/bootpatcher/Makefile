@@ -1,10 +1,10 @@
 LIBE2XR := "../../recovery/output/libe2xr.a"
-INCE2XR := "../../recovery/blob/include" "../../recovery/blob/FatFs" "../../recovery/blob/lv0p"
+INCE2XR := "../../recovery/blob/include" "../../recovery/blob/FatFs"
 CC := arm-vita-eabi-gcc
 CFLAGS := $(foreach dir,$(INCE2XR),-I$(dir)) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access \
 	  -O1 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable
 OBJCOPY := arm-vita-eabi-objcopy
-LDFLAGS := -nostartfiles -nostdlib -lgcc -lm -lbaremetal
+LDFLAGS := -nostartfiles -nostdlib -lgcc -lm -lbaremetal -lspl
 
 all: bootmgr.e2xp
 	rm bootmgr.o && rm bootmgr

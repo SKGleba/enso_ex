@@ -134,7 +134,7 @@ const volatile struct recovery_export_s recovery_export = {.magic = {EXPORTS_MAG
                                                                          .cmdh_armd = cmdh_armd,
                                                                          .cmdh_armx = cmdh_armx,
                                                                          .cmdh_mntinit = cmdh_mntinit,
-                                                                         .cmdh_lv0init = cmdh_lv0init,
+                                                                         .cmdh_splinit = cmdh_splinit,
                                                                          .cmdh_apply_pchains = cmdh_apply_pchains,
                                                                          .cmdh_lxp = cmdh_lxp,
                                                                      },
@@ -149,12 +149,17 @@ const volatile struct recovery_export_s recovery_export = {.magic = {EXPORTS_MAG
                                                                      },
                                                                  .lv0 =
                                                                      {
-                                                                         .lv0_initialized = &lv0_initialized,
                                                                          .lv0_load_sm = lv0_load_sm,
                                                                          .lv0_stop_sm = lv0_stop_sm,
                                                                          .lv0_call_sm = lv0_call_sm,
-                                                                         .lv0_init = lv0_init,
-                                                                         .lv0_spl_exec = lv0_spl_exec,
+                                                                     },
+                                                                 .spl =
+                                                                     {
+                                                                         .spl_init = spl_init,
+                                                                         .spl_deinit = spl_deinit,
+                                                                         .spl_lv0p_run = spl_lv0p_run,
+                                                                         .spl_lv0_exec = spl_lv0_exec,
+                                                                         .spl_NOTinitialized = &spl_NOTinitialized,
                                                                      },
                                                                  .lbm = {
                                                                      .cdram_enable = cdram_enable,

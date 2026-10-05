@@ -4,7 +4,7 @@ TARGET_BOOTMGR = bootmgr
 BOOTMGR_BASE = 0x51f00000
 TARGET_LIB = libe2xr
 SRCDIRS := src FatFs
-INCDIRS := include FatFs lv0p
+INCDIRS := include FatFs
 SRCFILES := $(foreach dir,$(SRCDIRS),$(wildcard $(dir)/*.c))
 OBJS := $(SRCFILES:.c=.o)
 
@@ -15,7 +15,7 @@ AR	= $(PREFIX)-ar
 OBJCOPY	= $(PREFIX)-objcopy
 CFLAGS	= $(foreach dir,$(INCDIRS),-I$(dir)) -mcpu=cortex-a9 -mthumb-interwork -mno-unaligned-access \
 	  -O3 -g3 -Wall -Wno-unused-const-variable -ffreestanding -Wno-unused-variable -Wno-multichar -fdiagnostics-color=always
-LDFLAGS	= -nostartfiles -nostdlib -lgcc -lm -lbaremetal
+LDFLAGS	= -nostartfiles -nostdlib -lgcc -lm -lbaremetal -lspl
 
 all: $(TARGET_BLOB).e2xp $(TARGET_BOOTMGR).e2xp $(TARGET_LIB).a
 	@rm -f $(OBJS)

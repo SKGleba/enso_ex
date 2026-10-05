@@ -60,22 +60,23 @@ char *find_rnth(const char *s, char c, int n) {
 	return find_nth(s, c, count - n + 1);  // find the nth occurrence from the end
 }
 
-int antoh(char *input, uint8_t *output, int output_len) {
+int antoh(char *input, uint8_t *output, int output_len, bool endian) {
     for (int i = 0; i < (output_len * 2); i++) {
         if (input[i] < '0' || (input[i] > '9' && input[i] < 'A') || input[i] > 'F')
             return -1;
     }
 
     for (int i = 0; i < output_len; i++) {
+		int a = endian ? (output_len - 1 - i) : i;
         if (input[i * 2] < 'A')
-            output[i] = 0x10 * (input[i * 2] - '0');
+            output[a] = 0x10 * (input[i * 2] - '0');
         else
-            output[i] = 0x10 * (input[i * 2] - '7');
+            output[a] = 0x10 * (input[i * 2] - '7');
 
         if (input[(i * 2) + 1] < 0x40)
-            output[i] += (input[(i * 2) + 1] - '0');
+            output[a] += (input[(i * 2) + 1] - '0');
         else
-            output[i] += (input[(i * 2) + 1] - '7');
+            output[a] += (input[(i * 2) + 1] - '7');
     }
 
     return 0;
